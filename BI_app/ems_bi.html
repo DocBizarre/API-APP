@@ -1,0 +1,1686 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EMS — Business Intelligence</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ══ TOKENS LIGHT ══ */
+:root {
+  --navy:        #0a1628; --navy-2:#0f2040; --navy-3:#162d52;
+  --blue:        #1d6ef5; --blue-dim:#1558c7; --blue-ghost:rgba(29,110,245,.10);
+  --red:         #e03131; --red-ghost:rgba(224,49,49,.10);
+  --amber:       #f08c00; --amber-ghost:rgba(240,140,0,.10);
+  --green:       #2f9e44; --green-ghost:rgba(47,158,68,.10);
+  --violet:      #7048e8; --violet-ghost:rgba(112,72,232,.10);
+  --teal:        #0c8599; --teal-ghost:rgba(12,133,153,.10);
+  --bg:          #f2f5f9; --bg-2:#e8edf4;
+  --surface:     #ffffff; --surface-2:#f8fafc;
+  --border:      #dde3ed; --border-2:#c9d3e0;
+  --text-1:      #0d1829; --text-2:#3d4f6b; --text-3:#7a8fa8;
+  --sh-sm:0 1px 4px rgba(13,24,41,.06),0 2px 8px rgba(13,24,41,.04);
+  --sh-md:0 2px 8px rgba(13,24,41,.07),0 6px 20px rgba(13,24,41,.05);
+  --sh-lg:0 8px 24px rgba(13,24,41,.10),0 2px 8px rgba(13,24,41,.06);
+  --r:10px; --rl:14px;
+}
+/* ══ DARK MODE ══ */
+[data-theme="dark"] {
+  --bg:#0d1117; --bg-2:#161b22;
+  --surface:#1c2230; --surface-2:#222b3a;
+  --border:#2d3748; --border-2:#3a4a5c;
+  --text-1:#e2e8f0; --text-2:#a0aec0; --text-3:#4a5568;
+  --navy:#0d1117; --navy-2:#161b22; --navy-3:#1c2230;
+  --sh-sm:0 1px 4px rgba(0,0,0,.3),0 2px 8px rgba(0,0,0,.2);
+  --sh-md:0 2px 8px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.2);
+  --sh-lg:0 8px 24px rgba(0,0,0,.4),0 2px 8px rgba(0,0,0,.3);
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Space Grotesk',sans-serif;background:var(--bg);color:var(--text-1);font-size:14px;line-height:1.5;overflow-x:hidden;transition:background .2s,color .2s}
+
+/* ══ LAYOUT ══ */
+.app{display:flex;min-height:100vh}
+
+/* ══ SIDEBAR ══ */
+.sidebar{width:220px;flex-shrink:0;background:var(--navy);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:200;overflow-y:auto;transition:width .2s}
+.sb-head{padding:18px 14px 14px;border-bottom:1px solid rgba(255,255,255,.06)}
+.sb-logo{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.sb-logo-icon{width:32px;height:32px;border-radius:8px;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.brand{font-size:15px;font-weight:700;color:#fff;letter-spacing:-.3px}
+.tagline{font-size:10px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.8px}
+.sb-db{padding:7px 9px;background:rgba(255,255,255,.04);border-radius:7px;border:1px solid rgba(255,255,255,.07);font-size:11px;color:rgba(255,255,255,.4);display:flex;align-items:center;gap:6px;overflow:hidden}
+.sb-db .dot{width:6px;height:6px;border-radius:50%;background:#22c55e;flex-shrink:0}
+.sb-db.offline .dot{background:var(--red)}
+.sb-db .db-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.sb-nav{padding:10px;flex:1}
+.sb-sec{font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.2);padding:12px 8px 5px}
+.sb-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;cursor:pointer;color:rgba(255,255,255,.48);font-size:13px;transition:all .13s;margin-bottom:1px;user-select:none}
+.sb-item:hover{background:rgba(255,255,255,.06);color:rgba(255,255,255,.88)}
+.sb-item.active{background:var(--blue);color:#fff;font-weight:600}
+.sb-item .ico{font-size:14px;width:18px;text-align:center;flex-shrink:0}
+.sb-item .badge-num{margin-left:auto;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;display:none}
+.sb-item .badge-num.on{display:inline-block}
+.sb-foot{padding:10px 14px 14px;border-top:1px solid rgba(255,255,255,.06);font-size:10.5px;color:rgba(255,255,255,.2);line-height:1.6}
+
+/* ══ MAIN ══ */
+.main{margin-left:220px;flex:1;display:flex;flex-direction:column;min-height:100vh}
+
+/* ══ TOPBAR ══ */
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:54px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100;box-shadow:var(--sh-sm);transition:background .2s,border-color .2s}
+.topbar-title{font-size:15px;font-weight:600;color:var(--text-1)}
+.topbar-title .crumb{color:var(--text-3);font-weight:400;margin-left:6px;font-size:12px}
+.top-spacer{flex:1}
+
+/* Global search */
+.gsearch-wrap{position:relative}
+.gsearch{font-family:inherit;font-size:13px;padding:6px 12px 6px 32px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text-1);outline:none;width:220px;transition:all .15s}
+.gsearch:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-ghost);width:280px}
+.gsearch::placeholder{color:var(--text-3)}
+.gsearch-icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text-3);pointer-events:none}
+.gsearch-results{position:absolute;top:calc(100% + 6px);left:0;width:380px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--sh-lg);z-index:500;display:none;overflow:hidden;max-height:400px;overflow-y:auto}
+.gsearch-results.open{display:block}
+.gsr-section{padding:8px 12px 4px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);border-bottom:1px solid var(--border)}
+.gsr-item{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;transition:background .1s;font-size:13px;color:var(--text-1)}
+.gsr-item:hover{background:var(--bg)}
+.gsr-item .gsr-ico{font-size:13px;width:18px;text-align:center;color:var(--text-3);flex-shrink:0}
+.gsr-item .gsr-main{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gsr-item .gsr-sub{font-size:11px;color:var(--text-3)}
+.gsr-empty{padding:20px;text-align:center;color:var(--text-3);font-size:13px}
+
+
+
+/* ══ BUTTONS ══ */
+.btn{display:inline-flex;align-items:center;gap:5px;font-family:inherit;font-size:13px;font-weight:500;padding:6px 13px;border-radius:7px;cursor:pointer;border:none;transition:all .13s;white-space:nowrap}
+.btn-primary{background:var(--blue);color:#fff}.btn-primary:hover{background:var(--blue-dim)}
+.btn-ghost{background:transparent;color:var(--text-2);border:1px solid var(--border)}.btn-ghost:hover{background:var(--bg)}
+.btn-success{background:var(--green);color:#fff}.btn-success:hover{background:#267a38}
+.btn-danger{background:var(--red);color:#fff}.btn-danger:hover{background:#b52222}
+.btn-amber{background:var(--amber);color:#fff}.btn-amber:hover{background:#c97600}
+.btn-sm{padding:5px 11px;font-size:12px}
+.btn-icon{padding:4px 7px;font-size:12px}
+
+/* ══ PAGE ══ */
+.page{padding:0;display:none}
+.page.active{display:block}
+.page-content{padding:16px 24px 20px}
+/* Direct page children get horizontal margins (except the full-width page-header) */
+.page > .fp, .page > .tc, .page > .cc, .page > .kpi-grid, .page > .dash-grid,
+.page > .dash-hero, .page > #tech-cards-grid, .page > #alerts-page-content {
+  margin-left:24px; margin-right:24px;
+}
+.page > .fp:first-of-type,.page > .tc:first-of-type,.page > .cc:first-of-type,
+.page > .kpi-grid:first-of-type,.page > .dash-grid:first-of-type,.page > .dash-hero:first-of-type,
+.page > #tech-cards-grid,.page > #alerts-page-content { margin-top:16px; }
+.page > *:last-child { margin-bottom:20px; }
+
+/* ══ UPLOAD ══ */
+#upload-screen{display:none;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;padding:40px}
+#upload-screen.visible{display:flex}
+.drop-zone{max-width:460px;width:100%;background:var(--surface);border:2px dashed var(--border-2);border-radius:var(--rl);padding:48px 36px;text-align:center;cursor:pointer;transition:all .2s}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--blue);background:var(--blue-ghost)}
+.dz-icon{font-size:42px;margin-bottom:12px;display:block}
+.drop-zone h2{font-size:17px;font-weight:600;margin-bottom:6px}
+.drop-zone p{color:var(--text-3);font-size:13px;margin-bottom:18px}
+#file-input{display:none}
+
+/* ══ ALERTS BANNER ══ */
+#alerts-banner{display:none;padding:8px 24px 10px;border-bottom:1px solid var(--border);background:var(--surface)}
+.alerts-banner-inner{display:flex;flex-direction:column;gap:6px}
+.alerts-banner-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+.alerts-banner-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)}
+.alerts-banner-close{background:none;border:none;cursor:pointer;font-size:16px;color:var(--text-3);padding:0 2px;line-height:1;transition:color .13s}.alerts-banner-close:hover{color:var(--text-1)}
+.alert-bar{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:8px;font-size:13px;border:1px solid;margin-bottom:6px}
+.alert-bar:last-child{margin-bottom:0}
+.alert-bar.crit{background:var(--red-ghost);border-color:rgba(224,49,49,.25);color:#991b1b}
+[data-theme="dark"] .alert-bar.crit{color:#fca5a5}
+.alert-bar.warn{background:var(--amber-ghost);border-color:rgba(240,140,0,.25);color:#92400e}
+[data-theme="dark"] .alert-bar.warn{color:#fde68a}
+.alert-bar.info{background:var(--blue-ghost);border-color:rgba(29,110,245,.2);color:#1e40af}
+[data-theme="dark"] .alert-bar.info{color:#93c5fd}
+.alert-bar .aic{font-size:15px;flex-shrink:0}
+.alert-bar .atxt{flex:1}
+.alert-bar .alink{cursor:pointer;text-decoration:underline;font-weight:600;flex-shrink:0}
+.alert-toggle{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;cursor:pointer;color:var(--text-2);padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface)}
+.alert-toggle:hover{background:var(--bg)}
+
+/* ══ DASHBOARD ══ */
+.dash-hero{background:linear-gradient(135deg,var(--navy-2) 0%,var(--navy-3) 100%);border-radius:var(--rl);padding:24px 28px;margin-bottom:18px;display:flex;align-items:center;gap:24px;box-shadow:var(--sh-lg);position:relative;overflow:hidden}
+.dash-hero::before{content:'';position:absolute;top:-80px;right:-80px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(29,110,245,.22) 0%,transparent 70%);pointer-events:none}
+.dash-hero::after{content:'';position:absolute;bottom:-60px;left:160px;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,rgba(112,72,232,.12) 0%,transparent 70%);pointer-events:none}
+.hero-main{flex:1;position:relative;z-index:1}
+.hero-date{font-size:11px;color:rgba(255,255,255,.38);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px}
+.hero-title{font-size:19px;font-weight:700;color:#fff;margin-bottom:3px;letter-spacing:-.3px}
+.hero-sub{font-size:13px;color:rgba(255,255,255,.45)}
+.hero-sep{width:1px;background:rgba(255,255,255,.1);align-self:stretch;flex-shrink:0;position:relative;z-index:1}
+.hero-kpis{display:flex;gap:0;position:relative;z-index:1}
+.hero-kpi{text-align:center;padding:0 22px;border-right:1px solid rgba(255,255,255,.1)}
+.hero-kpi:last-child{border-right:none}
+.hero-kpi .val{font-size:26px;font-weight:700;color:#fff;line-height:1;letter-spacing:-.5px}
+.hero-kpi .val.warn{color:#ffd43b}
+.hero-kpi .val.danger{color:#ff8787}
+.hero-kpi .lbl{font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;margin-top:5px}
+.hero-kpi .trend{font-size:11px;margin-top:3px}
+.hero-kpi .trend.up{color:#6ee7b7}.hero-kpi .trend.dn{color:#fca5a5}.hero-kpi .trend.flat{color:rgba(255,255,255,.3)}
+
+/* KPI row */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.kpi{background:var(--surface);border-radius:var(--r);padding:15px 17px;border:1px solid var(--border);box-shadow:var(--sh-sm);display:flex;flex-direction:column;gap:6px;transition:background .2s,border-color .2s}
+.kpi-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.kpi-label{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px}
+.kpi-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.kpi-num{font-size:25px;font-weight:700;color:var(--text-1);line-height:1;letter-spacing:-.5px}
+.kpi-bar{height:3px;background:var(--bg-2);border-radius:2px;overflow:hidden}
+.kpi-fill{height:100%;border-radius:2px;transition:width .6s}
+.kpi-foot{font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:5px}
+.trend-chip{display:inline-flex;align-items:center;gap:2px;font-size:11px;font-weight:600;padding:1px 5px;border-radius:5px}
+.trend-up{background:var(--green-ghost);color:var(--green)}
+.trend-dn{background:var(--red-ghost);color:var(--red)}
+.trend-flat{background:var(--bg-2);color:var(--text-3)}
+
+.kpi.blue  .kpi-icon{background:var(--blue-ghost);color:var(--blue)}    .kpi.blue   .kpi-fill{background:var(--blue)}
+.kpi.amber .kpi-icon{background:var(--amber-ghost);color:var(--amber)}  .kpi.amber  .kpi-fill{background:var(--amber)}
+.kpi.green .kpi-icon{background:var(--green-ghost);color:var(--green)}  .kpi.green  .kpi-fill{background:var(--green)}
+.kpi.red   .kpi-icon{background:var(--red-ghost);color:var(--red)}      .kpi.red    .kpi-fill{background:var(--red)}
+.kpi.violet .kpi-icon{background:var(--violet-ghost);color:var(--violet)} .kpi.violet .kpi-fill{background:var(--violet)}
+.kpi.teal  .kpi-icon{background:var(--teal-ghost);color:var(--teal)}    .kpi.teal   .kpi-fill{background:var(--teal)}
+
+/* Charts */
+.dash-grid{display:grid;gap:14px;margin-bottom:14px}
+.g2{grid-template-columns:2fr 1fr}
+.g3{grid-template-columns:1fr 1fr 1fr}
+.g12{grid-template-columns:1fr 1fr}
+.gcol2{grid-column:span 2}
+.cc{background:var(--surface);border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--sh-sm);overflow:hidden;transition:background .2s,border-color .2s}
+.cc-head{padding:13px 17px 0;display:flex;align-items:flex-start;justify-content:space-between}
+.cc-title{font-size:13px;font-weight:600;color:var(--text-1)}
+.cc-sub{font-size:11px;color:var(--text-3);margin-top:2px}
+.cc-body{padding:10px 13px 14px}
+.cc canvas{max-height:210px}
+.cc-actions{display:flex;gap:4px;align-items:center;margin-top:2px}
+
+/* stat list */
+.slist{display:flex;flex-direction:column}
+.srow{display:flex;align-items:center;gap:9px;padding:8px 17px;border-bottom:1px solid var(--border)}
+.srow:last-child{border-bottom:none}
+.srank{width:19px;height:19px;border-radius:5px;background:var(--bg);font-size:10px;font-weight:600;color:var(--text-3);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.srank.top{background:var(--blue-ghost);color:var(--blue)}
+.sname{flex:1;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sbar{width:75px;flex-shrink:0}
+.sbar-bg{height:5px;background:var(--bg-2);border-radius:3px;overflow:hidden}
+.sbar-fg{height:100%;border-radius:3px;transition:width .5s}
+.scount{font-size:12px;font-weight:600;color:var(--text-2);min-width:22px;text-align:right;flex-shrink:0}
+
+/* ══ FILTER PANEL ══ */
+.fp{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh-sm);margin-bottom:14px;overflow:hidden;transition:background .2s,border-color .2s}
+.fp-head{display:flex;align-items:center;justify-content:space-between;padding:10px 15px;cursor:pointer;user-select:none;border-bottom:1px solid transparent;transition:all .13s}
+.fp-head:hover{background:var(--surface-2)}
+.fp-head.open{border-bottom-color:var(--border)}
+.fp-htitle{font-size:13px;font-weight:600;color:var(--text-1);display:flex;align-items:center;gap:8px}
+.fc-badge{background:var(--blue);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;display:none}
+.fc-badge.on{display:inline-block}
+.fp-body{padding:12px 14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:9px}
+.fp-body.closed{display:none}
+.fgroup{display:flex;flex-direction:column;gap:3px}
+.fgroup label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3)}
+.fgroup input,.fgroup select{font-family:inherit;font-size:13px;padding:6px 9px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text-1);outline:none;transition:border-color .13s,box-shadow .13s;width:100%}
+.fgroup input:focus,.fgroup select:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-ghost)}
+.fgroup input::placeholder{color:var(--text-3)}
+.chips{display:flex;flex-wrap:wrap;gap:5px;padding:0 14px 8px}
+.chips:empty{display:none}
+.chip{display:inline-flex;align-items:center;gap:4px;background:var(--blue-ghost);color:#1e40af;border:1px solid rgba(29,110,245,.18);font-size:11px;font-weight:500;padding:2px 7px 2px 8px;border-radius:20px}
+[data-theme="dark"] .chip{color:#93c5fd}
+.chip-x{cursor:pointer;opacity:.55;font-size:13px;margin-left:1px}.chip-x:hover{opacity:1}
+.fp-foot{padding:8px 14px 11px;display:flex;gap:6px;align-items:center;border-top:1px solid var(--border);flex-wrap:wrap}
+.fp-count{font-size:12px;color:var(--text-3);margin-left:auto}
+.fp-count strong{color:var(--text-1)}
+
+/* Saved filters */
+.saved-filters-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 14px 10px;border-top:1px solid var(--border)}
+.saved-filters-label{font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;flex-shrink:0}
+.saved-chip{display:inline-flex;align-items:center;gap:4px;background:var(--surface-2);color:var(--text-2);border:1px solid var(--border);font-size:11.5px;font-weight:500;padding:3px 8px 3px 10px;border-radius:6px;cursor:pointer;transition:all .13s}
+.saved-chip:hover{border-color:var(--blue);color:var(--blue)}
+.saved-chip .sc-del{opacity:.4;font-size:12px;margin-left:2px;cursor:pointer}.saved-chip .sc-del:hover{opacity:1;color:var(--red)}
+
+/* ══ TABLE ══ */
+.tc{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh-sm);overflow:hidden;transition:background .2s,border-color .2s}
+.tscroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+thead th{background:var(--surface-2);padding:8px 13px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;transition:color .13s}
+thead th:hover{color:var(--text-1)}
+thead th.asc::after{content:' ↑';color:var(--blue)}
+thead th.desc::after{content:' ↓';color:var(--blue)}
+tbody tr{border-bottom:1px solid var(--border);transition:background .08s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--bg)}
+tbody td{padding:8px 13px;color:var(--text-1);font-size:13px}
+.mono{font-family:'JetBrains Mono',monospace;font-size:12px}
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.ba{background:var(--amber-ghost);color:#92400e}
+.bb{background:var(--blue-ghost);color:#1e40af}
+.bg{background:var(--green-ghost);color:#166534}
+.br{background:var(--red-ghost);color:#991b1b}
+.bv{background:var(--violet-ghost);color:#4c1d95}
+.bt{background:var(--teal-ghost);color:#134e4a}
+.bx{background:var(--bg-2);color:var(--text-3)}
+[data-theme="dark"] .ba{color:#fde68a}
+[data-theme="dark"] .bb{color:#93c5fd}
+[data-theme="dark"] .bg{color:#6ee7b7}
+[data-theme="dark"] .br{color:#fca5a5}
+[data-theme="dark"] .bv{color:#c4b5fd}
+[data-theme="dark"] .bt{color:#67e8f9}
+
+/* Pagination */
+.pag{display:flex;align-items:center;justify-content:space-between;padding:10px 15px;border-top:1px solid var(--border)}
+.pag-info{font-size:12px;color:var(--text-3)}
+.pag-info strong{color:var(--text-1)}
+.pag-btns{display:flex;gap:3px;align-items:center}
+.pg{font-family:inherit;font-size:12px;font-weight:500;padding:4px 8px;border-radius:6px;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--text-2);transition:all .1s}
+.pg:hover{background:var(--bg)}
+.pg.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+.pg:disabled{opacity:.35;cursor:default}
+.pag-size{font-family:inherit;font-size:12px;padding:4px 7px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text-2);outline:none;cursor:pointer}
+
+/* Detail row */
+.drow{background:var(--surface-2)!important}
+.dcell{padding:0!important}
+.dinner{padding:12px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:7px 18px;border-left:3px solid var(--blue)}
+.dfield label{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);font-weight:600;display:block;margin-bottom:1px}
+.dfield span{font-size:12.5px;color:var(--text-1)}
+
+/* ══ ANALYSE CROISÉE ══ */
+.pivot-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:14px 16px;border-bottom:1px solid var(--border)}
+.pivot-controls .fgroup{min-width:160px}
+.pivot-table-wrap{overflow:auto;max-height:500px}
+.pivot-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.pivot-tbl th,.pivot-tbl td{padding:7px 12px;border:1px solid var(--border);text-align:right}
+.pivot-tbl th{background:var(--surface-2);font-weight:600;text-align:center;color:var(--text-2);font-size:11px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+.pivot-tbl th.row-header{text-align:left}
+.pivot-tbl td.row-label{font-weight:500;text-align:left;color:var(--text-1);background:var(--surface-2);white-space:nowrap}
+.pivot-tbl td.total-col{font-weight:700;color:var(--text-1);background:rgba(29,110,245,.05)}
+.pivot-tbl tr:last-child td{font-weight:700;background:rgba(29,110,245,.07)}
+.cell-heat-1{background:rgba(29,110,245,.06)}
+.cell-heat-2{background:rgba(29,110,245,.12)}
+.cell-heat-3{background:rgba(29,110,245,.20)}
+.cell-heat-4{background:rgba(29,110,245,.30)}
+.cell-heat-5{background:rgba(29,110,245,.42);color:#fff}
+
+/* ══ TIMELINE ══ */
+.timeline-wrap{padding:16px;overflow-x:auto}
+.tl-header{display:flex;gap:0;margin-bottom:2px}
+.tl-row{display:flex;align-items:center;gap:0;height:32px;margin-bottom:3px}
+.tl-label{width:130px;flex-shrink:0;font-size:12px;font-weight:500;color:var(--text-2);padding-right:10px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-track{flex:1;position:relative;height:20px;background:var(--bg-2);border-radius:4px;overflow:hidden}
+.tl-bar{position:absolute;height:100%;border-radius:3px;opacity:.85;cursor:pointer;transition:opacity .13s}
+.tl-bar:hover{opacity:1}
+.tl-month-col{flex:1;font-size:10px;color:var(--text-3);text-align:center;border-right:1px solid var(--border);padding:0 2px}
+
+/* ══ COMPARAISON TECHS ══ */
+.tech-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;padding:16px}
+.tech-card{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px}
+.tech-card-name{font-size:14px;font-weight:600;margin-bottom:10px;color:var(--text-1)}
+.tech-card-stat{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:12.5px}
+.tech-card-stat .lbl{color:var(--text-3)}
+.tech-card-stat .val{font-weight:600;color:var(--text-1)}
+.tcs-bar{height:6px;background:var(--bg);border-radius:3px;overflow:hidden;margin-top:3px}
+.tcs-fill{height:100%;border-radius:3px}
+.tcs-rate{font-size:20px;font-weight:700;color:var(--text-1);margin:8px 0 2px}
+.tcs-rate-lbl{font-size:11px;color:var(--text-3)}
+
+/* ══ UTIL ══ */
+.loading-ov{position:fixed;inset:0;background:rgba(10,22,40,.5);display:none;align-items:center;justify-content:center;z-index:9000}
+.loading-ov.on{display:flex}
+.spin{width:36px;height:36px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .65s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.toast-el{position:fixed;bottom:22px;right:22px;z-index:9999;background:var(--navy);color:#fff;padding:10px 16px;border-radius:9px;font-size:13px;box-shadow:var(--sh-lg);opacity:0;transform:translateY(8px);transition:all .18s;pointer-events:none}
+.toast-el.on{opacity:1;transform:none}
+.empty-s{text-align:center;padding:50px 20px;color:var(--text-3)}
+.empty-s .ei{font-size:34px;margin-bottom:8px}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:4px}
+/* Print */
+@media print {
+  .sidebar,.topbar,#alerts-banner,.fp,.btn,.pag{display:none!important}
+  .main{margin-left:0}
+  .page{display:block!important;padding:0}
+  .page-header{border-bottom:1px solid #ddd;padding:12px 16px 10px}
+  .page > .fp, .page > .tc, .page > .cc, .page > .kpi-grid, .page > .dash-grid,
+  .page > .dash-hero, .page > #tech-cards-grid, .page > #alerts-page-content {margin-left:16px;margin-right:16px}
+  .dash-hero{print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  .kpi-grid{grid-template-columns:repeat(4,1fr)}
+  .dash-grid{page-break-inside:avoid}
+}
+/* ══ PAGE HEADER — uniforme sur toutes les pages ══ */
+.page-header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px 14px;border-bottom:1px solid var(--border);background:var(--surface);margin-bottom:16px;flex-wrap:wrap;gap:10px;transition:background .2s,border-color .2s}
+.page-header-left{display:flex;flex-direction:column;gap:2px}
+.page-header-title{font-size:16px;font-weight:700;color:var(--text-1);letter-spacing:-.2px;display:flex;align-items:center;gap:8px}
+.page-header-title .ph-icon{font-size:16px}
+.page-header-sub{font-size:12px;color:var(--text-3)}
+.page-header-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+
+/* Compat alias — supprime l'ancien section-heading */
+.section-heading{display:none}
+</style>
+</head>
+<body>
+<div class="loading-ov" id="loading"><div class="spin"></div></div>
+<div class="toast-el" id="toast"></div>
+
+<div class="app">
+<!-- ══ SIDEBAR ══ -->
+<aside class="sidebar">
+  <div class="sb-head">
+    <div class="sb-logo">
+      <div class="sb-logo-icon">📈</div>
+      <div><div class="brand">EMS · BI</div><div class="tagline">Business Intelligence</div></div>
+    </div>
+    <div class="sb-db offline" id="sb-db">
+      <span class="dot"></span>
+      <span class="db-txt" id="sb-db-name">Aucune base</span>
+    </div>
+  </div>
+  <nav class="sb-nav">
+    <div class="sb-sec">Analyse</div>
+    <div class="sb-item active" data-page="dashboard"     onclick="nav(this)"><span class="ico">🏠</span>Vue d'ensemble</div>
+    <div class="sb-item" data-page="interventions"        onclick="nav(this)"><span class="ico">🔧</span>Interventions</div>
+    <div class="sb-item" data-page="moteurs"              onclick="nav(this)"><span class="ico">⚙️</span>Moteurs</div>
+    <div class="sb-item" data-page="clients"              onclick="nav(this)"><span class="ico">👥</span>Clients</div>
+    <div class="sb-sec">Suivi</div>
+    <div class="sb-item" data-page="garanties"            onclick="nav(this)"><span class="ico">🛡️</span>Garanties</div>
+    <div class="sb-item" data-page="ameliorations"        onclick="nav(this)"><span class="ico">💡</span>Améliorations</div>
+    <div class="sb-sec">Outils BI</div>
+    <div class="sb-item" data-page="croise"               onclick="nav(this)"><span class="ico">🔀</span>Analyse croisée</div>
+    <div class="sb-item" data-page="techniciens"          onclick="nav(this)"><span class="ico">👷</span>Techniciens</div>
+    <div class="sb-item" data-page="timeline"             onclick="nav(this)"><span class="ico">📅</span>Timeline</div>
+    <div class="sb-item" id="sb-alerts" data-page="alertes" onclick="nav(this)">
+      <span class="ico">🔔</span>Alertes
+      <span class="badge-num" id="alerts-count"></span>
+    </div>
+  </nav>
+  <div class="sb-foot">Emeraude Moteurs Systèmes<br><span id="sb-upd"></span></div>
+</aside>
+
+<!-- ══ MAIN ══ -->
+<main class="main">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-title" id="pt">Vue d'ensemble <span class="crumb" id="pc"></span></div>
+    <div class="top-spacer"></div>
+    <!-- Global search -->
+    <div class="gsearch-wrap">
+      <span class="gsearch-icon">🔍</span>
+      <input type="text" class="gsearch" id="gsearch" placeholder="Recherche globale…" autocomplete="off" oninput="globalSearch(this.value)" onblur="setTimeout(()=>closeGS(),200)">
+      <div class="gsearch-results" id="gsr"></div>
+    </div>
+    <!-- Actions -->
+    <button class="btn btn-ghost btn-sm" id="btn-reload" onclick="reloadDB()" style="display:none" title="Recharger">⟳</button>
+    <button class="btn btn-ghost btn-sm" onclick="window.print()" title="Imprimer / PDF">🖨</button>
+    <button class="btn btn-ghost btn-sm" onclick="toggleDark()" id="btn-dark" title="Mode sombre">🌙</button>
+    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('file-input').click()">📂 .db</button>
+    <input type="file" id="file-input" accept=".db,.sqlite,.sqlite3" onchange="loadDB(this)">
+  </div>
+
+  <!-- ALERTS BANNER -->
+  <div id="alerts-banner"></div>
+
+  <!-- UPLOAD -->
+  <div id="upload-screen" class="visible">
+    <div class="drop-zone" id="drop-zone"
+      onclick="document.getElementById('file-input').click()"
+      ondragover="event.preventDefault();this.classList.add('drag')"
+      ondragleave="this.classList.remove('drag')"
+      ondrop="onDrop(event)">
+      <span class="dz-icon">🗄️</span>
+      <h2>Charger la base EMS</h2>
+      <p>Déposez votre fichier <strong>ems.db</strong> ici ou cliquez pour parcourir</p>
+      <button class="btn btn-primary" onclick="event.stopPropagation();document.getElementById('file-input').click()">Sélectionner le fichier</button>
+    </div>
+  </div>
+
+  <!-- ══ DASHBOARD ══ -->
+  <div id="page-dashboard" class="page">
+    <div class="page-header">
+      <div class="page-header-left">
+        <div class="page-header-title"><span class="ph-icon">🏠</span>Vue d'ensemble</div>
+        <div class="page-header-sub">Tableau de bord EMS — indicateurs clés</div>
+      </div>
+      <div class="page-header-actions">
+        <button class="btn btn-ghost btn-sm" onclick="window.print()" title="Imprimer">🖨 Imprimer</button>
+      </div>
+    </div>
+    <div class="dash-hero">
+      <div class="hero-main">
+        <div class="hero-date" id="hero-date"></div>
+        <div class="hero-title">Tableau de bord EMS</div>
+        <div class="hero-sub" id="hero-sub">—</div>
+      </div>
+      <div class="hero-sep"></div>
+      <div class="hero-kpis" id="hero-kpis"></div>
+    </div>
+    <div class="kpi-grid" id="kpi-statuts"></div>
+    <div class="kpi-grid" id="kpi-parc"></div>
+    <div class="dash-grid g2"  id="dr1" style="margin-bottom:14px"></div>
+    <div class="dash-grid g3"  id="dr2" style="margin-bottom:14px"></div>
+    <div class="dash-grid g12" id="dr3"></div>
+  </div>
+
+  <!-- ══ INTERVENTIONS ══ -->
+  <div id="page-interventions" class="page">
+    <div class="page-header">
+      <div class="page-header-left">
+        <div class="page-header-title"><span class="ph-icon">🔧</span>Interventions</div>
+        <div class="page-header-sub">Bons d'intervention — suivi et historique</div>
+      </div>
+      <div class="page-header-actions">
+        <button class="btn btn-ghost btn-sm" onclick="resetFP('interventions')">↺ Réinitialiser</button>
+        <button class="btn btn-success btn-sm" onclick="exportCSV('interventions')">⬇ CSV</button>
+      </div>
+    </div>
+    <div class="fp" id="fp-interventions">
+      <div class="fp-head open" onclick="togFP('interventions')">
+        <div class="fp-htitle">🔍 Filtres <span class="fc-badge" id="fc-interventions"></span></div>
+        <span id="fpa-interventions" style="color:var(--text-3);font-size:12px">▲</span>
+      </div>
+      <div class="fp-body" id="fpb-interventions">
+        <div class="fgroup"><label>Recherche libre</label><input type="text" id="fi-q" placeholder="N° bon, client, moteur…"></div>
+        <div class="fgroup"><label>Statut</label><select id="fi-statut"><option value="">Tous</option><option>En cours</option><option>À facturer</option><option>Facturé</option><option>Clos</option></select></div>
+        <div class="fgroup"><label>Urgence</label><select id="fi-urgence"><option value="">Toutes</option><option>Normale</option><option>Urgente</option><option>Critique</option></select></div>
+        <div class="fgroup"><label>Type</label><select id="fi-type"></select></div>
+        <div class="fgroup"><label>Technicien</label><select id="fi-tech"></select></div>
+        <div class="fgroup"><label>Client</label><select id="fi-client"></select></div>
+        <div class="fgroup"><label>Lieu</label><select id="fi-lieu"></select></div>
+        <div class="fgroup"><label>Classification</label><select id="fi-classif"><option value="">Toutes</option><option value="garantie">Garantie</option><option value="facturable">Facturable</option><option value="interne">Interne</option></select></div>
+        <div class="fgroup"><label>Notifié client</label><select id="fi-ncli"><option value="">Tous</option><option value="1">Oui</option><option value="0">Non</option></select></div>
+        <div class="fgroup"><label>Notifié tech.</label><select id="fi-ntech"><option value="">Tous</option><option value="1">Oui</option><option value="0">Non</option></select></div>
+        <div class="fgroup"><label>Date création — Du</label><input type="date" id="fi-from"></div>
+        <div class="fgroup"><label>Date création — Au</label><input type="date" id="fi-to"></div>
+      </div>
+      <div class="chips" id="ch-interventions"></div>
+      <div class="saved-filters-row" id="sfr-interventions">
+        <span class="saved-filters-label">💾 Enregistrés :</span>
+        <div id="sf-list-interventions" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        <button class="btn btn-ghost btn-sm" onclick="saveFilter('interventions')" style="margin-left:auto">+ Sauvegarder</button>
+      </div>
+      <div class="fp-foot">
+        <button class="btn btn-ghost btn-sm" onclick="resetFP('interventions')">↺ Réinitialiser</button>
+        <button class="btn btn-success btn-sm" onclick="exportCSV('interventions')">⬇ CSV</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportCSV('interventions','xlsx')">⬇ Excel</button>
+        <span class="fp-count" id="cnt-interventions"></span>
+      </div>
+    </div>
+    <div class="tc">
+      <div class="tscroll">
+        <table>
+          <thead><tr>
+            <th onclick="srt('interventions','num_bon')">N° Bon</th>
+            <th onclick="srt('interventions','date_creation')">Date</th>
+            <th onclick="srt('interventions','client_nom')">Client</th>
+            <th onclick="srt('interventions','num_serie')">N° Série</th>
+            <th onclick="srt('interventions','type_intervention')">Type</th>
+            <th onclick="srt('interventions','technicien')">Technicien</th>
+            <th onclick="srt('interventions','lieu_intervention')">Lieu</th>
+            <th onclick="srt('interventions','statut')">Statut</th>
+            <th onclick="srt('interventions','urgence')">Urgence</th>
+            <th>Classif.</th>
+            <th style="width:28px"></th>
+          </tr></thead>
+          <tbody id="tb-interventions"></tbody>
+        </table>
+      </div>
+      <div class="pag" id="pag-interventions"></div>
+    </div>
+  </div>
+
+  <!-- ══ MOTEURS ══ -->
+  <div id="page-moteurs" class="page">
+    <div class="page-header">
+      <div class="page-header-left">
+        <div class="page-header-title"><span class="ph-icon">⚙️</span>Moteurs</div>
+        <div class="page-header-sub">Parc moteurs — référentiel et mise en service</div>
+      </div>
+      <div class="page-header-actions">
+        <button class="btn btn-ghost btn-sm" onclick="resetFP('moteurs')">↺ Réinitialiser</button>
+        <button class="btn btn-success btn-sm" onclick="exportCSV('moteurs')">⬇ CSV</button>
+      </div>
+    </div>
+    <div class="fp" id="fp-moteurs">
+      <div class="fp-head open" onclick="togFP('moteurs')">
+        <div class="fp-htitle">🔍 Filtres <span class="fc-badge" id="fc-moteurs"></span></div>
+        <span id="fpa-moteurs" style="color:var(--text-3);font-size:12px">▲</span>
+      </div>
+      <div class="fp-body" id="fpb-moteurs">
+        <div class="fgroup"><label>Recherche libre</label><input type="text" id="fm-q" placeholder="N° série, navire, réf…"></div>
+        <div class="fgroup"><label>Client</label><select id="fm-client"></select></div>
+        <div class="fgroup"><label>Marque</label><select id="fm-marque"></select></div>
+        <div class="fgroup"><label>Famille</label><select id="fm-famille"></select></div>
+        <div class="fgroup"><label>Type moteur</label><select id="fm-type"></select></div>
+        <div class="fgroup"><label>Application</label><select id="fm-app"></select></div>
+        <div class="fgroup"><label>Typologie</label><select id="fm-typo"></select></div>
+        <div class="fgroup"><label>Collection</label><select id="fm-coll"></select></div>
+        <div class="fgroup"><label>Cylindrée</label><select id="fm-cyl"></select></div>
+        <div class="fgroup"><label>Type client</label><select id="fm-tcli"></select></div>
+        <div class="fgroup"><label>Code affaire</label><input type="text" id="fm-code" placeholder="Code affaire…"></div>
+        <div class="fgroup"><label>Navire / Machine</label><input type="text" id="fm-navire" placeholder="Nom navire…"></div>
+        <div class="fgroup"><label>Mise en service — Du</label><input type="date" id="fm-misfrom"></div>
+        <div class="fgroup"><label>Mise en service — Au</label><input type="date" id="fm-misto"></div>
+      </div>
+      <div class="chips" id="ch-moteurs"></div>
+      <div class="saved-filters-row" id="sfr-moteurs">
+        <span class="saved-filters-label">💾 Enregistrés :</span>
+        <div id="sf-list-moteurs" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        <button class="btn btn-ghost btn-sm" onclick="saveFilter('moteurs')" style="margin-left:auto">+ Sauvegarder</button>
+      </div>
+      <div class="fp-foot">
+        <button class="btn btn-ghost btn-sm" onclick="resetFP('moteurs')">↺ Réinitialiser</button>
+        <button class="btn btn-success btn-sm" onclick="exportCSV('moteurs')">⬇ CSV</button>
+        <span class="fp-count" id="cnt-moteurs"></span>
+      </div>
+    </div>
+    <div class="tc"><div class="tscroll"><table>
+      <thead><tr>
+        <th onclick="srt('moteurs','num_serie')">N° Série</th>
+        <th onclick="srt('moteurs','client_nom')">Client</th>
+        <th onclick="srt('moteurs','navire')">Navire / Machine</th>
+        <th onclick="srt('moteurs','marque')">Marque</th>
+        <th onclick="srt('moteurs','famille')">Famille</th>
+        <th onclick="srt('moteurs','type_moteur')">Type</th>
+        <th onclick="srt('moteurs','application')">Application</th>
+        <th onclick="srt('moteurs','cylindree')">Cylindrée</th>
+        <th onclick="srt('moteurs','ref_constructeur')">Réf. Constr.</th>
+        <th onclick="srt('moteurs','code_affaire')">Code affaire</th>
+        <th onclick="srt('moteurs','date_mise_service')">Mise en service</th>
+        <th onclick="srt('moteurs','nb_interventions')">Bons</th>
+      </tr></thead>
+      <tbody id="tb-moteurs"></tbody>
+    </table></div><div class="pag" id="pag-moteurs"></div></div>
+  </div>
+
+  <!-- ══ CLIENTS ══ -->
+  <div id="page-clients" class="page">
+    <div class="page-header">
+      <div class="page-header-left">
+        <div class="page-header-title"><span class="ph-icon">👥</span>Clients</div>
+        <div class="page-header-sub">Parc clients — contacts et activité</div>
+      </div>
+      <div class="page-header-actions">
+        <button class="btn btn-ghost btn-sm" onclick="resetFP('clients')">↺ Réinitialiser</button>
+        <button class="btn btn-success btn-sm" onclick="exportCSV('clients')">⬇ CSV</button>
+      </div>
+    </div>
+    <div class="fp" id="fp-clients">
+      <div class="fp-head open" onclick="togFP('clients')">
+        <div class="fp-htitle">🔍 Filtres <span class="fc-badge" id="fc-clients"></span></div>
+        <span id="fpa-clients" style="color:var(--text-3);font-size:12px">▲</span>
+      </div>
+      <div class="fp-body" id="fpb-clients">
+        <div class="fgroup"><label>Recherche</label><input type="text" id="fc-q" placeholder="Nom, contact, email…"></div>
+        <div class="fgroup"><label>A des interventions</label><select id="fc-hint"><option value="">Tous</option><option value="1">Oui</option><option value="0">Non</option></select></div>
+        <div class="fgroup"><label>A des moteurs</label><select id="fc-hmot"><option value="">Tous</option><option value="1">Oui</option><option value="0">Non</option></select></div>
+      </div>
+      <div class="chips" id="ch-clients"></div>
+      <div class="fp-foot">
+        <button class="btn btn-ghost btn-sm" onclick="resetFP('clients')">↺ Réinitialiser</button>
+        <button class="btn btn-success btn-sm" onclick="exportCSV('clients')">⬇ CSV</button>
+        <span class="fp-count" id="cnt-clients"></span>
+      </div>
+    </div>
+    <div class="tc"><div class="tscroll"><table>
+      <thead><tr>
+        <th onclick="srt('clients','nom')">Nom</th>
+        <th onclick="srt('clients','contact')">Contact</th>
+        <th onclick="srt('clients','email')">Email</th>
+        <th onclick="srt('clients','telephone')">Téléphone</th>
+        <th onclick="srt('clients','adresse')">Adresse</th>
+        <th onclick="srt('clients','nb_interventions')">Bons</th>
+        <th onclick="srt('clients','nb_moteurs')">Moteurs</th>
+        <th onclick="srt('clients','created_at')">Créé le</th>
+      </tr></thead>
+      <tbody id="tb-clients"></tbody>
+    </table></div><div class="pag" id="pag-clients"></div></div>
+  </div>
+
+  <!-- ══ GARANTIES ══ -->
+  <div id="page-garanties" class="page">
+    <div class="page-header">
+      <div class="page-header-left">
+        <div class="page-header-title"><span class="ph-icon">🛡️</span>Garanties</div>
+        <div class="page-header-sub">Dossiers de garantie — suivi et attribution</div>
+      </div>
+      <div class="page-header-actions">
+        <button class="btn btn-ghost btn-sm" onclick="resetFP('garanties')">↺ Réinitialiser</button>
+        <button class="btn btn-success btn-sm" onclick="exportCSV('garanties')">⬇ CSV</button>
+      </div>
+    </div>
+    <div class="fp" id="fp-garanties">
+      <div class="fp-head open" onclick="togFP('garanties')">
+        <div class="fp-htitle">🔍 Filtres <span class="fc-badge" id="fc-garanties"></span></div>
+        <span id="fpa-garanties" style="color:var(--text-3);font-size:12px">▲</span>
+      </div>
+      <div class="fp-body" id="fpb-garanties">
+        <div class="fgroup"><label>Recherche</label><input type="text" id="fg-q" placeholder="N° EMS, constructeur…"></div>
+        <div class="fgroup"><label>Statut</label><select id="fg-statut"></select></div>
+        <div class="fgroup"><label>Attribution</label><select id="fg-attrib"><option value="">Toutes</option><option>Constructeur</option><option>Interne EMS</option><option>Mixte</option></select></div>
+        <div class="fgroup"><label>Client</label><select id="fg-client"></select></div>
+        <div class="fgroup"><label>Ouverture — Du</label><input type="date" id="fg-from"></div>
+        <div class="fgroup"><label>Ouverture — Au</label><input type="date" id="fg-to"></div>
+      </div>
+      <div class="chips" id="ch-garanties"></div>
+      <div class="fp-foot">
+        <button class="btn btn-ghost btn-sm" onclick="resetFP('garanties')">↺ Réinitialiser</button>
+        <button class="btn btn-success btn-sm" onclick="exportCSV('garanties')">⬇ CSV</button>
+        <span class="fp-count" id="cnt-garanties"></span>
+      </div>
+    </div>
+    <div class="tc"><div class="tscroll"><table>
+      <thead><tr>
+        <th onclick="srt('garanties','num_ems')">N° EMS</th>
+        <th onclick="srt('garanties','num_constructeur')">N° Constructeur</th>
+        <th onclick="srt('garanties','client_nom')">Client</th>
+        <th onclick="srt('garanties','num_serie')">N° Série Moteur</th>
+        <th onclick="srt('garanties','attribution')">Attribution</th>
+        <th onclick="srt('garanties','statut')">Statut</th>
+        <th onclick="srt('garanties','date_ouverture')">Ouverture</th>
+        <th onclick="srt('garanties','date_cloture')">Clôture</th>
+        <th onclick="srt('garanties','montant')">Montant</th>
+      </tr></thead>
+      <tbody id="tb-garanties"></tbody>
+    </table></div><div class="pag" id="pag-garanties"></div></div>
+  </div>
+
+  <!-- ══ AMÉLIORATIONS ══ -->
+  <div id="page-ameliorations" class="page">
+    <div class="page-header">
+      <div class="page-header-left">
+        <div class="page-header-title"><span class="ph-icon">💡</span>Améliorations</div>
+        <div class="page-header-sub">Tickets d'amélioration — suivi et priorités</div>
+      </div>
+      <div class="page-header-actions">
+        <button class="btn btn-ghost btn-sm" onclick="resetFP('ameliorations')">↺ Réinitialiser</button>
+        <button class="btn btn-success btn-sm" onclick="exportCSV('ameliorations')">⬇ CSV</button>
+      </div>
+    </div>
+    <div class="fp" id="fp-ameliorations">
+      <div class="fp-head open" onclick="togFP('ameliorations')">
+        <div class="fp-htitle">🔍 Filtres <span class="fc-badge" id="fc-ameliorations"></span></div>
+        <span id="fpa-ameliorations" style="color:var(--text-3);font-size:12px">▲</span>
+      </div>
+      <div class="fp-body" id="fpb-ameliorations">
+        <div class="fgroup"><label>Recherche</label><input type="text" id="fa-q" placeholder="N° ticket, titre…"></div>
+        <div class="fgroup"><label>Statut</label><select id="fa-statut"><option value="">Tous</option><option>Nouveau</option><option>En cours</option><option>Résolu</option></select></div>
+        <div class="fgroup"><label>Priorité</label><select id="fa-prio"><option value="">Toutes</option><option>Critique</option><option>Haute</option><option>Moyenne</option><option>Basse</option></select></div>
+        <div class="fgroup"><label>Client</label><select id="fa-client"></select></div>
+      </div>
+      <div class="chips" id="ch-ameliorations"></div>
+      <div class="fp-foot">
+        <button class="btn btn-ghost btn-sm" onclick="resetFP('ameliorations')">↺ Réinitialiser</button>
+        <button class="btn btn-success btn-sm" onclick="exportCSV('ameliorations')">⬇ CSV</button>
+        <span class="fp-count" id="cnt-ameliorations"></span>
+      </div>
+    </div>
+    <div class="tc"><div class="tscroll"><table>
+      <thead><tr>
+        <th onclick="srt('ameliorations','num_ticket')">N° Ticket</th>
+        <th onclick="srt('ameliorations','titre')">Titre</th>
+        <th onclick="srt('ameliorations','client_nom')">Client</th>
+        <th onclick="srt('ameliorations','priorite')">Priorité</th>
+        <th onclick="srt('ameliorations','statut')">Statut</th>
+        <th onclick="srt('ameliorations','created_at')">Créé le</th>
+        <th onclick="srt('ameliorations','updated_at')">Mis à jour</th>
+      </tr></thead>
+      <tbody id="tb-ameliorations"></tbody>
+    </table></div><div class="pag" id="pag-ameliorations"></div></div>
+  </div>
+
+  <!-- ══ ANALYSE CROISÉE ══ -->
+  <div id="page-croise" class="page">
+    <div class="page-header">
+      <div class="page-header-left">
+        <div class="page-header-title"><span class="ph-icon">🔀</span>Analyse croisée</div>
+        <div class="page-header-sub">Croisez deux dimensions pour révéler les patterns dans vos données</div>
+      </div>
+      <div class="page-header-actions">
+        <button class="btn btn-success btn-sm" onclick="exportPivotCSV()">⬇ CSV</button>
+      </div>
+    </div>
+    <div class="cc" style="margin-bottom:14px">
+      <div class="pivot-controls">
+        <div class="fgroup">
+          <label>Lignes (axe Y)</label>
+          <select id="pv-rows" onchange="buildPivot()">
+            <option value="statut">Statut</option>
+            <option value="urgence">Urgence</option>
+            <option value="type_intervention">Type d'intervention</option>
+            <option value="technicien">Technicien</option>
+            <option value="client_nom">Client</option>
+            <option value="lieu_intervention">Lieu</option>
+            <option value="mois">Mois</option>
+            <option value="annee">Année</option>
+          </select>
+        </div>
+        <div class="fgroup">
+          <label>Colonnes (axe X)</label>
+          <select id="pv-cols" onchange="buildPivot()">
+            <option value="statut">Statut</option>
+            <option value="urgence" selected>Urgence</option>
+            <option value="type_intervention">Type d'intervention</option>
+            <option value="technicien">Technicien</option>
+            <option value="client_nom">Client</option>
+            <option value="lieu_intervention">Lieu</option>
+            <option value="mois">Mois</option>
+          </select>
+        </div>
+        <div class="fgroup">
+          <label>Valeur</label>
+          <select id="pv-val" onchange="buildPivot()">
+            <option value="count">Nombre de bons</option>
+            <option value="pct">% par ligne</option>
+          </select>
+        </div>
+        <div class="fgroup">
+          <label>Heatmap</label>
+          <select id="pv-heat" onchange="buildPivot()">
+            <option value="1">Activée</option>
+            <option value="0">Désactivée</option>
+          </select>
+        </div>
+      </div>
+      <div class="pivot-table-wrap" id="pivot-output">
+        <div class="empty-s"><div class="ei">🔀</div><p>Chargez une base pour voir l'analyse croisée</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TECHNICIENS ══ -->
+  <div id="page-techniciens" class="page">
+    <div class="page-header">
+      <div class="page-header-left">
+        <div class="page-header-title"><span class="ph-icon">👷</span>Techniciens</div>
+        <div class="page-header-sub">Performance et charge de l'équipe technique</div>
+      </div>
+      <div class="page-header-actions">
+        <button class="btn btn-success btn-sm" onclick="exportCSV('techniciens')">⬇ CSV</button>
+      </div>
+    </div>
+    <div id="tech-cards-grid" class="cc" style="margin-bottom:14px"><div class="tech-grid" id="tech-cards"></div></div>
+    <div class="cc"><div class="tscroll"><table>
+      <thead><tr>
+        <th onclick="srt('techniciens','nom')">Nom</th>
+        <th onclick="srt('techniciens','email')">Email</th>
+        <th onclick="srt('techniciens','telephone')">Tél.</th>
+        <th onclick="srt('techniciens','nb_interventions')">Total</th>
+        <th onclick="srt('techniciens','en_cours')">En cours</th>
+        <th onclick="srt('techniciens','a_facturer')">À facturer</th>
+        <th onclick="srt('techniciens','facture')">Facturé</th>
+        <th onclick="srt('techniciens','clos')">Clos</th>
+        <th onclick="srt('techniciens','taux_cloture')">Taux clôture</th>
+      </tr></thead>
+      <tbody id="tb-techniciens"></tbody>
+    </table></div><div class="pag" id="pag-techniciens"></div></div>
+  </div>
+
+  <!-- ══ TIMELINE ══ -->
+  <div id="page-timeline" class="page">
+    <div class="page-header">
+      <div class="page-header-left">
+        <div class="page-header-title"><span class="ph-icon">📅</span>Timeline</div>
+        <div class="page-header-sub">Visualisation chronologique par technicien (12 derniers mois)</div>
+      </div>
+      <div class="page-header-actions">
+        <select class="btn btn-ghost btn-sm" id="tl-group" onchange="buildTimeline()" style="padding:5px 10px;font-size:12px">
+          <option value="technicien">Grouper par technicien</option>
+          <option value="client_nom">Grouper par client</option>
+          <option value="type_intervention">Grouper par type</option>
+        </select>
+      </div>
+    </div>
+    <div class="cc">
+      <div id="timeline-output" class="timeline-wrap">
+        <div class="empty-s"><div class="ei">📅</div><p>Chargez une base pour voir la timeline</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ALERTES ══ -->
+  <div id="page-alertes" class="page">
+    <div class="page-header">
+      <div class="page-header-left">
+        <div class="page-header-title"><span class="ph-icon">🔔</span>Alertes</div>
+        <div class="page-header-sub">Situations requérant une attention immédiate</div>
+      </div>
+    </div>
+    <div id="alerts-page-content">
+      <div class="empty-s"><div class="ei">🔔</div><p>Chargez une base pour voir les alertes</p></div>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+//  GLOBALS
+// ══════════════════════════════════════════════════════════════════
+let SQL=null,db=null,_dbFile=null;
+const PS=50;
+let _C={};
+const ST={
+  interventions:{raw:[],filtered:[],page:1,col:'date_creation',dir:-1,ps:50},
+  moteurs:      {raw:[],filtered:[],page:1,col:'num_serie',     dir: 1,ps:50},
+  clients:      {raw:[],filtered:[],page:1,col:'nom',           dir: 1,ps:50},
+  garanties:    {raw:[],filtered:[],page:1,col:'date_ouverture',dir:-1,ps:50},
+  ameliorations:{raw:[],filtered:[],page:1,col:'created_at',    dir:-1,ps:50},
+  techniciens:  {raw:[],filtered:[],page:1,col:'nb_interventions',dir:-1,ps:50},
+};
+const FPO={interventions:true,moteurs:true,clients:true,garanties:true,ameliorations:true};
+
+// Saved filters — stored in sessionStorage
+let _savedFilters = JSON.parse(sessionStorage.getItem('ems_sf')||'{}');
+
+// ══════════════════════════════════════════════════════════════════
+//  SQL.JS
+// ══════════════════════════════════════════════════════════════════
+initSqlJs({locateFile:f=>`https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/${f}`})
+  .then(S=>{
+    SQL=S;
+    if(window.EMS_DB_B64){
+      try{
+        const bin=atob(window.EMS_DB_B64),buf=new Uint8Array(bin.length);
+        for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i);
+        db=new SQL.Database(buf);
+        setDbOk(window.EMS_DB_NAME||'ems.db');
+        document.getElementById('upload-screen').classList.remove('visible');
+        document.getElementById('btn-reload').style.display='';
+        bootAll(); toast('✅ Base EMS chargée automatiquement');
+      }catch(e){toast('⚠ Auto-chargement échoué');}
+    }
+  }).catch(e=>console.error('sql.js',e));
+
+// ══════════════════════════════════════════════════════════════════
+//  DB
+// ══════════════════════════════════════════════════════════════════
+function loadDB(input){
+  const f=input.files[0]; if(!f)return;
+  showLoad();
+  const rd=new FileReader();
+  rd.onload=e=>{
+    try{
+      if(db)db.close();
+      db=new SQL.Database(new Uint8Array(e.target.result));
+      _dbFile=f; setDbOk(f.name);
+      document.getElementById('upload-screen').classList.remove('visible');
+      document.getElementById('btn-reload').style.display='';
+      hideLoad(); bootAll(); toast(`✅ "${f.name}" chargée`);
+    }catch(err){hideLoad();toast('❌ '+err.message);}
+  };
+  rd.readAsArrayBuffer(f); input.value='';
+}
+function reloadDB(){if(_dbFile)loadDB({files:[_dbFile]});else toast('Aucune base à recharger');}
+function onDrop(e){e.preventDefault();document.getElementById('drop-zone').classList.remove('drag');const f=e.dataTransfer.files[0];if(f)loadDB({files:[f]});}
+function setDbOk(name){
+  const el=document.getElementById('sb-db');
+  el.classList.remove('offline');
+  document.getElementById('sb-db-name').textContent=name;
+  const t=new Date();
+  document.getElementById('sb-upd').textContent=`Chargé ${t.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  QUERY
+// ══════════════════════════════════════════════════════════════════
+function q(sql,p=[]){
+  if(!db)return[];
+  try{const s=db.prepare(sql);s.bind(p);const r=[];while(s.step())r.push(s.getAsObject());s.free();return r;}
+  catch(e){console.warn('SQL',e.message);return[];}
+}
+function tbl(n){try{return q(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`,[n]).length>0;}catch{return false;}}
+function distinct(col,table){return q(`SELECT DISTINCT ${col} FROM ${table} WHERE ${col} IS NOT NULL AND ${col}!='' ORDER BY ${col}`).map(r=>r[col]).filter(Boolean);}
+
+// ══════════════════════════════════════════════════════════════════
+//  BOOT
+// ══════════════════════════════════════════════════════════════════
+function bootAll(){
+  // Activer la vue d'ensemble par défaut
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-dashboard').classList.add('active');
+  document.querySelectorAll('.sb-item').forEach(n=>n.classList.remove('active'));
+  document.querySelector('.sb-item[data-page="dashboard"]').classList.add('active');
+  document.getElementById('pt').innerHTML='Vue d\'ensemble <span class="crumb">Tableau de bord</span>';
+
+  buildDash();
+  buildInt();  bindFP('interventions',fInt,['fi-q','fi-from','fi-to'],['fi-statut','fi-urgence','fi-type','fi-tech','fi-client','fi-lieu','fi-classif','fi-ncli','fi-ntech']);
+  buildMot();  bindFP('moteurs',fMot,['fm-q','fm-code','fm-navire','fm-misfrom','fm-misto'],['fm-client','fm-marque','fm-famille','fm-type','fm-app','fm-typo','fm-coll','fm-cyl','fm-tcli']);
+  buildCli();  bindFP('clients',fCli,['fc-q'],['fc-hint','fc-hmot']);
+  buildGar();  bindFP('garanties',fGar,['fg-q','fg-from','fg-to'],['fg-statut','fg-attrib','fg-client']);
+  buildAml();  bindFP('ameliorations',fAml,['fa-q'],['fa-statut','fa-prio','fa-client']);
+  buildTec();
+  buildPivot();
+  buildTimeline();
+  buildAlerts();
+  renderSavedFilters('interventions');
+  renderSavedFilters('moteurs');
+}
+
+function bindFP(name,fn,inputs,selects){
+  const run=()=>{ST[name].page=1;fn();chips(name);};
+  inputs.forEach(id=>{const e=document.getElementById(id);if(e)e.addEventListener('input',run);});
+  selects.forEach(id=>{const e=document.getElementById(id);if(e)e.addEventListener('change',run);});
+}
+
+function drFilter(){return true;}
+
+// ══════════════════════════════════════════════════════════════════
+//  GLOBAL SEARCH
+// ══════════════════════════════════════════════════════════════════
+function globalSearch(v){
+  const box=document.getElementById('gsr');
+  if(!db||v.length<2){box.classList.remove('open');return;}
+  const vl=v.toLowerCase();
+  const results=[];
+  // Search interventions
+  q(`SELECT num_bon,date_creation,statut,technicien,client_id FROM interventions WHERE num_bon LIKE ? OR technicien LIKE ? LIMIT 5`,[`%${v}%`,`%${v}%`]).forEach(r=>results.push({ico:'🔧',main:r.num_bon,sub:`${fmt(r.date_creation)} · ${r.statut}`,page:'interventions'}));
+  // Search clients
+  q(`SELECT nom,email FROM clients WHERE nom LIKE ? OR email LIKE ? OR contact LIKE ? LIMIT 5`,[`%${v}%`,`%${v}%`,`%${v}%`]).forEach(r=>results.push({ico:'👥',main:r.nom,sub:r.email||'',page:'clients'}));
+  // Search moteurs
+  q(`SELECT num_serie,marque,type_moteur FROM moteurs WHERE num_serie LIKE ? OR marque LIKE ? OR navire LIKE ? LIMIT 5`,[`%${v}%`,`%${v}%`,`%${v}%`]).forEach(r=>results.push({ico:'⚙️',main:r.num_serie,sub:`${r.marque||''} ${r.type_moteur||''}`.trim(),page:'moteurs'}));
+
+  if(!results.length){box.innerHTML='<div class="gsr-empty">Aucun résultat</div>';box.classList.add('open');return;}
+  const grouped={};
+  results.forEach(r=>{if(!grouped[r.page])grouped[r.page]=['<div class="gsr-section">'+r.page+'</div>'];grouped[r.page].push(`<div class="gsr-item" onclick="gsrGo('${esc(r.page)}','${esc(r.main)}')"><span class="gsr-ico">${r.ico}</span><div><div class="gsr-main">${esc(r.main)}</div><div class="gsr-sub">${esc(r.sub)}</div></div></div>`);});
+  box.innerHTML=Object.values(grouped).map(g=>g.join('')).join('');
+  box.classList.add('open');
+}
+function gsrGo(page,val){
+  closeGS();
+  document.getElementById('gsearch').value='';
+  const navEl=document.querySelector(`.sb-item[data-page="${page}"]`);
+  if(navEl)nav(navEl);
+  // set search box of that page
+  const searchMap={interventions:'fi-q',moteurs:'fm-q',clients:'fc-q'};
+  const sid=searchMap[page];
+  if(sid){
+    const el=document.getElementById(sid);
+    if(el){el.value=val;el.dispatchEvent(new Event('input'));}
+  }
+}
+function closeGS(){document.getElementById('gsr').classList.remove('open');}
+
+// ══════════════════════════════════════════════════════════════════
+//  DARK MODE
+// ══════════════════════════════════════════════════════════════════
+function toggleDark(){
+  const html=document.documentElement;
+  const isDark=html.dataset.theme==='dark';
+  html.dataset.theme=isDark?'light':'dark';
+  document.getElementById('btn-dark').textContent=isDark?'🌙':'☀️';
+  localStorage.setItem('ems_theme',html.dataset.theme);
+  // Rebuild charts for new colors
+  if(db) buildDash();
+}
+// Restore theme
+(()=>{const t=localStorage.getItem('ems_theme');if(t){document.documentElement.dataset.theme=t;if(t==='dark')document.getElementById('btn-dark').textContent='☀️';}})();
+
+// ══════════════════════════════════════════════════════════════════
+//  ALERTS
+// ══════════════════════════════════════════════════════════════════
+function buildAlerts(){
+  if(!db)return;
+  const alerts=[];
+  const today=new Date().toISOString().slice(0,10);
+  const d30=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
+  const d7=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+
+  // Bons critiques sans technicien
+  const crit=q(`SELECT num_bon FROM interventions WHERE urgence='Critique' AND (technicien IS NULL OR technicien='') AND statut='En cours'`);
+  if(crit.length) alerts.push({level:'crit',ico:'🚨',txt:`${crit.length} bon${crit.length>1?'s':''} <strong>Critique(s)</strong> sans technicien affecté`,link:'Voir',page:'interventions',filter:{id:'fi-urgence',val:'Critique'}});
+
+  // Bons en cours depuis > 30 jours
+  const old=q(`SELECT num_bon,date_creation FROM interventions WHERE statut='En cours' AND date_creation!='' AND date_creation<?`,[d30]);
+  if(old.length) alerts.push({level:'warn',ico:'⏰',txt:`${old.length} bon${old.length>1?'s':''} en cours depuis <strong>plus de 30 jours</strong>`,link:'Voir',page:'interventions',filter:{id:'fi-statut',val:'En cours'}});
+
+  // Bons urgents non notifiés
+  const notif=q(`SELECT COUNT(*) n FROM interventions WHERE urgence IN ('Urgente','Critique') AND client_notifie=0 AND statut='En cours'`);
+  if(notif[0]?.n>0) alerts.push({level:'warn',ico:'📣',txt:`${notif[0].n} intervention${notif[0].n>1?'s':''} urgente${notif[0].n>1?'s':''} sans notification client`,link:'Voir',page:'interventions'});
+
+  // Bons à facturer anciens
+  const fact=q(`SELECT COUNT(*) n FROM interventions WHERE statut='À facturer' AND date_creation<?`,[d30]);
+  if(fact[0]?.n>0) alerts.push({level:'info',ico:'💰',txt:`${fact[0].n} bon${fact[0].n>1?'s':''} <strong>À facturer</strong> depuis plus de 30 jours`,link:'Voir',page:'interventions',filter:{id:'fi-statut',val:'À facturer'}});
+
+  // Garanties sans date de clôture (si table existe)
+  if(tbl('garanties')){
+    const garOpen=q(`SELECT COUNT(*) n FROM garanties WHERE (date_cloture IS NULL OR date_cloture='') AND statut!='Clôturée'`);
+    if(garOpen[0]?.n>0) alerts.push({level:'info',ico:'🛡️',txt:`${garOpen[0].n} dossier${garOpen[0].n>1?'s':''} de garantie ouvert${garOpen[0].n>1?'s':''}`,link:'Voir',page:'garanties'});
+  }
+
+  // Update sidebar badge
+  const badge=document.getElementById('alerts-count');
+  const critCount=alerts.filter(a=>a.level==='crit').length;
+  if(critCount>0){badge.textContent=critCount;badge.classList.add('on');}
+  else badge.classList.remove('on');
+
+  // Render compact banner (top 3 only)
+  const banner=document.getElementById('alerts-banner');
+  if(alerts.length>0){
+    banner.style.display='block';
+    const more=alerts.length>3?`<span style="font-size:12px;color:var(--text-3);margin-left:4px">+${alerts.length-3} autre${alerts.length-3>1?'s':''} — <span style="cursor:pointer;color:var(--blue);text-decoration:underline" onclick="document.querySelector('.sb-item[data-page=alertes]').click();nav(document.querySelector('.sb-item[data-page=alertes]'))">voir tout</span></span>`:'';
+    banner.innerHTML=`
+      <div class="alerts-banner-inner">
+        <div class="alerts-banner-head">
+          <span class="alerts-banner-label">🔔 ${alerts.length} alerte${alerts.length>1?'s':''} active${alerts.length>1?'s':''}${more}</span>
+          <button class="alerts-banner-close" onclick="closeBanner()" title="Masquer les alertes">✕</button>
+        </div>
+        ${alerts.slice(0,3).map(a=>`
+          <div class="alert-bar ${a.level}">
+            <span class="aic">${a.ico}</span>
+            <span class="atxt">${a.txt}</span>
+            ${a.link?`<span class="alink" onclick="alertGo('${a.page}','${a.filter?.id||''}','${a.filter?.val||''}')">${a.link} →</span>`:''}
+          </div>`).join('')}
+      </div>`;
+  } else {
+    banner.style.display='none';
+  }
+
+  // Full alerts page
+  const ap=document.getElementById('alerts-page-content');
+  if(!alerts.length){
+    ap.innerHTML=`<div class="empty-s"><div class="ei">✅</div><p>Aucune alerte — tout est en ordre</p></div>`;
+    return;
+  }
+  ap.innerHTML=alerts.map(a=>`
+    <div class="alert-bar ${a.level}" style="margin-bottom:8px;font-size:13.5px;padding:12px 16px">
+      <span class="aic">${a.ico}</span>
+      <span class="atxt">${a.txt}</span>
+      ${a.link?`<span class="alink" onclick="alertGo('${a.page}','${a.filter?.id||''}','${a.filter?.val||''}')">${a.link} →</span>`:''}
+    </div>`).join('');
+}
+
+function alertGo(page,filterId,filterVal){
+  const el=document.querySelector(`.sb-item[data-page="${page}"]`);
+  if(el)nav(el);
+  if(filterId&&filterVal){
+    const fe=document.getElementById(filterId);
+    if(fe){fe.value=filterVal;fe.dispatchEvent(new Event('change'));}
+  }
+}
+function closeBanner(){
+  const b=document.getElementById('alerts-banner');
+  b.style.display='none';
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  NAVIGATION
+// ══════════════════════════════════════════════════════════════════
+const PTITLES={dashboard:['Vue d\'ensemble','Tableau de bord'],interventions:['Interventions','Bons'],moteurs:['Moteurs','Parc moteurs'],clients:['Clients','Parc clients'],garanties:['Garanties','Dossiers'],ameliorations:['Améliorations','Tickets'],croise:['Analyse croisée','Pivot'],techniciens:['Techniciens','Équipe'],timeline:['Timeline','Chronologie'],alertes:['Alertes','Centre d\'alertes']};
+function nav(el){
+  document.querySelectorAll('.sb-item').forEach(n=>n.classList.remove('active'));
+  el.classList.add('active');
+  const pg=el.dataset.page;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const t=document.getElementById('page-'+pg);if(t)t.classList.add('active');
+  const[ti,cr]=PTITLES[pg]||[pg,''];
+  document.getElementById('pt').innerHTML=`${ti} <span class="crumb">${cr}</span>`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  FILTER PANEL
+// ══════════════════════════════════════════════════════════════════
+function togFP(name){
+  FPO[name]=!FPO[name];
+  document.getElementById('fpb-'+name).classList.toggle('closed',!FPO[name]);
+  document.querySelector(`#fp-${name} .fp-head`).classList.toggle('open',FPO[name]);
+  document.getElementById('fpa-'+name).textContent=FPO[name]?'▲':'▼';
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  CHIPS
+// ══════════════════════════════════════════════════════════════════
+const CHIPMAP={'fi-q':'Recherche','fi-statut':'Statut','fi-urgence':'Urgence','fi-type':'Type','fi-tech':'Technicien','fi-client':'Client','fi-lieu':'Lieu','fi-classif':'Classif.','fi-ncli':'Notif.cli','fi-ntech':'Notif.tec','fi-from':'Du','fi-to':'Au','fm-q':'Recherche','fm-client':'Client','fm-marque':'Marque','fm-famille':'Famille','fm-type':'Type','fm-app':'Application','fm-typo':'Typo.','fm-coll':'Collection','fm-cyl':'Cylindrée','fm-tcli':'TypeCli','fm-code':'Code','fm-navire':'Navire','fm-misfrom':'MES Du','fm-misto':'MES Au','fc-q':'Recherche','fc-hint':'Interventions','fc-hmot':'Moteurs','fg-q':'Recherche','fg-statut':'Statut','fg-attrib':'Attribution','fg-client':'Client','fg-from':'Du','fg-to':'Au','fa-q':'Recherche','fa-statut':'Statut','fa-prio':'Priorité','fa-client':'Client','ft-q':'Recherche'};
+const FP_IDS={interventions:['fi-q','fi-statut','fi-urgence','fi-type','fi-tech','fi-client','fi-lieu','fi-classif','fi-ncli','fi-ntech','fi-from','fi-to'],moteurs:['fm-q','fm-client','fm-marque','fm-famille','fm-type','fm-app','fm-typo','fm-coll','fm-cyl','fm-tcli','fm-code','fm-navire','fm-misfrom','fm-misto'],clients:['fc-q','fc-hint','fc-hmot'],garanties:['fg-q','fg-statut','fg-attrib','fg-client','fg-from','fg-to'],ameliorations:['fa-q','fa-statut','fa-prio','fa-client'],techniciens:['ft-q']};
+function chips(name){
+  const ids=FP_IDS[name]||[];
+  const cont=document.getElementById('ch-'+name);if(!cont)return;
+  let html='',n=0;
+  ids.forEach(id=>{const el=document.getElementById(id);if(!el)return;const v=el.value.trim();if(!v)return;n++;html+=`<span class="chip">${CHIPMAP[id]||id}: <strong>${esc(v)}</strong><span class="chip-x" onclick="clearChip('${id}','${name}')">×</span></span>`;});
+  cont.innerHTML=html;
+  const fc=document.getElementById('fc-'+name);if(fc){fc.textContent=n;fc.classList.toggle('on',n>0);}
+}
+function clearChip(id,name){
+  const el=document.getElementById(id);if(el)el.value='';
+  ST[name].page=1;
+  const fns={interventions:fInt,moteurs:fMot,clients:fCli,garanties:fGar,ameliorations:fAml,techniciens:fTec};
+  fns[name]?.();chips(name);
+}
+function resetFP(name){
+  (FP_IDS[name]||[]).forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  ST[name].page=1;
+  const fns={interventions:fInt,moteurs:fMot,clients:fCli,garanties:fGar,ameliorations:fAml,techniciens:fTec};
+  fns[name]?.();chips(name);toast('Filtres réinitialisés');
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  SAVED FILTERS
+// ══════════════════════════════════════════════════════════════════
+function saveFilter(name){
+  const ids=FP_IDS[name]||[];
+  const state={};
+  ids.forEach(id=>{const e=document.getElementById(id);if(e&&e.value)state[id]=e.value;});
+  if(!Object.keys(state).length){toast('Aucun filtre actif à sauvegarder');return;}
+  const label=prompt('Nom du filtre sauvegardé :');
+  if(!label)return;
+  if(!_savedFilters[name])_savedFilters[name]=[];
+  _savedFilters[name].push({label,state});
+  sessionStorage.setItem('ems_sf',JSON.stringify(_savedFilters));
+  renderSavedFilters(name);
+  toast(`💾 Filtre "${label}" sauvegardé`);
+}
+function loadSavedFilter(name,idx){
+  const sf=_savedFilters[name]?.[idx];if(!sf)return;
+  resetFP(name);
+  Object.entries(sf.state).forEach(([id,val])=>{const e=document.getElementById(id);if(e)e.value=val;});
+  ST[name].page=1;
+  const fns={interventions:fInt,moteurs:fMot,clients:fCli,garanties:fGar,ameliorations:fAml};
+  fns[name]?.();chips(name);
+  toast(`Filtre "${sf.label}" appliqué`);
+}
+function deleteSavedFilter(name,idx,e){
+  e.stopPropagation();
+  _savedFilters[name].splice(idx,1);
+  sessionStorage.setItem('ems_sf',JSON.stringify(_savedFilters));
+  renderSavedFilters(name);
+}
+function renderSavedFilters(name){
+  const cont=document.getElementById('sf-list-'+name);if(!cont)return;
+  const list=_savedFilters[name]||[];
+  cont.innerHTML=list.map((sf,i)=>`<span class="saved-chip" onclick="loadSavedFilter('${name}',${i})">${esc(sf.label)}<span class="sc-del" onclick="deleteSavedFilter('${name}',${i},event)">×</span></span>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  DASHBOARD
+// ══════════════════════════════════════════════════════════════════
+function buildDash(){
+  killCharts();
+  const now=new Date();
+  document.getElementById('hero-date').textContent=now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  
+  const invAll=q(`SELECT statut,urgence,date_creation FROM interventions`);
+  const nC=q('SELECT COUNT(*) n FROM clients')[0]?.n||0;
+  const nM=q('SELECT COUNT(*) n FROM moteurs')[0]?.n||0;
+  const nT=q('SELECT COUNT(*) n FROM techniciens')[0]?.n||0;
+  const cnt={tot:invAll.length,'En cours':0,'À facturer':0,'Facturé':0,'Clos':0,Urg:0,Crit:0};
+  invAll.forEach(r=>{if(r.statut in cnt)cnt[r.statut]++;if(r.urgence==='Urgente')cnt.Urg++;if(r.urgence==='Critique')cnt.Crit++;});
+
+  // Trend vs previous period (same duration)
+  const getMonthAgo=(n)=>new Date(Date.now()-n*30*864e5).toISOString().slice(0,7);
+  const prevMonth=q(`SELECT COUNT(*) n FROM interventions WHERE substr(date_creation,1,7)=?`,[getMonthAgo(1)]);
+  const thisMonth=q(`SELECT COUNT(*) n FROM interventions WHERE substr(date_creation,1,7)=?`,[getMonthAgo(0)]);
+  const tmn=thisMonth[0]?.n||0,pmn=prevMonth[0]?.n||0;
+  const trendPct=pmn>0?Math.round((tmn-pmn)/pmn*100):0;
+  const trendCls=trendPct>0?'up':trendPct<0?'dn':'flat';
+  const trendTxt=trendPct>0?`↑ +${trendPct}%`:trendPct<0?`↓ ${trendPct}%`:'→ stable';
+
+  document.getElementById('hero-sub').textContent=`${cnt.tot} bon${cnt.tot>1?'s':''} • ${nC} client${nC>1?'s':''} • ${nM} moteur${nM>1?'s':''} • ${nT} technicien${nT>1?'s':''}`;
+  document.getElementById('hero-kpis').innerHTML=[
+    {val:cnt['En cours'],  lbl:'En cours',  cls:cnt['En cours']>0?'warn':'',  trend:trendTxt,trendCls},
+    {val:cnt.Crit,         lbl:'Critiques', cls:cnt.Crit>0?'danger':'',  trend:'',trendCls:'flat'},
+    {val:cnt.Urg,          lbl:'Urgentes',  cls:cnt.Urg>0?'warn':'',     trend:'',trendCls:'flat'},
+    {val:cnt['À facturer'],lbl:'À facturer',cls:'',trend:'',trendCls:'flat'},
+  ].map(k=>`<div class="hero-kpi"><div class="val ${k.cls}">${k.val}</div><div class="lbl">${k.lbl}</div>${k.trend?`<div class="trend ${k.trendCls}">${k.trend}</div>`:''}</div>`).join('');
+
+  const tot=cnt.tot||1;
+  const statKpis=[
+    {lbl:'En cours',  val:cnt['En cours'],  ico:'🔄',cls:'amber'},
+    {lbl:'À facturer',val:cnt['À facturer'],ico:'📋',cls:'violet'},
+    {lbl:'Facturé',   val:cnt['Facturé'],   ico:'💰',cls:'blue'},
+    {lbl:'Clos',      val:cnt['Clos'],      ico:'✅',cls:'green'},
+  ];
+  document.getElementById('kpi-statuts').innerHTML=statKpis.map(k=>{
+    const pct=Math.round(k.val/tot*100);
+    const trend=k.lbl==='En cours'?`<span class="trend-chip trend-${trendCls}">${trendTxt} ce mois</span>`:'';
+    return`<div class="kpi ${k.cls}">
+      <div class="kpi-top"><div class="kpi-label">${k.lbl}</div><div class="kpi-icon">${k.ico}</div></div>
+      <div class="kpi-num">${k.val}</div>
+      <div class="kpi-bar"><div class="kpi-fill" style="width:${pct}%"></div></div>
+      <div class="kpi-foot">${pct}% du total ${trend}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('kpi-parc').innerHTML=[
+    {lbl:'Total bons',  val:cnt.tot,ico:'📄',cls:'blue',  foot:'toutes périodes'},
+    {lbl:'Clients',     val:nC,     ico:'👥',cls:'teal',  foot:'dans la base'},
+    {lbl:'Moteurs',     val:nM,     ico:'⚙️',cls:'violet',foot:'dans le parc'},
+    {lbl:'Techniciens', val:nT,     ico:'👷',cls:'green', foot:'actifs'},
+  ].map(k=>`
+    <div class="kpi ${k.cls}">
+      <div class="kpi-top"><div class="kpi-label">${k.lbl}</div><div class="kpi-icon">${k.ico}</div></div>
+      <div class="kpi-num">${k.val}</div>
+      <div class="kpi-foot">${k.foot}</div>
+    </div>`).join('');
+
+  const isDark=document.documentElement.dataset.theme==='dark';
+  const gridColor=isDark?'rgba(255,255,255,.06)':'rgba(0,0,0,.04)';
+  const tickColor=isDark?'#4a5568':'#7a8fa8';
+
+  const byMonth=q(`SELECT substr(date_creation,1,7) m,COUNT(*) n FROM interventions WHERE date_creation!='' GROUP BY m ORDER BY m DESC LIMIT 18`).reverse();
+  const r1=document.getElementById('dr1');r1.innerHTML='';
+  if(byMonth.length>1){
+    r1.insertAdjacentHTML('beforeend',`<div class="cc gcol2"><div class="cc-head"><div><div class="cc-title">Activité mensuelle</div><div class="cc-sub">Bons créés par mois</div></div></div><div class="cc-body"><canvas id="ch-months"></canvas></div></div>`);
+    _C.months=new Chart(document.getElementById('ch-months'),{type:'bar',data:{labels:byMonth.map(r=>r.m),datasets:[{data:byMonth.map(r=>r.n),backgroundColor:'rgba(29,110,245,.18)',borderColor:'rgba(29,110,245,.85)',borderWidth:2,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0,color:tickColor},grid:{color:gridColor}},x:{ticks:{color:tickColor},grid:{display:false}}}}});
+  }
+  r1.insertAdjacentHTML('beforeend',`<div class="cc"><div class="cc-head"><div><div class="cc-title">Statuts</div><div class="cc-sub">Répartition</div></div></div><div class="cc-body"><canvas id="ch-statuts"></canvas></div></div>`);
+  _C.statuts=new Chart(document.getElementById('ch-statuts'),{type:'doughnut',data:{labels:['En cours','À facturer','Facturé','Clos'],datasets:[{data:[cnt['En cours'],cnt['À facturer'],cnt['Facturé'],cnt['Clos']],backgroundColor:['#f08c00','#7048e8','#1d6ef5','#2f9e44'],borderWidth:3,borderColor:isDark?'#1c2230':'#fff',hoverOffset:4}]},options:{responsive:true,cutout:'68%',plugins:{legend:{position:'bottom',labels:{padding:10,font:{size:11},color:isDark?'#a0aec0':'#3d4f6b'}}}}});
+
+  const r2=document.getElementById('dr2');r2.innerHTML='';
+  const byType=q(`SELECT type_intervention t,COUNT(*) n FROM interventions WHERE type_intervention!='' GROUP BY t ORDER BY n DESC LIMIT 10`);
+  if(byType.length){
+    r2.insertAdjacentHTML('beforeend',`<div class="cc"><div class="cc-head"><div><div class="cc-title">Types d'intervention</div><div class="cc-sub">Top 10</div></div></div><div class="cc-body"><canvas id="ch-types"></canvas></div></div>`);
+    _C.types=new Chart(document.getElementById('ch-types'),{type:'bar',data:{labels:byType.map(r=>r.t),datasets:[{data:byType.map(r=>r.n),backgroundColor:'rgba(112,72,232,.75)',borderRadius:3,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0,color:tickColor},grid:{color:gridColor}},y:{ticks:{color:tickColor,font:{size:11}},grid:{display:false}}}}});
+  }
+  const byClient=q(`SELECT c.nom n,COUNT(i.id) cnt FROM interventions i LEFT JOIN clients c ON i.client_id=c.id WHERE c.nom IS NOT NULL GROUP BY c.nom ORDER BY cnt DESC LIMIT 8`);
+  if(byClient.length){
+    const maxC=byClient[0].cnt;
+    r2.insertAdjacentHTML('beforeend',`<div class="cc"><div class="cc-head"><div><div class="cc-title">Top clients</div><div class="cc-sub">Volume de bons</div></div></div><div class="slist">${byClient.map((r,i)=>`<div class="srow"><div class="srank${i<3?' top':''}">${i+1}</div><div class="sname" title="${esc(r.n)}">${esc(r.n)}</div><div class="sbar"><div class="sbar-bg"><div class="sbar-fg" style="width:${Math.round(r.cnt/maxC*100)}%;background:var(--teal)"></div></div></div><div class="scount">${r.cnt}</div></div>`).join('')}</div></div>`);
+  }
+  const byTRaw=q(`SELECT technicien FROM interventions WHERE technicien!=''`);
+  const tMap={};byTRaw.forEach(r=>{(r.technicien||'').split(',').forEach(t=>{const n=t.trim();if(n)tMap[n]=(tMap[n]||0)+1;});});
+  const tEnt=Object.entries(tMap).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  if(tEnt.length){
+    const maxT=tEnt[0][1];
+    r2.insertAdjacentHTML('beforeend',`<div class="cc"><div class="cc-head"><div><div class="cc-title">Charge techniciens</div><div class="cc-sub">Nombre de bons</div></div></div><div class="slist">${tEnt.map(([n,v],i)=>`<div class="srow"><div class="srank${i<3?' top':''}">${i+1}</div><div class="sname" title="${esc(n)}">${esc(n)}</div><div class="sbar"><div class="sbar-bg"><div class="sbar-fg" style="width:${Math.round(v/maxT*100)}%"></div></div></div><div class="scount">${v}</div></div>`).join('')}</div></div>`);
+  }
+
+  const r3=document.getElementById('dr3');r3.innerHTML='';
+  const urgC={Normale:0,Urgente:0,Critique:0};
+  invAll.forEach(r=>{const u=r.urgence||'Normale';if(u in urgC)urgC[u]++;});
+  r3.insertAdjacentHTML('beforeend',`<div class="cc"><div class="cc-head"><div><div class="cc-title">Niveaux d'urgence</div><div class="cc-sub">Toutes interventions</div></div></div><div class="cc-body"><canvas id="ch-urg"></canvas></div></div>`);
+  _C.urg=new Chart(document.getElementById('ch-urg'),{type:'doughnut',data:{labels:['Normale','Urgente','Critique'],datasets:[{data:[urgC.Normale,urgC.Urgente,urgC.Critique],backgroundColor:['#2f9e44','#f08c00','#e03131'],borderWidth:3,borderColor:isDark?'#1c2230':'#fff',hoverOffset:4}]},options:{responsive:true,cutout:'68%',plugins:{legend:{position:'bottom',labels:{padding:10,font:{size:11},color:isDark?'#a0aec0':'#3d4f6b'}}}}});
+  const byMarque=q(`SELECT marque,COUNT(*) n FROM moteurs WHERE marque!='' GROUP BY marque ORDER BY n DESC LIMIT 10`);
+  if(byMarque.length){
+    const cols=['#1d6ef5','#7048e8','#0c8599','#2f9e44','#f08c00','#e03131','#1d6ef5','#7048e8','#0c8599','#2f9e44'];
+    r3.insertAdjacentHTML('beforeend',`<div class="cc"><div class="cc-head"><div><div class="cc-title">Parc par marque</div><div class="cc-sub">Nombre de moteurs</div></div></div><div class="cc-body"><canvas id="ch-marq"></canvas></div></div>`);
+    _C.marq=new Chart(document.getElementById('ch-marq'),{type:'bar',data:{labels:byMarque.map(r=>r.marque),datasets:[{data:byMarque.map(r=>r.n),backgroundColor:cols,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0,color:tickColor},grid:{color:gridColor}},x:{ticks:{color:tickColor},grid:{display:false}}}}});
+  }
+}
+function killCharts(){Object.values(_C).forEach(c=>c.destroy());_C={};}
+
+// ══════════════════════════════════════════════════════════════════
+//  PIVOT / ANALYSE CROISÉE
+// ══════════════════════════════════════════════════════════════════
+let _pivotData=[];
+function buildPivot(){
+  if(!db){document.getElementById('pivot-output').innerHTML='<div class="empty-s"><div class="ei">🔀</div><p>Chargez une base</p></div>';return;}
+  const rowDim=gv('pv-rows')||'statut';
+  const colDim=gv('pv-cols')||'urgence';
+  const valType=gv('pv-val')||'count';
+  const heatOn=gv('pv-heat')!=='0';
+
+  // Get dimension value for a row
+  function getDim(r,dim){
+    if(dim==='mois') return (r.date_creation||'').slice(0,7)||'—';
+    if(dim==='annee') return (r.date_creation||'').slice(0,4)||'—';
+    if(dim==='client_nom') return r.client_nom||'—';
+    return r[dim]||'—';
+  }
+
+  const rows=q(`SELECT i.*,c.nom client_nom FROM interventions i LEFT JOIN clients c ON i.client_id=c.id`);
+  // Apply global date range
+  const filtered=rows.filter(r=>drFilter(r,'date_creation'));
+
+  const rowSet=new Set(),colSet=new Set();
+  filtered.forEach(r=>{rowSet.add(getDim(r,rowDim));colSet.add(getDim(r,colDim));});
+  const rowKeys=[...rowSet].sort(),colKeys=[...colSet].sort();
+
+  // Count matrix
+  const matrix={};
+  rowKeys.forEach(rk=>{matrix[rk]={};colKeys.forEach(ck=>{matrix[rk][ck]=0;});});
+  filtered.forEach(r=>{const rk=getDim(r,rowDim),ck=getDim(r,colDim);if(matrix[rk])matrix[rk][ck]=(matrix[rk][ck]||0)+1;});
+
+  // Row totals
+  const rowTotals={};rowKeys.forEach(rk=>{rowTotals[rk]=colKeys.reduce((s,ck)=>s+matrix[rk][ck],0);});
+  const grandTotal=Object.values(rowTotals).reduce((s,v)=>s+v,0);
+
+  // Max for heat
+  let maxVal=0;
+  rowKeys.forEach(rk=>colKeys.forEach(ck=>{if(matrix[rk][ck]>maxVal)maxVal=matrix[rk][ck];}));
+
+  // Store for export
+  _pivotData={rowKeys,colKeys,matrix,rowTotals,grandTotal,rowDim,colDim};
+
+  function heatClass(v){
+    if(!heatOn||!maxVal)return'';
+    const p=v/maxVal;
+    if(p>.8)return'cell-heat-5';
+    if(p>.6)return'cell-heat-4';
+    if(p>.4)return'cell-heat-3';
+    if(p>.2)return'cell-heat-2';
+    if(p>0)return'cell-heat-1';
+    return'';
+  }
+
+  let html=`<table class="pivot-tbl"><thead><tr><th class="row-header">${rowDim} \\ ${colDim}</th>`;
+  colKeys.forEach(ck=>html+=`<th>${esc(ck)}</th>`);
+  html+=`<th>Total</th></tr></thead><tbody>`;
+  rowKeys.forEach(rk=>{
+    html+=`<tr><td class="row-label">${esc(rk)}</td>`;
+    const rowTot=rowTotals[rk]||0;
+    colKeys.forEach(ck=>{
+      const v=matrix[rk][ck];
+      const display=valType==='pct'?(rowTot>0?Math.round(v/rowTot*100)+'%':'—'):(v||'—');
+      html+=`<td class="${heatClass(v)}">${display}</td>`;
+    });
+    html+=`<td class="total-col">${valType==='pct'?'100%':rowTot}</td></tr>`;
+  });
+  // Grand total row
+  html+=`<tr><td class="row-label">Total</td>`;
+  colKeys.forEach(ck=>{const ct=rowKeys.reduce((s,rk)=>s+matrix[rk][ck],0);html+=`<td class="total-col">${valType==='pct'?(grandTotal>0?Math.round(ct/grandTotal*100)+'%':'—'):ct}</td>`;});
+  html+=`<td class="total-col">${valType==='pct'?'100%':grandTotal}</td></tr>`;
+  html+=`</tbody></table>`;
+  document.getElementById('pivot-output').innerHTML=html;
+}
+
+function exportPivotCSV(){
+  if(!_pivotData||!_pivotData.rowKeys){toast('Construisez d\'abord l\'analyse');return;}
+  const{rowKeys,colKeys,matrix,rowTotals}=_pivotData;
+  const lines=[['',  ...colKeys,'Total'].join(';')];
+  rowKeys.forEach(rk=>{lines.push([rk,...colKeys.map(ck=>matrix[rk][ck]),rowTotals[rk]].join(';'));});
+  lines.push(['Total',...colKeys.map(ck=>rowKeys.reduce((s,rk)=>s+matrix[rk][ck],0)),Object.values(rowTotals).reduce((s,v)=>s+v,0)].join(';'));
+  const blob=new Blob(['\uFEFF'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='EMS_analyse_croisee.csv';a.click();URL.revokeObjectURL(url);
+  toast('✅ Tableau croisé exporté');
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  TIMELINE
+// ══════════════════════════════════════════════════════════════════
+function buildTimeline(){
+  if(!db){return;}
+  const groupBy=gv('tl-group')||'technicien';
+  const d12=new Date(Date.now()-365*864e5).toISOString().slice(0,10);
+  const rows=q(`SELECT i.*,c.nom client_nom FROM interventions i LEFT JOIN clients c ON i.client_id=c.id WHERE i.date_creation>=? ORDER BY i.date_creation`,[d12]);
+
+  // Build months axis (12 months)
+  const months=[];
+  for(let i=11;i>=0;i--){
+    const d=new Date();d.setMonth(d.getMonth()-i);
+    months.push(d.toISOString().slice(0,7));
+  }
+  const minDate=months[0]+'-01';
+  const maxDate=months[months.length-1]+'-31';
+  const totalDays=(new Date(maxDate)-new Date(minDate))/864e5;
+
+  // Group rows
+  const groups={};
+  function getKey(r){
+    if(groupBy==='technicien') return(r.technicien||'Non affecté').split(',')[0].trim();
+    if(groupBy==='client_nom') return r.client_nom||'—';
+    if(groupBy==='type_intervention') return r.type_intervention||'—';
+    return'—';
+  }
+  rows.forEach(r=>{
+    if(!drFilter(r,'date_creation'))return;
+    const k=getKey(r);
+    if(!groups[k])groups[k]=[];
+    groups[k].push(r);
+  });
+
+  const statusColor={'En cours':'#f08c00','À facturer':'#7048e8','Facturé':'#1d6ef5','Clos':'#2f9e44'};
+
+  const container=document.getElementById('timeline-output');
+  if(!Object.keys(groups).length){container.innerHTML='<div class="empty-s"><div class="ei">📅</div><p>Aucune donnée sur les 12 derniers mois</p></div>';return;}
+
+  // Header months
+  let html=`<div style="display:flex;margin-left:140px;margin-bottom:6px">`;
+  months.forEach(m=>html+=`<div class="tl-month-col">${m.slice(5)}</div>`);
+  html+=`</div>`;
+
+  // Rows
+  const entries=Object.entries(groups).sort((a,b)=>b[1].length-a[1].length).slice(0,20);
+  entries.forEach(([key,items])=>{
+    html+=`<div class="tl-row"><div class="tl-label" title="${esc(key)}">${esc(key)}</div><div class="tl-track">`;
+    items.forEach(r=>{
+      if(!r.date_creation)return;
+      const start=(new Date(r.date_creation)-new Date(minDate))/864e5;
+      const leftPct=Math.max(0,Math.min(100,start/totalDays*100));
+      const widthPct=Math.max(.5,1/totalDays*100);
+      const col=statusColor[r.statut]||'#94a3b8';
+      html+=`<div class="tl-bar" style="left:${leftPct.toFixed(1)}%;width:${widthPct.toFixed(1)}%;background:${col}" title="${esc(r.num_bon)} — ${esc(r.statut)} — ${fmt(r.date_creation)}"></div>`;
+    });
+    html+=`</div></div>`;
+  });
+
+  // Legend
+  html+=`<div style="display:flex;gap:14px;padding:12px 0 0 140px;flex-wrap:wrap">`;
+  Object.entries(statusColor).forEach(([k,c])=>html+=`<span style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-3)"><span style="width:12px;height:12px;border-radius:3px;background:${c};display:inline-block;flex-shrink:0"></span>${k}</span>`);
+  html+=`</div>`;
+
+  container.innerHTML=html;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  INTERVENTIONS
+// ══════════════════════════════════════════════════════════════════
+function buildInt(){
+  ST.interventions.raw=q(`SELECT i.*,c.nom client_nom,m.num_serie,m.navire FROM interventions i LEFT JOIN clients c ON i.client_id=c.id LEFT JOIN moteurs m ON i.moteur_id=m.id ORDER BY i.date_creation DESC`);
+  popSel('fi-type',  distinct('type_intervention','interventions'));
+  popSel('fi-lieu',  distinct('lieu_intervention','interventions'));
+  popSel('fi-client',distinct('nom','clients'));
+  const ts=new Set();ST.interventions.raw.forEach(r=>(r.technicien||'').split(',').forEach(t=>{const n=t.trim();if(n)ts.add(n);}));
+  popSel('fi-tech',[...ts].sort());
+  fInt();
+}
+function fInt(){
+  const q2=gv('fi-q').toLowerCase(),st=gv('fi-statut'),urg=gv('fi-urgence'),tp=gv('fi-type'),tc=gv('fi-tech'),cl=gv('fi-client'),li=gv('fi-lieu'),cf=gv('fi-classif'),nc=gv('fi-ncli'),nt=gv('fi-ntech'),fr=gv('fi-from'),to=gv('fi-to');
+  ST.interventions.filtered=ST.interventions.raw.filter(r=>{
+    if(q2&&!`${r.num_bon} ${r.client_nom} ${r.num_serie} ${r.navire} ${r.technicien} ${r.lieu_intervention} ${r.type_intervention}`.toLowerCase().includes(q2))return false;
+    if(st &&r.statut!==st)return false;
+    if(urg&&r.urgence!==urg)return false;
+    if(tp &&r.type_intervention!==tp)return false;
+    if(tc &&!(r.technicien||'').split(',').map(s=>s.trim()).includes(tc))return false;
+    if(cl &&r.client_nom!==cl)return false;
+    if(li &&r.lieu_intervention!==li)return false;
+    if(cf==='garantie'  &&!r.garantie_intervention)return false;
+    if(cf==='facturable'&&!r.facturable)return false;
+    if(cf==='interne'   &&!r.interne)return false;
+    if(fr&&(r.date_creation||'')<fr)return false;
+    if(to&&(r.date_creation||'')>to+'z')return false;
+    if(nc!==''&&String(r.client_notifie)!==nc)return false;
+    if(nt!==''&&String(r.tech_notifie)!==nt)return false;
+    return true;
+  });
+  rTbl('interventions');
+  setCnt('cnt-interventions',ST.interventions.filtered.length,ST.interventions.raw.length);
+}
+function rInt(r){
+  const sB={'En cours':'ba','À facturer':'bv','Facturé':'bb','Clos':'bg'}[r.statut]||'bx';
+  const uB={'Critique':'br','Urgente':'ba','Normale':'bx'}[r.urgence||'Normale']||'bx';
+  const cl=[];
+  if(r.garantie_intervention)cl.push('<span class="badge bt">Gar.</span>');
+  if(r.facturable)cl.push('<span class="badge bb">Fact.</span>');
+  if(r.interne)cl.push('<span class="badge bx">Int.</span>');
+  const did=`dr-${String(r.id||r.num_bon).replace(/\W/g,'_')}`;
+  return`<tr>
+    <td class="mono">${esc(r.num_bon)}</td>
+    <td>${fmt(r.date_creation)}</td>
+    <td>${esc(r.client_nom||'—')}</td>
+    <td class="mono">${esc(r.num_serie||'—')}</td>
+    <td>${esc(r.type_intervention||'—')}</td>
+    <td>${esc(r.technicien||'—')}</td>
+    <td>${esc(r.lieu_intervention||'—')}</td>
+    <td><span class="badge ${sB}">${esc(r.statut)}</span></td>
+    <td><span class="badge ${uB}">${esc(r.urgence||'Normale')}</span></td>
+    <td>${cl.join(' ')||'—'}</td>
+    <td><button class="btn btn-ghost btn-sm btn-icon" onclick="togDetail('${did}',this)">+</button></td>
+  </tr>
+  <tr class="drow" id="${did}" style="display:none">
+    <td colspan="11" class="dcell">
+      <div class="dinner">
+        <div class="dfield"><label>Demande client</label><span>${esc(r.demande_client||'—')}</span></div>
+        <div class="dfield"><label>Constat</label><span>${esc(r.constat||'—')}</span></div>
+        <div class="dfield"><label>Travaux réalisés</label><span>${esc(r.travaux||'—')}</span></div>
+        <div class="dfield"><label>Pièces</label><span>${esc(r.pieces||'—')}</span></div>
+        <div class="dfield"><label>Signataire</label><span>${esc(r.nom_signataire||'—')}</span></div>
+        <div class="dfield"><label>Heures fonct.</label><span>${esc(r.nb_heures_fct||'—')}</span></div>
+        <div class="dfield"><label>Notif. client</label><span>${r.client_notifie?'✅ Oui':'❌ Non'}</span></div>
+        <div class="dfield"><label>Notif. tech.</label><span>${r.tech_notifie?'✅ Oui':'❌ Non'}</span></div>
+        <div class="dfield"><label>Créé le</label><span>${fmt(r.created_at)}</span></div>
+        <div class="dfield"><label>Mis à jour</label><span>${fmt(r.updated_at)}</span></div>
+      </div>
+    </td>
+  </tr>`;
+}
+function togDetail(id,btn){const r=document.getElementById(id);if(!r)return;const v=r.style.display==='table-row';r.style.display=v?'none':'table-row';btn.textContent=v?'+':'−';}
+
+// ══════════════════════════════════════════════════════════════════
+//  MOTEURS
+// ══════════════════════════════════════════════════════════════════
+function buildMot(){
+  ST.moteurs.raw=q(`SELECT m.*,c.nom client_nom,COUNT(i.id) nb_interventions FROM moteurs m LEFT JOIN clients c ON m.client_id=c.id LEFT JOIN interventions i ON i.moteur_id=m.id GROUP BY m.id ORDER BY m.num_serie`);
+  popSel('fm-client',distinct('nom','clients'));popSel('fm-marque',distinct('marque','moteurs'));popSel('fm-famille',distinct('famille','moteurs'));popSel('fm-type',distinct('type_moteur','moteurs'));popSel('fm-app',distinct('application','moteurs'));popSel('fm-typo',distinct('typologie','moteurs'));popSel('fm-coll',distinct('collection','moteurs'));popSel('fm-cyl',distinct('cylindree','moteurs'));popSel('fm-tcli',distinct('type_client','moteurs'));
+  fMot();
+}
+function fMot(){
+  const sq=gv('fm-q').toLowerCase(),cl=gv('fm-client'),ma=gv('fm-marque'),fa=gv('fm-famille'),tp=gv('fm-type'),ap=gv('fm-app'),ty=gv('fm-typo'),co=gv('fm-coll'),cy=gv('fm-cyl'),tc=gv('fm-tcli'),cd=gv('fm-code').toLowerCase(),nv=gv('fm-navire').toLowerCase(),mf=gv('fm-misfrom'),mt=gv('fm-misto');
+  ST.moteurs.filtered=ST.moteurs.raw.filter(r=>{
+    if(sq&&!`${r.num_serie} ${r.navire} ${r.machine} ${r.marque} ${r.type_moteur} ${r.ref_constructeur} ${r.code_affaire} ${r.famille} ${r.application}`.toLowerCase().includes(sq))return false;
+    if(cl&&r.client_nom!==cl)return false;if(ma&&r.marque!==ma)return false;if(fa&&r.famille!==fa)return false;if(tp&&r.type_moteur!==tp)return false;if(ap&&r.application!==ap)return false;if(ty&&r.typologie!==ty)return false;if(co&&r.collection!==co)return false;if(cy&&r.cylindree!==cy)return false;if(tc&&r.type_client!==tc)return false;
+    if(cd&&!(r.code_affaire||'').toLowerCase().includes(cd))return false;
+    if(nv&&!`${r.navire} ${r.machine}`.toLowerCase().includes(nv))return false;
+    if(mf&&(r.date_mise_service||'')<mf)return false;if(mt&&(r.date_mise_service||'')>mt+'z')return false;
+    return true;
+  });
+  rTbl('moteurs');setCnt('cnt-moteurs',ST.moteurs.filtered.length,ST.moteurs.raw.length);
+}
+function rMot(r){return`<tr><td class="mono"><strong>${esc(r.num_serie)}</strong></td><td>${esc(r.client_nom||'—')}</td><td>${esc([r.navire,r.machine].filter(Boolean).join(' / ')||'—')}</td><td>${esc(r.marque||'—')}</td><td>${esc(r.famille||'—')}</td><td>${esc(r.type_moteur||'—')}</td><td>${esc(r.application||'—')}</td><td>${esc(r.cylindree||'—')}</td><td class="mono">${esc(r.ref_constructeur||'—')}</td><td class="mono">${esc(r.code_affaire||'—')}</td><td>${esc(r.date_mise_service||'—')}</td><td>${r.nb_interventions||0}</td></tr>`;}
+
+// ══════════════════════════════════════════════════════════════════
+//  CLIENTS
+// ══════════════════════════════════════════════════════════════════
+function buildCli(){ST.clients.raw=q(`SELECT c.*,COUNT(DISTINCT i.id) nb_interventions,COUNT(DISTINCT m.id) nb_moteurs FROM clients c LEFT JOIN interventions i ON i.client_id=c.id LEFT JOIN moteurs m ON m.client_id=c.id GROUP BY c.id ORDER BY c.nom`);fCli();}
+function fCli(){const s=gv('fc-q').toLowerCase(),hi=gv('fc-hint'),hm=gv('fc-hmot');ST.clients.filtered=ST.clients.raw.filter(r=>{if(s&&!`${r.nom} ${r.contact} ${r.email} ${r.telephone} ${r.adresse}`.toLowerCase().includes(s))return false;if(hi==='1'&&!r.nb_interventions)return false;if(hi==='0'&&r.nb_interventions)return false;if(hm==='1'&&!r.nb_moteurs)return false;if(hm==='0'&&r.nb_moteurs)return false;return true;});rTbl('clients');setCnt('cnt-clients',ST.clients.filtered.length,ST.clients.raw.length);}
+function rCli(r){return`<tr><td><strong>${esc(r.nom)}</strong></td><td>${esc(r.contact||'—')}</td><td>${r.email?`<a href="mailto:${esc(r.email)}" style="color:var(--blue)">${esc(r.email)}</a>`:'—'}</td><td>${esc(r.telephone||'—')}</td><td>${esc(r.adresse||'—')}</td><td>${r.nb_interventions||0}</td><td>${r.nb_moteurs||0}</td><td>${fmt(r.created_at)}</td></tr>`;}
+
+// ══════════════════════════════════════════════════════════════════
+//  GARANTIES
+// ══════════════════════════════════════════════════════════════════
+function buildGar(){if(!tbl('garanties')){ST.garanties.raw=[];rTbl('garanties');return;}ST.garanties.raw=q(`SELECT g.*,c.nom client_nom,m.num_serie FROM garanties g LEFT JOIN clients c ON g.client_id=c.id LEFT JOIN moteurs m ON g.moteur_id=m.id ORDER BY g.date_ouverture DESC`);popSel('fg-statut',distinct('statut','garanties'));popSel('fg-client',distinct('nom','clients'));fGar();}
+function fGar(){const s=gv('fg-q').toLowerCase(),st=gv('fg-statut'),at=gv('fg-attrib'),cl=gv('fg-client'),fr=gv('fg-from'),to=gv('fg-to');ST.garanties.filtered=ST.garanties.raw.filter(r=>{if(s&&!`${r.num_ems} ${r.num_constructeur} ${r.client_nom} ${r.num_serie}`.toLowerCase().includes(s))return false;if(st&&r.statut!==st)return false;if(at&&r.attribution!==at)return false;if(cl&&r.client_nom!==cl)return false;if(fr&&(r.date_ouverture||'')<fr)return false;if(to&&(r.date_ouverture||'')>to+'z')return false;return true;});rTbl('garanties');setCnt('cnt-garanties',ST.garanties.filtered.length,ST.garanties.raw.length);}
+function rGar(r){const sm={'Clôturée':'bg','Acceptée par le constructeur':'bb','Non pris en garantie':'br'}[r.statut]||'bv';return`<tr><td class="mono">${esc(r.num_ems)}</td><td class="mono">${esc(r.num_constructeur||'—')}</td><td>${esc(r.client_nom||'—')}</td><td class="mono">${esc(r.num_serie||'—')}</td><td>${esc(r.attribution||'—')}</td><td><span class="badge ${sm}">${esc(r.statut||'—')}</span></td><td>${esc(r.date_ouverture||'—')}</td><td>${esc(r.date_cloture||'—')}</td><td>${r.montant?`<strong>${esc(r.montant)} €</strong>`:'—'}</td></tr>`;}
+
+// ══════════════════════════════════════════════════════════════════
+//  AMÉLIORATIONS
+// ══════════════════════════════════════════════════════════════════
+function buildAml(){if(!tbl('ameliorations')){ST.ameliorations.raw=[];rTbl('ameliorations');return;}ST.ameliorations.raw=q(`SELECT a.*,c.nom client_nom FROM ameliorations a LEFT JOIN clients c ON a.client_id=c.id ORDER BY a.created_at DESC`);popSel('fa-client',distinct('nom','clients'));fAml();}
+function fAml(){const s=gv('fa-q').toLowerCase(),st=gv('fa-statut'),pr=gv('fa-prio'),cl=gv('fa-client');ST.ameliorations.filtered=ST.ameliorations.raw.filter(r=>{if(s&&!`${r.num_ticket} ${r.titre} ${r.client_nom} ${r.description}`.toLowerCase().includes(s))return false;if(st&&r.statut!==st)return false;if(pr&&r.priorite!==pr)return false;if(cl&&r.client_nom!==cl)return false;return true;});rTbl('ameliorations');setCnt('cnt-ameliorations',ST.ameliorations.filtered.length,ST.ameliorations.raw.length);}
+function rAml(r){const sb={'Nouveau':'ba','En cours':'bb','Résolu':'bg'}[r.statut]||'bx';const pb={'Critique':'br','Haute':'ba','Moyenne':'bv','Basse':'bx'}[r.priorite]||'bx';return`<tr><td class="mono">${esc(r.num_ticket)}</td><td>${esc(r.titre)}</td><td>${esc(r.client_nom||'—')}</td><td><span class="badge ${pb}">${esc(r.priorite||'—')}</span></td><td><span class="badge ${sb}">${esc(r.statut||'—')}</span></td><td>${fmt(r.created_at)}</td><td>${fmt(r.updated_at)}</td></tr>`;}
+
+// ══════════════════════════════════════════════════════════════════
+//  TECHNICIENS
+// ══════════════════════════════════════════════════════════════════
+function buildTec(){
+  const base=q('SELECT * FROM techniciens ORDER BY nom');
+  const ints=q(`SELECT technicien,statut,date_creation FROM interventions WHERE technicien!=""`);
+  const mp={};
+  base.forEach(r=>{mp[r.nom]={...r,nb_interventions:0,en_cours:0,a_facturer:0,facture:0,clos:0};});
+  ints.forEach(r=>{
+    if(!drFilter(r,'date_creation'))return;
+    (r.technicien||'').split(',').forEach(t=>{
+      const n=t.trim();if(!n)return;
+      if(!mp[n])mp[n]={nom:n,email:'',telephone:'',created_at:'',nb_interventions:0,en_cours:0,a_facturer:0,facture:0,clos:0};
+      const c=mp[n];c.nb_interventions++;
+      if(r.statut==='En cours')c.en_cours++;if(r.statut==='À facturer')c.a_facturer++;if(r.statut==='Facturé')c.facture++;if(r.statut==='Clos')c.clos++;
+    });
+  });
+  ST.techniciens.raw=Object.values(mp).map(r=>({...r,taux_cloture:r.nb_interventions>0?Math.round(r.clos/r.nb_interventions*100):0}));
+  fTec();
+  buildTechCards();
+}
+function fTec(){ST.techniciens.filtered=ST.techniciens.raw;rTbl('techniciens');}
+function buildTechCards(){
+  const sorted=[...ST.techniciens.raw].sort((a,b)=>b.nb_interventions-a.nb_interventions);
+  document.getElementById('tech-cards').innerHTML=sorted.map(r=>{
+    const tot=r.nb_interventions||1;
+    const txCls=r.taux_cloture>=80?'var(--green)':r.taux_cloture>=50?'var(--amber)':'var(--red)';
+    return`<div class="tech-card">
+      <div class="tech-card-name">👷 ${esc(r.nom)}</div>
+      <div class="tcs-rate" style="color:${txCls}">${r.taux_cloture}%</div>
+      <div class="tcs-rate-lbl">Taux de clôture</div>
+      <div style="margin-top:10px">
+        ${[['En cours',r.en_cours,'var(--amber)'],['À facturer',r.a_facturer,'var(--violet)'],['Facturé',r.facture,'var(--blue)'],['Clos',r.clos,'var(--green)']].map(([lbl,v,c])=>`
+          <div class="tech-card-stat"><span class="lbl">${lbl}</span><span class="val">${v}</span></div>
+          <div class="tcs-bar"><div class="tcs-fill" style="width:${Math.round(v/tot*100)}%;background:${c}"></div></div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+function rTec(r){
+  const tot=r.nb_interventions||1;
+  const mb=(v,c)=>`<div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:600;width:16px">${v}</span><div style="flex:1;height:4px;background:var(--bg-2);border-radius:2px;overflow:hidden"><div style="height:100%;width:${Math.round(v/tot*100)}%;background:${c};border-radius:2px"></div></div></div>`;
+  const trc=r.taux_cloture>=80?'bg':r.taux_cloture>=50?'ba':'br';
+  return`<tr><td><strong>${esc(r.nom)}</strong></td><td>${r.email?`<a href="mailto:${esc(r.email)}" style="color:var(--blue)">${esc(r.email)}</a>`:'—'}</td><td>${esc(r.telephone||'—')}</td><td><strong>${r.nb_interventions}</strong></td><td>${mb(r.en_cours,'var(--amber)')}</td><td>${mb(r.a_facturer,'var(--violet)')}</td><td>${mb(r.facture,'var(--blue)')}</td><td>${mb(r.clos,'var(--green)')}</td><td><span class="badge ${trc}">${r.taux_cloture}%</span></td></tr>`;}
+
+// ══════════════════════════════════════════════════════════════════
+//  TABLE ENGINE
+// ══════════════════════════════════════════════════════════════════
+const REND={interventions:rInt,moteurs:rMot,clients:rCli,garanties:rGar,ameliorations:rAml,techniciens:rTec};
+function rTbl(name){
+  const s=ST[name];
+  const data=sortArr(s.filtered,s.col,s.dir);
+  const tot=data.length,ps=s.ps||PS,start=(s.page-1)*ps;
+  const pg=data.slice(start,start+ps);
+  const tb=document.getElementById('tb-'+name);if(!tb)return;
+  tb.innerHTML=pg.length?pg.map(REND[name]).join(''):`<tr><td colspan="20"><div class="empty-s"><div class="ei">🔍</div><p>Aucun résultat pour ces critères</p></div></td></tr>`;
+  buildPag(name,tot,s.page,ps);
+  updSortTh(name,s.col,s.dir);
+}
+function buildPag(name,total,cur,ps){
+  const el=document.getElementById('pag-'+name);if(!el)return;
+  const pages=Math.ceil(total/ps);
+  const s=(cur-1)*ps+1,e=Math.min(cur*ps,total);
+  let h=`<div class="pag-info">Affichage <strong>${s}–${e}</strong> sur <strong>${total}</strong></div><div class="pag-btns">`;
+  if(pages>1){
+    h+=`<button class="pg" onclick="chPg('${name}',${cur-1})" ${cur===1?'disabled':''}>‹</button>`;
+    pRange(cur,pages).forEach(p=>{h+=p==='…'?`<span style="padding:4px 2px;color:var(--text-3)">…</span>`:`<button class="pg${p===cur?' on':''}" onclick="chPg('${name}',${p})">${p}</button>`;});
+    h+=`<button class="pg" onclick="chPg('${name}',${cur+1})" ${cur===pages?'disabled':''}>›</button>`;
+  }
+  h+=`</div><select class="pag-size" onchange="chPs('${name}',this.value)" title="Lignes par page">`;
+  [25,50,100,200].forEach(n=>h+=`<option value="${n}"${n===ps?' selected':''}>${n}/page</option>`);
+  h+=`</select>`;
+  el.innerHTML=h;
+}
+function pRange(c,t){if(t<=7)return Array.from({length:t},(_,i)=>i+1);const p=[1];if(c>3)p.push('…');for(let i=Math.max(2,c-1);i<=Math.min(t-1,c+1);i++)p.push(i);if(c<t-2)p.push('…');p.push(t);return p;}
+function chPg(name,pg){const s=ST[name];const tp=Math.ceil(s.filtered.length/(s.ps||PS));if(pg<1||pg>tp)return;s.page=pg;rTbl(name);}
+function chPs(name,val){ST[name].ps=parseInt(val);ST[name].page=1;rTbl(name);}
+function srt(name,col){const s=ST[name];s.dir=s.col===col?-s.dir:1;s.col=col;s.page=1;rTbl(name);}
+function sortArr(data,col,dir){return[...data].sort((a,b)=>{let av=a[col]??'',bv=b[col]??'';if(av!==''&&bv!==''&&!isNaN(av)&&!isNaN(bv))return dir*(Number(av)-Number(bv));return dir*String(av).localeCompare(String(bv),'fr');});}
+function updSortTh(name,col,dir){const t=document.querySelector(`#page-${name} table`);if(!t)return;t.querySelectorAll('thead th').forEach(th=>{th.classList.remove('asc','desc');const oc=th.getAttribute('onclick')||'';if(oc.includes(`'${col}'`))th.classList.add(dir===1?'asc':'desc');});}
+
+// ══════════════════════════════════════════════════════════════════
+//  CSV EXPORT
+// ══════════════════════════════════════════════════════════════════
+function exportCSV(name){
+  const s=ST[name],data=sortArr(s.filtered,s.col,s.dir);
+  if(!data.length){toast('Aucune donnée à exporter');return;}
+  const cols=Object.keys(data[0]);
+  const rows=[cols.join(';'),...data.map(r=>cols.map(c=>{let v=String(r[c]??'').replace(/"/g,'""');if(v.includes(';')||v.includes('\n')||v.includes('"'))v=`"${v}"`;return v;}).join(';'))];
+  const blob=new Blob(['\uFEFF'+rows.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`EMS_${name}_${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url);
+  toast(`✅ ${data.length} lignes exportées`);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════════════════
+function gv(id){const e=document.getElementById(id);return e?e.value.trim():'';}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fmt(s){if(!s||s==='—')return'—';const m=String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);return m?`${m[3]}/${m[2]}/${m[1]}`:esc(String(s).slice(0,10));}
+function popSel(id,vals){const e=document.getElementById(id);if(!e)return;e.innerHTML='<option value="">Tous</option>'+vals.map(v=>`<option>${esc(v)}</option>`).join('');}
+function setCnt(id,f,t){const e=document.getElementById(id);if(!e)return;e.innerHTML=f===t?`<strong>${t.toLocaleString('fr-FR')}</strong> résultat${t>1?'s':''}`:`<strong>${f.toLocaleString('fr-FR')}</strong> / ${t.toLocaleString('fr-FR')} résultats`;}
+let _tt;function toast(msg){const e=document.getElementById('toast');e.textContent=msg;e.classList.add('on');clearTimeout(_tt);_tt=setTimeout(()=>e.classList.remove('on'),3000);}
+function showLoad(){document.getElementById('loading').classList.add('on');}
+function hideLoad(){document.getElementById('loading').classList.remove('on');}
+</script>
+</body>
+</html>
