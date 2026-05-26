@@ -14,6 +14,7 @@ class InterventionCreate(BaseModel):
     statut:                 str = "En cours"
     technicien:             str = ""
     date_creation:          str = ""
+    date_cloture:           str = ""
     lieu_intervention:      str = ""
     nom_signataire:         str = ""
     email_signataire:       str = ""
@@ -63,6 +64,7 @@ class InterventionUpdate(BaseModel):
     statut:                 Optional[str] = None
     technicien:             Optional[str] = None
     date_creation:          Optional[str] = None
+    date_cloture:           Optional[str] = None
     lieu_intervention:      Optional[str] = None
     nom_signataire:         Optional[str] = None
     email_signataire:       Optional[str] = None
@@ -115,6 +117,7 @@ class InterventionOut(BaseModel):
     statut:                 str
     technicien:             str
     date_creation:          str
+    date_cloture:           str = ""
     lieu_intervention:      str
     nom_signataire:         str
     email_signataire:       str

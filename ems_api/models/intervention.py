@@ -16,6 +16,8 @@ class Intervention(Base):
     statut                = Column(String, default="En cours", index=True)
     technicien            = Column(String, default="")          # CSV multi-tech
     date_creation         = Column(String, default="")          # JJ/MM/AAAA
+    date_cloture          = Column(String, default="")          # JJ/MM/AAAA
+    date_cloture          = Column(String, default="")          # JJ/MM/AAAA
     lieu_intervention     = Column(String, default="")
     nom_signataire        = Column(String, default="")
     email_signataire      = Column(String, default="")

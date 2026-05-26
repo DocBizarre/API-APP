@@ -300,13 +300,27 @@ def get_types_intervention() -> List[str]:
     return [it["libelle"] for it in items]
 
 
-def add_type_intervention(libelle: str) -> None:
-    _client.post("/types-intervention", json={"libelle": libelle})
+def add_type_intervention(libelle: str) -> bool:
+    """Retourne True si ajoute, False si doublon."""
+    try:
+        _client.post("/types-intervention", json={"libelle": libelle})
+        return True
+    except APIError as e:
+        if e.status_code == 409:
+            return False
+        raise
 
 
-def update_type_intervention(old_libelle: str, new_libelle: str) -> None:
-    _client.put("/types-intervention",
-                 json={"old": old_libelle, "new": new_libelle})
+def update_type_intervention(old_libelle: str, new_libelle: str) -> bool:
+    """Retourne True si OK, False si le nouveau nom existe déjà."""
+    try:
+        _client.put("/types-intervention",
+                     json={"old": old_libelle, "new": new_libelle})
+        return True
+    except APIError as e:
+        if e.status_code in (404, 409):
+            return False
+        raise
 
 
 def delete_type_intervention(libelle: str) -> None:
@@ -318,13 +332,27 @@ def get_statuts_garantie() -> List[str]:
     return [it["libelle"] for it in items]
 
 
-def add_statut_garantie(libelle: str) -> None:
-    _client.post("/statuts-garantie", json={"libelle": libelle})
+def add_statut_garantie(libelle: str) -> bool:
+    """Retourne True si ajoute, False si doublon."""
+    try:
+        _client.post("/statuts-garantie", json={"libelle": libelle})
+        return True
+    except APIError as e:
+        if e.status_code == 409:
+            return False
+        raise
 
 
-def update_statut_garantie(old_libelle: str, new_libelle: str) -> None:
-    _client.put("/statuts-garantie",
-                 json={"old": old_libelle, "new": new_libelle})
+def update_statut_garantie(old_libelle: str, new_libelle: str) -> bool:
+    """Retourne True si OK, False si le nouveau nom existe déjà."""
+    try:
+        _client.put("/statuts-garantie",
+                     json={"old": old_libelle, "new": new_libelle})
+        return True
+    except APIError as e:
+        if e.status_code in (404, 409):
+            return False
+        raise
 
 
 def delete_statut_garantie(libelle: str) -> None:
