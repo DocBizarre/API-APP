@@ -36,6 +36,7 @@ def _to_out(g: Garantie) -> dict:
 def list_garanties(
     statut: Optional[str] = None,
     search: Optional[str] = None,
+    attribution: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     q = db.query(Garantie)
@@ -50,6 +51,8 @@ def list_garanties(
                 Client.nom.ilike(like),
                 Moteur.num_serie.ilike(like))
         )
+    if attribution and attribution not in ("Toutes", "Tous"):
+        q = q.filter(Garantie.attribution == attribution)
     q = q.order_by(Garantie.created_at.desc())
     return [_to_out(g) for g in q.all()]
 

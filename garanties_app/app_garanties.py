@@ -69,7 +69,7 @@ def _dossiers_candidats():
 
 _CANDIDATS = _dossiers_candidats()
 for _c in _CANDIDATS:
-    if (_c / "database.py").is_file() and (_c / "garantie_generator.py").is_file():
+    if (_c / "garantie_generator.py").is_file():
         sys.path.insert(0, str(_c))
         break
 else:

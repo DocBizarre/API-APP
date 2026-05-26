@@ -38,10 +38,15 @@ def list_moteurs(
         if serie_only:
             q = q.filter(Moteur.num_serie.ilike(like))
         else:
-            q = q.filter(or_(Moteur.num_serie.ilike(like),
-                             Moteur.marque.ilike(like),
-                             Moteur.navire.ilike(like),
-                             Moteur.machine.ilike(like)))
+            # outerjoin Client pour pouvoir chercher par nom client
+            q = q.outerjoin(Client).filter(
+                or_(Moteur.num_serie.ilike(like),
+                    Moteur.marque.ilike(like),
+                    Moteur.navire.ilike(like),
+                    Moteur.machine.ilike(like),
+                    Moteur.ref_constructeur.ilike(like),
+                    Moteur.code_affaire.ilike(like),
+                    Client.nom.ilike(like)))
     return [_to_out(m) for m in q.order_by(Moteur.num_serie).all()]
 
 

@@ -411,10 +411,14 @@ def mark_notifie(inv_id: str, kind: str) -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def get_garanties(statut: Optional[str] = None,
-                   search: str = "") -> List[Dict]:
+                   search: str = "",
+                   attribution: Optional[str] = None) -> List[Dict]:
     if statut in ("Tous", "tous", ""):
         statut = None
-    return _client.get("/garanties", statut=statut, search=search)
+    if attribution in ("Toutes", "toutes", "Tous", ""):
+        attribution = None
+    return _client.get("/garanties", statut=statut, search=search,
+                        attribution=attribution)
 
 
 def get_garantie(garantie_id: Optional[str] = None,
@@ -455,17 +459,39 @@ def delete_garantie(garantie_id: str) -> None:
     _client.delete(f"/garanties/{garantie_id}")
 
 
-def get_stats_garanties() -> Dict[str, int]:
+def get_stats_garanties() -> Dict:
     """
-    Statistiques des garanties par statut + total.
-    Calcule en local (l'API n'a pas d'endpoint dedie pour les garanties).
+    Statistiques des garanties, calculees en local.
+    Retourne : {
+        'Total':         int,
+        'Ouvertes':      int,    # toutes celles non cloturees
+        'Cloturees':     int,
+        'par_attribution': {nom: count, ...},
+        'par_statut':    {nom: count, ...},
+    }
+    Note : la cle 'Clôturées' (avec accent) est aussi presente pour
+    matcher exactement ce qu'attend app_garanties.py.
     """
-    res: Dict[str, int] = {"Total": 0}
+    from collections import Counter
+    par_statut = Counter()
+    par_attrib = Counter()
+    total = 0
     for g in get_garanties():
-        res["Total"] += 1
+        total += 1
         s = g.get("statut") or "Inconnu"
-        res[s] = res.get(s, 0) + 1
-    return res
+        par_statut[s] += 1
+        a = g.get("attribution") or "Non assignee"
+        par_attrib[a] += 1
+    cloturees = par_statut.get("Cloturee", 0) + par_statut.get("Cloturees", 0) + par_statut.get("Clôturée", 0) + par_statut.get("Clôturées", 0)
+    return {
+        "Total":           total,
+        "Ouvertes":        total - cloturees,
+        "Cloturees":       cloturees,
+        "Clôturées":       cloturees,    # cle avec accent attendue
+        "par_attribution": dict(par_attrib),
+        "par_statut":      dict(par_statut),
+    }
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -555,11 +581,26 @@ def set_dashboard_cards(cards: List[str]) -> None:
 #   Constantes (compat ancien database.py)
 # ═══════════════════════════════════════════════════════════════════════════
 
-GARANTIE_STATUT_DEFAULT = "Suivi EMS"
-AMELIO_STATUT_DEFAULT = "Nouveau"
+from pathlib import Path as _Path
+
+GARANTIE_STATUT_DEFAULT      = "Suivi EMS"
+GARANTIE_ATTRIBUTION_DEFAULT = "Constructeur"
+STATUTS_GARANTIE = ["Suivi EMS", "Expertise en cours",
+                    "En attente infos Constructeur",
+                    "En attente infos EMS",
+                    "Acceptée par Constructeur",
+                    "Facture transmise au Constructeur",
+                    "Non pris en garantie", "Clôturée"]
+
+AMELIO_STATUT_DEFAULT   = "Nouveau"
 AMELIO_PRIORITE_DEFAULT = "Moyenne"
-STATUTS_GARANTIE = ["Suivi EMS", "Envoyée", "Acceptée", "Refusée", "Cloturée"]
-PRIORITES_AMELIORATION = ["Basse", "Moyenne", "Haute", "Critique"]
+AMELIO_STATUTS    = ["Nouveau", "À étudier", "En cours", "Résolu", "Refusé"]
+AMELIO_PRIORITES  = ["Basse", "Moyenne", "Haute", "Critique"]
+PRIORITES_AMELIORATION = AMELIO_PRIORITES  # alias
+
+# Dossiers de stockage (modifiables a chaud par les apps)
+GARANTIE_DIR = _Path(__file__).resolve().parent.parent / "garanties"
+AMELIO_DIR   = _Path(__file__).resolve().parent.parent / "ameliorations"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
