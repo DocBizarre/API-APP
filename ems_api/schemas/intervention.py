@@ -103,8 +103,13 @@ class InterventionOut(BaseModel):
     client_id:              Optional[str] = None
     moteur_id:              Optional[str] = None
     # Champs enrichis (ajoutés par _to_out dans le router)
+    # Champs enrichis (ajoutés par _to_out dans le router)
     client_nom:             Optional[str] = None
     moteur_serie:           Optional[str] = None
+    # Champs additionnels utilisés par le code Tkinter
+    navire:                 str = ""
+    num_serie:              str = ""
+    marque:                 str = ""
     type_intervention:      str
     urgence:                str
     statut:                 str

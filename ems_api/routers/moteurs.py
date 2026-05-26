@@ -1,7 +1,7 @@
 """Endpoints REST pour la ressource Moteur."""
 from typing import List, Optional
 from uuid import uuid4
-
+from sqlalchemy.orm import joinedload
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -14,9 +14,15 @@ router = APIRouter(prefix="/moteurs", tags=["moteurs"])
 
 
 def _to_out(m: Moteur) -> dict:
-    """Sérialise un moteur en injectant client_nom (jointure)."""
-    d = {c.name: getattr(m, c.name) for c in m.__table__.columns}
-    d["client_nom"] = m.client.nom if m.client else None
+    """Sérialise un moteur en garantissant TOUS les champs (jamais None)."""
+    d = {}
+    for c in m.__table__.columns:
+        val = getattr(m, c.name)
+        # Convertir None en "" pour les colonnes string
+        if val is None and not c.name.endswith("_at"):
+            val = ""
+        d[c.name] = val
+    d["client_nom"] = m.client.nom if m.client else ""
     return d
 
 
@@ -26,7 +32,7 @@ def list_moteurs(
     serie_only: bool = Query(False, description="Recherche uniquement par N° série"),
     db: Session = Depends(get_db),
 ):
-    q = db.query(Moteur)
+    q = db.query(Moteur).options(joinedload(Moteur.client))
     if search:
         like = f"%{search}%"
         if serie_only:

@@ -1,10 +1,10 @@
-"""Schémas Pydantic – Moteur."""
+﻿"""Schémas Pydantic – Moteur."""
 from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
- 
- 
+
+
 class MoteurCreate(BaseModel):
     client_id:          str
     num_serie:          str
@@ -22,8 +22,8 @@ class MoteurCreate(BaseModel):
     type_client:        str = ""
     date_mise_service:  str = ""
     duree_garantie:     str = ""
- 
- 
+
+
 class MoteurUpdate(BaseModel):
     client_id:          Optional[str] = None
     num_serie:          Optional[str] = None
@@ -41,8 +41,8 @@ class MoteurUpdate(BaseModel):
     type_client:        Optional[str] = None
     date_mise_service:  Optional[str] = None
     duree_garantie:     Optional[str] = None
- 
- 
+
+
 class MoteurOut(BaseModel):
     id:                 str
     client_id:          Optional[str] = None
@@ -61,7 +61,9 @@ class MoteurOut(BaseModel):
     type_client:        str
     date_mise_service:  str
     duree_garantie:     str
+    # Champ enrichi (ajoute par _to_out dans le router)
+    client_nom:         Optional[str] = ""
     created_at:         Optional[datetime] = None
     updated_at:         Optional[datetime] = None
- 
+
     model_config = {"from_attributes": True}

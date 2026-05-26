@@ -16,16 +16,34 @@ from ..services.numerotation import next_num_bon
 
 
 # Heure Paris (sans dépendance externe)
-PARIS = timezone(timedelta(hours=1))   # UTC+1 (CET) — ajuster si besoin DST
+PARIS = timezone(timedelta(hours=1))
 
 
 router = APIRouter(prefix="/interventions", tags=["interventions"])
 
 
 def _to_out(inv: Intervention) -> dict:
-    d = {c.name: getattr(inv, c.name) for c in inv.__table__.columns}
-    d["client_nom"] = inv.client.nom if inv.client else None
-    d["moteur_serie"] = inv.moteur.num_serie if inv.moteur else None
+    """Sérialise une intervention en garantissant TOUS les champs."""
+    d = {}
+    for c in inv.__table__.columns:
+        val = getattr(inv, c.name)
+        if val is None and not c.name.endswith("_at"):
+            # Type par défaut selon la colonne
+            if c.name in ("garantie_intervention", "facturable", "interne",
+                           "outil_diagnostic", "memoriser_avant", "memoriser_apres",
+                           "photos_avant", "photos_apres", "pour_information",
+                           "preconisation", "client_notifie", "tech_notifie"):
+                val = 0
+            else:
+                val = ""
+        d[c.name] = val
+    # Jointures pour les vues Tkinter
+    d["client_nom"] = inv.client.nom if inv.client else ""
+    d["moteur_serie"] = inv.moteur.num_serie if inv.moteur else ""
+    # Champs additionnels attendus par le code Tkinter
+    d["navire"] = inv.moteur.navire if inv.moteur else ""
+    d["num_serie"] = inv.moteur.num_serie if inv.moteur else ""
+    d["marque"] = inv.moteur.marque if inv.moteur else ""
     return d
 
 
@@ -39,11 +57,10 @@ def list_interventions(
     q = db.query(Intervention)
     if statut and statut != "Tous":
         q = q.filter(Intervention.statut == statut)
-    if urgence:
+    if urgence and urgence != "Toutes":
         q = q.filter(Intervention.urgence == urgence)
     if search:
         like = f"%{search}%"
-        # Recherche dans num_bon + technicien + (via jointure) client.nom + moteur.num_serie
         q = q.outerjoin(Client).outerjoin(Moteur).filter(
             or_(Intervention.num_bon.ilike(like),
                 Intervention.technicien.ilike(like),
@@ -106,8 +123,11 @@ def get_intervention(inv_id: str, db: Session = Depends(get_db)):
 @router.post("", response_model=InterventionOut,
              status_code=status.HTTP_201_CREATED)
 def create_intervention(data: InterventionCreate, db: Session = Depends(get_db)):
-    num_bon = next_num_bon(db)
-    inv = Intervention(id=str(uuid4()), num_bon=num_bon, **data.model_dump())
+    payload = data.model_dump()
+    # Si num_bon non fourni → génération auto
+    if not payload.get("num_bon"):
+        payload["num_bon"] = next_num_bon(db)
+    inv = Intervention(id=str(uuid4()), **payload)
     db.add(inv)
     db.commit()
     db.refresh(inv)

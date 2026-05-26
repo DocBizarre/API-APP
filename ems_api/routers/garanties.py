@@ -16,10 +16,19 @@ router = APIRouter(prefix="/garanties", tags=["garanties"])
 
 
 def _to_out(g: Garantie) -> dict:
-    d = {c.name: getattr(g, c.name) for c in g.__table__.columns}
-    d["client_nom"] = g.client.nom if g.client else None
-    d["moteur_serie"] = g.moteur.num_serie if g.moteur else None
-    d["moteur_marque"] = g.moteur.marque if g.moteur else None
+    """Sérialise une garantie en garantissant TOUS les champs (jamais None)."""
+    d = {}
+    for c in g.__table__.columns:
+        val = getattr(g, c.name)
+        if val is None and not c.name.endswith("_at"):
+            val = ""
+        d[c.name] = val
+    d["client_nom"]    = g.client.nom if g.client else ""
+    d["moteur_serie"]  = g.moteur.num_serie if g.moteur else ""
+    # Alias pour le code Tkinter qui utilise num_serie directement
+    d["num_serie"]     = g.moteur.num_serie if g.moteur else ""
+    d["marque"]        = g.moteur.marque if g.moteur else ""
+    d["moteur_marque"] = g.moteur.marque if g.moteur else ""
     return d
 
 
@@ -50,9 +59,16 @@ def list_attributions(db: Session = Depends(get_db)):
     """Liste des attributions (marques moteurs + options internes)."""
     marques = (db.query(Moteur.marque).distinct()
                .filter(Moteur.marque != "").all())
-    res = sorted({m[0] for m in marques})
-    res.extend(["Interne EMS", "Mixte"])
-    return res
+    res = sorted({m[0] for m in marques if m[0]})
+    res.extend(["Constructeur", "Interne EMS", "Mixte"])
+    # dédoublonner en préservant ordre
+    seen = set()
+    out = []
+    for x in res:
+        if x not in seen:
+            seen.add(x)
+            out.append(x)
+    return out
 
 
 @router.get("/by-moteur/{moteur_id}", response_model=List[GarantieOut])
@@ -81,8 +97,10 @@ def get_garantie(garantie_id: str, db: Session = Depends(get_db)):
 @router.post("", response_model=GarantieOut,
              status_code=status.HTTP_201_CREATED)
 def create_garantie(data: GarantieCreate, db: Session = Depends(get_db)):
-    num = next_num_garantie(db)
-    g = Garantie(id=str(uuid4()), num_ems=num, **data.model_dump())
+    payload = data.model_dump()
+    if not payload.get("num_ems"):
+        payload["num_ems"] = next_num_garantie(db)
+    g = Garantie(id=str(uuid4()), **payload)
     db.add(g)
     db.commit()
     db.refresh(g)

@@ -3,14 +3,9 @@
   EMS CLIENT — Wrapper API pour les apps Tkinter
 ═══════════════════════════════════════════════════════════════════════════════
 
-Expose la même interface que l'ancien `database.py` mais s'appuie sur
-l'API REST. Pour migrer une app, remplacer :
-
-    import database as db
-
-par :
-
-    from ems_client import api as db
+Drop-in remplacement de l'ancien `database.py`. Toutes les fonctions ont
+exactement la même signature que ce que le code Tkinter (main.py,
+app_garanties.py, app_amelioration.py) attend.
 
 Configuration via variables d'environnement :
     EMS_API_URL   (défaut : http://127.0.0.1:8765)
@@ -19,11 +14,14 @@ Configuration via variables d'environnement :
 """
 from __future__ import annotations
 import os
-import re
-from datetime import datetime, timezone, timedelta
-from typing import Any, Optional, List, Dict
+from datetime import datetime, timedelta
+from typing import Any, Optional, List, Dict, Tuple
 import requests
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+#   Client HTTP de bas niveau
+# ═══════════════════════════════════════════════════════════════════════════
 
 class APIError(Exception):
     """Erreur retournée par l'API EMS."""
@@ -38,7 +36,7 @@ class EMSClient:
 
     def __init__(self, base_url: Optional[str] = None,
                  api_key: Optional[str] = None,
-                 timeout: float = 15.0):
+                 timeout: float = 60.0):
         self.base_url = (base_url or
                          os.environ.get("EMS_API_URL",
                                         "http://127.0.0.1:8765")).rstrip("/")
@@ -53,7 +51,7 @@ class EMSClient:
         try:
             r = self._session.request(method, url, timeout=self.timeout, **kw)
         except requests.RequestException as e:
-            raise APIError(f"Connexion à l'API impossible : {e}") from e
+            raise APIError(f"Connexion a l'API impossible : {e}") from e
         if r.status_code == 204:
             return None
         try:
@@ -80,91 +78,86 @@ _client = EMSClient()
 
 
 def configure(base_url: Optional[str] = None, api_key: Optional[str] = None):
-    """Reconfigure le client à chaud (ex: changer de serveur)."""
+    """Reconfigure le client a chaud (ex: changer de serveur)."""
     global _client
     _client = EMSClient(base_url=base_url, api_key=api_key)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#   Constantes (identiques à l'ancien database.py)
-# ═══════════════════════════════════════════════════════════════════════════
-
-AMELIO_PRIORITES        = ["Basse", "Moyenne", "Haute"]
-AMELIO_PRIORITE_DEFAULT = "Moyenne"
-AMELIO_STATUTS          = ["À étudier", "En cours", "Terminé", "Annulé"]
-AMELIO_STATUT_DEFAULT   = "À étudier"
-
-GARANTIE_ATTRIBUTION_DEFAULT = "Constructeur"
-GARANTIE_STATUT_DEFAULT      = "Suivi EMS"
-
-# Fuseau Paris (UTC+1 hiver, UTC+2 été) — approximation sans dépendance externe
-_PARIS = timezone(timedelta(hours=1))
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-#   Utilitaires locaux (pas d'appel API)
+#   Helpers locaux (pas d'appel API)
 # ═══════════════════════════════════════════════════════════════════════════
 
 def parse_techniciens(csv: str) -> List[str]:
-    """'A, B, C' → ['A', 'B', 'C']"""
+    """'A, B, C' -> ['A', 'B', 'C']"""
     if not csv:
         return []
     return [t.strip() for t in csv.split(",") if t.strip()]
 
 
 def format_techniciens(noms: List[str]) -> str:
-    """['A', 'B'] → 'A, B'"""
+    """['A', 'B'] -> 'A, B'"""
     return ", ".join(n.strip() for n in noms if n.strip())
 
 
 def email_looks_valid(email: str) -> bool:
-    """Validation légère, non bloquante (comme l'ancien database.py)."""
-    if not email:
-        return True
-    return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email))
+    """Validation email basique (pas d'API)."""
+    if not email or "@" not in email:
+        return False
+    parts = email.split("@")
+    return len(parts) == 2 and parts[0] and "." in parts[1]
 
 
-def fmt_paris_short(dt_str: str) -> str:
-    """Convertit une chaîne ISO ou JJ/MM/AAAA HH:MM en format court 'JJ/MM HH:MM'."""
+def fmt_paris_short(dt_str) -> str:
+    """
+    Formate un datetime ISO (string ou datetime) en 'JJ/MM HH:MM' (heure Paris).
+    Accepte aussi un None ou une string vide.
+    """
     if not dt_str:
         return ""
-    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f",
-                "%d/%m/%Y %H:%M", "%d/%m/%Y"):
-        try:
-            dt = datetime.strptime(dt_str[:19], fmt[:len(dt_str[:19])])
-            return dt.strftime("%d/%m %H:%M")
-        except ValueError:
-            continue
-    return dt_str[:11]
-
-
-def garantie_status(moteur: Dict) -> str:
-    """Retourne 'active', 'expiree' ou 'aucune' selon le moteur."""
-    date_str = moteur.get("date_mise_service", "")
-    duree_str = moteur.get("duree_garantie", "")
-    if not date_str or not duree_str:
-        return "aucune"
-    try:
-        duree = int(duree_str)
-        for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+    if isinstance(dt_str, datetime):
+        dt = dt_str
+    else:
+        s = str(dt_str)
+        dt = None
+        for fmt in ("%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S",
+                    "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S",
+                    "%Y-%m-%d"):
             try:
-                debut = datetime.strptime(date_str, fmt)
+                dt = datetime.strptime(s.replace("Z", ""), fmt)
                 break
             except ValueError:
                 continue
-        else:
-            return "aucune"
-        fin = debut + timedelta(days=duree * 30)
-        return "active" if datetime.now() <= fin else "expiree"
+        if dt is None:
+            return s[:16]
+    return dt.strftime("%d/%m %H:%M")
+
+
+def garantie_status(date_mise_service: str, duree_garantie: str) -> Tuple[str, int]:
+    """
+    Retourne (statut, jours) :
+      - statut : 'Active' / 'Expiree' / '-'
+      - jours  : nombre de jours restants (positif) ou ecoules (positif si expiree)
+    """
+    if not date_mise_service or not duree_garantie:
+        return ("-", 0)
+    try:
+        d = datetime.strptime(date_mise_service, "%d/%m/%Y")
+        mois = int(str(duree_garantie).strip())
+        fin = d + timedelta(days=mois * 30)
+        delta = (fin - datetime.now()).days
+        if delta >= 0:
+            return ("Active", delta)
+        return ("Expiree", abs(delta))
     except (ValueError, TypeError):
-        return "aucune"
+        return ("-", 0)
 
 
 def get_technicien_by_nom(nom: str) -> Optional[Dict]:
-    """Recherche un technicien par son nom exact."""
-    techs = get_techniciens()
-    for t in techs:
-        if t.get("nom", "").lower() == nom.lower():
+    """Cherche un technicien par son nom (utilitaire pratique)."""
+    if not nom:
+        return None
+    for t in get_techniciens():
+        if (t.get("nom") or "").strip().lower() == nom.strip().lower():
             return t
     return None
 
@@ -178,14 +171,24 @@ def get_clients(search: str = "") -> List[Dict]:
 
 
 def get_client(client_id: str) -> Optional[Dict]:
+    if not client_id:
+        return None
     try:
         return _client.get(f"/clients/{client_id}")
     except APIError as e:
-        if e.status_code == 404: return None
+        if e.status_code == 404:
+            return None
         raise
 
 
-def upsert_client(data: Dict) -> str:
+def upsert_client(data: Dict, client_id: Optional[str] = None) -> str:
+    """
+    Si client_id fourni -> PUT (mise a jour de CE client precis).
+    Sinon -> POST (upsert par nom : cree ou met a jour).
+    """
+    if client_id:
+        _client.put(f"/clients/{client_id}", json=data)
+        return client_id
     return _client.post("/clients", json=data)["id"]
 
 
@@ -202,27 +205,36 @@ def delete_client(client_id: str) -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def get_moteurs(search: str = "", serie_only: bool = False) -> List[Dict]:
-    return _client.get("/moteurs", search=search,
-                        serie_only=str(serie_only).lower())
+    return _client.get("/moteurs",
+                        search=search,
+                        serie_only=str(bool(serie_only)).lower())
 
 
 def get_moteur(moteur_id: str) -> Optional[Dict]:
+    if not moteur_id:
+        return None
     try:
         return _client.get(f"/moteurs/{moteur_id}")
     except APIError as e:
-        if e.status_code == 404: return None
+        if e.status_code == 404:
+            return None
         raise
 
 
 def find_moteur_by_serie(num_serie: str) -> Optional[Dict]:
-    try:
-        return _client.get(f"/moteurs/by-serie/{num_serie}")
-    except APIError as e:
-        if e.status_code == 404: return None
-        raise
+    if not num_serie:
+        return None
+    return _client.get(f"/moteurs/by-serie/{num_serie}")
 
 
-def upsert_moteur(data: Dict) -> str:
+def upsert_moteur(data: Dict, moteur_id: Optional[str] = None) -> str:
+    """
+    Si moteur_id fourni -> PUT (mise a jour).
+    Sinon -> POST (upsert par num_serie).
+    """
+    if moteur_id:
+        _client.put(f"/moteurs/{moteur_id}", json=data)
+        return moteur_id
     return _client.post("/moteurs", json=data)["id"]
 
 
@@ -235,7 +247,17 @@ def delete_moteur(moteur_id: str) -> None:
 
 
 def get_moteurs_garantie_expirante(jours_max: int = 90) -> List[Dict]:
-    return _client.get("/moteurs/garantie-expirante", jours_max=jours_max)
+    """
+    Retourne [{'moteur': {...}, 'jours_restants': N}, ...]
+    pour matcher le format attendu par le widget Tkinter.
+    """
+    moteurs = _client.get("/moteurs/garantie-expirante", jours_max=jours_max)
+    res = []
+    for m in moteurs:
+        _, jours = garantie_status(m.get("date_mise_service", ""),
+                                     m.get("duree_garantie", ""))
+        res.append({"moteur": m, "jours_restants": jours})
+    return res
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -247,14 +269,20 @@ def get_techniciens() -> List[Dict]:
 
 
 def get_technicien(tech_id: str) -> Optional[Dict]:
+    if not tech_id:
+        return None
     try:
         return _client.get(f"/techniciens/{tech_id}")
     except APIError as e:
-        if e.status_code == 404: return None
+        if e.status_code == 404:
+            return None
         raise
 
 
-def upsert_technicien(data: Dict) -> str:
+def upsert_technicien(data: Dict, tech_id: Optional[str] = None) -> str:
+    if tech_id:
+        _client.put(f"/techniciens/{tech_id}", json=data)
+        return tech_id
     return _client.post("/techniciens", json=data)["id"]
 
 
@@ -263,16 +291,13 @@ def delete_technicien(tech_id: str) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#   Types d'intervention
+#   Types intervention & Statuts garantie (parametrage)
 # ═══════════════════════════════════════════════════════════════════════════
 
 def get_types_intervention() -> List[str]:
-    """Retourne la liste des libellés triés par ordre."""
-    try:
-        items = _client.get("/types-intervention")
-        return [i["libelle"] for i in items]
-    except APIError:
-        return []
+    """Retourne juste les libelles (pas les dicts complets)."""
+    items = _client.get("/types-intervention")
+    return [it["libelle"] for it in items]
 
 
 def add_type_intervention(libelle: str) -> None:
@@ -280,24 +305,17 @@ def add_type_intervention(libelle: str) -> None:
 
 
 def update_type_intervention(old_libelle: str, new_libelle: str) -> None:
-    _client.put("/types-intervention", json={"old": old_libelle,
-                                              "new": new_libelle})
+    _client.put("/types-intervention",
+                 json={"old": old_libelle, "new": new_libelle})
 
 
 def delete_type_intervention(libelle: str) -> None:
     _client.delete(f"/types-intervention/{libelle}")
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-#   Statuts de garantie
-# ═══════════════════════════════════════════════════════════════════════════
-
 def get_statuts_garantie() -> List[str]:
-    try:
-        items = _client.get("/statuts-garantie")
-        return [i["libelle"] for i in items]
-    except APIError:
-        return []
+    items = _client.get("/statuts-garantie")
+    return [it["libelle"] for it in items]
 
 
 def add_statut_garantie(libelle: str) -> None:
@@ -305,8 +323,8 @@ def add_statut_garantie(libelle: str) -> None:
 
 
 def update_statut_garantie(old_libelle: str, new_libelle: str) -> None:
-    _client.put("/statuts-garantie", json={"old": old_libelle,
-                                            "new": new_libelle})
+    _client.put("/statuts-garantie",
+                 json={"old": old_libelle, "new": new_libelle})
 
 
 def delete_statut_garantie(libelle: str) -> None:
@@ -320,8 +338,13 @@ def delete_statut_garantie(libelle: str) -> None:
 def get_interventions(statut: Optional[str] = None,
                        search: str = "",
                        urgence: Optional[str] = None) -> List[Dict]:
+    # Ignorer les valeurs "Tous" / "Toutes" cote Tkinter
+    if statut in ("Tous", "tous", ""):
+        statut = None
+    if urgence in ("Toutes", "toutes", ""):
+        urgence = None
     return _client.get("/interventions", statut=statut,
-                        search=search, urgence=urgence)
+                        urgence=urgence, search=search)
 
 
 def get_intervention(inv_id: Optional[str] = None,
@@ -333,11 +356,14 @@ def get_intervention(inv_id: Optional[str] = None,
             return _client.get(f"/interventions/by-num/{num_bon}")
         return None
     except APIError as e:
-        if e.status_code == 404: return None
+        if e.status_code == 404:
+            return None
         raise
 
 
 def get_interventions_for_moteur(moteur_id: str) -> List[Dict]:
+    if not moteur_id:
+        return []
     return _client.get(f"/interventions/by-moteur/{moteur_id}")
 
 
@@ -345,7 +371,11 @@ def get_interventions_urgentes(limit: int = 10) -> List[Dict]:
     return _client.get("/interventions/urgentes", limit=limit)
 
 
-def create_intervention(data: Dict) -> tuple[str, str]:
+def get_non_notifies(limit: int = 50) -> List[Dict]:
+    return _client.get("/interventions/non-notifies", limit=limit)
+
+
+def create_intervention(data: Dict) -> Tuple[str, str]:
     """Retourne (id, num_bon)."""
     r = _client.post("/interventions", json=data)
     return r["id"], r["num_bon"]
@@ -361,7 +391,7 @@ def delete_intervention(inv_id: str) -> None:
 
 def enregistrer_signature(inv_id: str, signature_b64: str,
                            signature_nom: str, role: str = "client") -> str:
-    """Retourne l'horodatage."""
+    """Retourne l'horodatage de la signature (compat ancien database.py)."""
     r = _client.post(f"/interventions/{inv_id}/signature",
                       json={"signature_b64": signature_b64,
                             "signature_nom": signature_nom,
@@ -376,23 +406,14 @@ def mark_notifie(inv_id: str, kind: str) -> None:
     _client.post(f"/interventions/{inv_id}/notifie/{kind}", json={})
 
 
-def get_non_notifies(limit: int = 50) -> List[Dict]:
-    """Interventions en cours dont client ou technicien n'a pas été notifié."""
-    try:
-        return _client.get("/interventions/non-notifies", limit=limit)
-    except APIError:
-        interventions = get_interventions(statut="En cours")
-        res = [i for i in interventions
-               if not i.get("client_notifie") or not i.get("tech_notifie")]
-        return res[:limit]
-
-
 # ═══════════════════════════════════════════════════════════════════════════
 #   Garanties
 # ═══════════════════════════════════════════════════════════════════════════
 
 def get_garanties(statut: Optional[str] = None,
                    search: str = "") -> List[Dict]:
+    if statut in ("Tous", "tous", ""):
+        statut = None
     return _client.get("/garanties", statut=statut, search=search)
 
 
@@ -405,7 +426,8 @@ def get_garantie(garantie_id: Optional[str] = None,
             return _client.get(f"/garanties/by-num/{num_ems}")
         return None
     except APIError as e:
-        if e.status_code == 404: return None
+        if e.status_code == 404:
+            return None
         raise
 
 
@@ -416,13 +438,11 @@ def get_garanties_moteur(moteur_id: str) -> List[Dict]:
 
 
 def get_attributions_garantie() -> List[str]:
-    try:
-        return _client.get("/garanties/attributions")
-    except APIError:
-        return ["Constructeur", "EMS"]
+    return _client.get("/garanties/attributions")
 
 
-def create_garantie(data: Dict) -> tuple[str, str]:
+def create_garantie(data: Dict) -> Tuple[str, str]:
+    """Retourne (id, num_ems)."""
     r = _client.post("/garanties", json=data)
     return r["id"], r["num_ems"]
 
@@ -435,13 +455,30 @@ def delete_garantie(garantie_id: str) -> None:
     _client.delete(f"/garanties/{garantie_id}")
 
 
+def get_stats_garanties() -> Dict[str, int]:
+    """
+    Statistiques des garanties par statut + total.
+    Calcule en local (l'API n'a pas d'endpoint dedie pour les garanties).
+    """
+    res: Dict[str, int] = {"Total": 0}
+    for g in get_garanties():
+        res["Total"] += 1
+        s = g.get("statut") or "Inconnu"
+        res[s] = res.get(s, 0) + 1
+    return res
+
+
 # ═══════════════════════════════════════════════════════════════════════════
-#   Améliorations
+#   Ameliorations
 # ═══════════════════════════════════════════════════════════════════════════
 
 def get_ameliorations(statut: Optional[str] = None,
                        priorite: Optional[str] = None,
                        search: str = "") -> List[Dict]:
+    if statut in ("Tous", "tous", ""):
+        statut = None
+    if priorite in ("Toutes", "toutes", ""):
+        priorite = None
     return _client.get("/ameliorations", statut=statut,
                         priorite=priorite, search=search)
 
@@ -455,11 +492,13 @@ def get_amelioration(amelio_id: Optional[str] = None,
             return _client.get(f"/ameliorations/by-num/{num_ticket}")
         return None
     except APIError as e:
-        if e.status_code == 404: return None
+        if e.status_code == 404:
+            return None
         raise
 
 
-def create_amelioration(data: Dict) -> tuple[str, str]:
+def create_amelioration(data: Dict) -> Tuple[str, str]:
+    """Retourne (id, num_ticket)."""
     r = _client.post("/ameliorations", json=data)
     return r["id"], r["num_ticket"]
 
@@ -472,73 +511,59 @@ def delete_amelioration(amelio_id: str) -> None:
     _client.delete(f"/ameliorations/{amelio_id}")
 
 
+def get_stats_ameliorations() -> Dict[str, int]:
+    return _client.get("/ameliorations/stats")
+
+
 # ═══════════════════════════════════════════════════════════════════════════
-#   Statistiques & tableau de bord
+#   Stats globales & config dashboard
 # ═══════════════════════════════════════════════════════════════════════════
 
 def get_stats() -> Dict:
-    """Statistiques globales pour les cartes du tableau de bord."""
-    try:
-        return _client.get("/stats")
-    except APIError:
-        return {}
+    return _client.get("/stats")
 
 
 def get_stats_par_technicien() -> List[Dict]:
-    try:
-        return _client.get("/stats/par-technicien")
-    except APIError:
-        return []
+    return _client.get("/stats/par-technicien")
 
 
 def get_stats_par_type() -> List[Dict]:
-    try:
-        return _client.get("/stats/par-type")
-    except APIError:
-        return []
+    return _client.get("/stats/par-type")
 
 
 def get_activite_recente(limit: int = 20) -> List[Dict]:
-    try:
-        return _client.get("/stats/activite-recente", limit=limit)
-    except APIError:
-        return []
+    return _client.get("/stats/activite-recente", limit=limit)
 
 
 def get_dashboard_widgets() -> List[str]:
-    """Retourne la liste ordonnée des widgets actifs."""
-    try:
-        r = _client.get("/config/dashboard-widgets")
-        return r if isinstance(r, list) else []
-    except APIError:
-        return []
+    return _client.get("/config/dashboard-widgets")
 
 
 def set_dashboard_widgets(widgets: List[str]) -> None:
-    try:
-        _client.post("/config/dashboard-widgets", json=widgets)
-    except APIError:
-        pass
+    _client.post("/config/dashboard-widgets", json=widgets)
 
 
 def get_dashboard_cards() -> List[str]:
-    """Retourne la liste ordonnée des cartes statistiques actives."""
-    try:
-        r = _client.get("/config/dashboard-cards")
-        return r if isinstance(r, list) else []
-    except APIError:
-        return []
+    return _client.get("/config/dashboard-cards")
 
 
 def set_dashboard_cards(cards: List[str]) -> None:
-    try:
-        _client.post("/config/dashboard-cards", json=cards)
-    except APIError:
-        pass
+    _client.post("/config/dashboard-cards", json=cards)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#   Initialisation (no-op : l'API gère elle-même)
+#   Constantes (compat ancien database.py)
+# ═══════════════════════════════════════════════════════════════════════════
+
+GARANTIE_STATUT_DEFAULT = "Suivi EMS"
+AMELIO_STATUT_DEFAULT = "Nouveau"
+AMELIO_PRIORITE_DEFAULT = "Moyenne"
+STATUTS_GARANTIE = ["Suivi EMS", "Envoyée", "Acceptée", "Refusée", "Cloturée"]
+PRIORITES_AMELIORATION = ["Basse", "Moyenne", "Haute", "Critique"]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#   Init (no-op, l'API gere sa base)
 # ═══════════════════════════════════════════════════════════════════════════
 
 def init_db() -> None:

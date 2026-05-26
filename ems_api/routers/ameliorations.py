@@ -18,8 +18,13 @@ router = APIRouter(prefix="/ameliorations", tags=["ameliorations"])
 
 
 def _to_out(a: Amelioration) -> dict:
-    d = {c.name: getattr(a, c.name) for c in a.__table__.columns}
-    d["client_nom"] = a.client.nom if a.client else None
+    d = {}
+    for c in a.__table__.columns:
+        val = getattr(a, c.name)
+        if val is None and not c.name.endswith("_at"):
+            val = ""
+        d[c.name] = val
+    d["client_nom"] = a.client.nom if a.client else ""
     return d
 
 
@@ -50,11 +55,14 @@ def list_ameliorations(
 @router.get("/stats", response_model=Dict[str, int])
 def stats(db: Session = Depends(get_db)):
     """Statistiques par statut + total."""
-    res = {"Nouveau": 0, "En cours": 0, "Résolu": 0, "Total": 0}
+    res = {"Nouveau": 0, "À étudier": 0, "En cours": 0,
+            "Résolu": 0, "Refusé": 0, "Total": 0}
     for a in db.query(Amelioration).all():
         res["Total"] += 1
         if a.statut in res:
             res[a.statut] += 1
+        else:
+            res[a.statut] = res.get(a.statut, 0) + 1
     return res
 
 
@@ -79,8 +87,10 @@ def get_amelioration(amelio_id: str, db: Session = Depends(get_db)):
              status_code=status.HTTP_201_CREATED)
 def create_amelioration(data: AmeliorationCreate,
                         db: Session = Depends(get_db)):
-    num = next_num_amelioration(db)
-    a = Amelioration(id=str(uuid4()), num_ticket=num, **data.model_dump())
+    payload = data.model_dump()
+    if not payload.get("num_ticket"):
+        payload["num_ticket"] = next_num_amelioration(db)
+    a = Amelioration(id=str(uuid4()), **payload)
     db.add(a)
     db.commit()
     db.refresh(a)
