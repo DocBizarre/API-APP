@@ -6,7 +6,9 @@ from .garantie import Garantie
 from .amelioration import Amelioration
 from .technicien import Technicien
 from .configurations import TypeIntervention, StatutGarantie, Config
+from .piece import Piece
 
 __all__ = ["Client", "Moteur", "Intervention",
            "Garantie", "Amelioration", "Technicien",
-           "TypeIntervention", "StatutGarantie", "Config"]
+           "TypeIntervention", "StatutGarantie", "Config",
+           "Piece"]

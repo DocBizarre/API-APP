@@ -89,7 +89,8 @@ def create_amelioration(data: AmeliorationCreate,
                         db: Session = Depends(get_db)):
     payload = data.model_dump()
     if not payload.get("num_ticket"):
-        payload["num_ticket"] = next_num_amelioration(db)
+        from ..config import settings
+        payload["num_ticket"] = next_num_amelioration(db, settings.DEVICE_PREFIX)
     a = Amelioration(id=str(uuid4()), **payload)
     db.add(a)
     db.commit()
@@ -105,6 +106,7 @@ def update_amelioration(amelio_id: str, data: AmeliorationUpdate,
         raise HTTPException(404, f"Amélioration {amelio_id} introuvable")
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(a, field, value)
+    a.version = (a.version or 0) + 1
     db.commit()
     db.refresh(a)
     return _to_out(a)

@@ -1,4 +1,4 @@
-"""Modèle Intervention (le plus complet : bons + signatures)."""
+"""Modèle Intervention (le plus complet : bons + signatures + synchro)."""
 from sqlalchemy import Column, String, Integer, ForeignKey, DateTime, func
 from sqlalchemy.orm import relationship
 from ..database import Base
@@ -17,11 +17,11 @@ class Intervention(Base):
     technicien            = Column(String, default="")          # CSV multi-tech
     date_creation         = Column(String, default="")          # JJ/MM/AAAA
     date_cloture          = Column(String, default="")          # JJ/MM/AAAA
-    date_cloture          = Column(String, default="")          # JJ/MM/AAAA
     lieu_intervention     = Column(String, default="")
     nom_signataire        = Column(String, default="")
     email_signataire      = Column(String, default="")
     nb_heures_fct         = Column(String, default="")
+    num_commande_client   = Column(String, default="")
 
     # Classifications
     garantie_intervention = Column(Integer, default=0)
@@ -62,6 +62,12 @@ class Intervention(Base):
     signature_tech_b64    = Column(String, default="")
     signature_tech_nom    = Column(String, default="")
     signature_tech_date   = Column(String, default="")
+
+    # Synchronisation tournee terrain
+    version          = Column(Integer, default=1)        # incremente a chaque modif
+    sync_state       = Column(String, default="atelier") # "atelier" ou "terrain"
+    sync_device      = Column(String, default="")        # ex: "tablette-1"
+    sync_checkout_at = Column(String, default="")        # date de depart en tournee
 
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
     updated_at  = Column(DateTime(timezone=True),

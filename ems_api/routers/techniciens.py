@@ -61,6 +61,7 @@ def update_technicien(tech_id: str, data: TechnicienUpdate,
         raise HTTPException(404, f"Technicien {tech_id} introuvable")
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(t, field, value)
+    t.version = (t.version or 0) + 1
     db.commit()
     db.refresh(t)
     return _to_out(t)

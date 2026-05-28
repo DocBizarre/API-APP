@@ -6,12 +6,10 @@
 ═══════════════════════════════════════════════════════════════════════════════
 
 Application séparée et indépendante du logiciel principal de suivi des
-interventions. Elle se concentre uniquement sur la gestion des dossiers de
-garantie moteur.
+interventions.
 
 • Lancement :  python app_amelioration.py
-• Base de données : PARTAGÉE avec l'application principale (data/ems.db),
-  ce qui permet de réutiliser les moteurs et clients déjà saisis.
+
 • Dépendances : les fichiers  database.py  et  amelioration_generator.py  doivent
   être présents (soit à côté de ce script, soit dans le projet EMS principal —
   voir la résolution de chemin ci-dessous).
@@ -100,6 +98,8 @@ except ImportError as e:
 #
 # Si aucune de ces options n'est trouvée, l'app utilise sa propre base locale
 # (data/ems.db à côté de ce script) — utile pour un usage indépendant.
+
+
 def _resoudre_base_partagee():
     # 1. Variable d'environnement
     env = os.environ.get("EMS_DB_PATH", "").strip()

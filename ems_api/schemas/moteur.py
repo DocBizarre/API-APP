@@ -1,4 +1,4 @@
-﻿"""Schémas Pydantic – Moteur."""
+"""Schemas Pydantic Moteur."""
 from __future__ import annotations
 from datetime import datetime
 from typing import Optional
@@ -63,6 +63,7 @@ class MoteurOut(BaseModel):
     duree_garantie:     str
     # Champ enrichi (ajoute par _to_out dans le router)
     client_nom:         Optional[str] = ""
+    version:         int = 1
     created_at:         Optional[datetime] = None
     updated_at:         Optional[datetime] = None
 

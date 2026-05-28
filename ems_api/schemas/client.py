@@ -31,6 +31,7 @@ class ClientOut(BaseModel):
     email:      str
     telephone:  str
     adresse:    str
+    version:    int = 1
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
  

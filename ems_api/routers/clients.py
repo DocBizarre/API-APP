@@ -69,6 +69,7 @@ def update_client(client_id: str, data: ClientUpdate,
         raise HTTPException(404, f"Client {client_id} introuvable")
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(c, field, value)
+    c.version = (c.version or 0) + 1
     db.commit()
     db.refresh(c)
     return _to_out(c)

@@ -10,6 +10,7 @@ class GarantieCreate(BaseModel):
     num_constructeur:   str = ""
     moteur_id:          Optional[str] = None
     client_id:          Optional[str] = None
+    intervention_id:    Optional[str] = None
     attribution:        str = "Constructeur"
     statut:             str = "Suivi EMS"
     date_ouverture:     str = ""
@@ -25,6 +26,7 @@ class GarantieUpdate(BaseModel):
     num_constructeur:   Optional[str] = None
     moteur_id:          Optional[str] = None
     client_id:          Optional[str] = None
+    intervention_id:    Optional[str] = None
     attribution:        Optional[str] = None
     statut:             Optional[str] = None
     date_ouverture:     Optional[str] = None
@@ -41,6 +43,7 @@ class GarantieOut(BaseModel):
     num_constructeur:   str
     moteur_id:          Optional[str] = None
     client_id:          Optional[str] = None
+    intervention_id:    Optional[str] = None
     attribution:        str
     statut:             str
     date_ouverture:     str
@@ -51,10 +54,12 @@ class GarantieOut(BaseModel):
     dossier_path:       str
     # Champs enrichis (ajoutes par _to_out dans le router)
     client_nom:         Optional[str] = ""
+    intervention_num_bon: Optional[str] = ""
     moteur_serie:       Optional[str] = ""
     num_serie:          Optional[str] = ""    # alias de moteur_serie
     marque:             Optional[str] = ""
     moteur_marque:      Optional[str] = ""
+    version:         int = 1
     created_at:         Optional[datetime] = None
     updated_at:         Optional[datetime] = None
 

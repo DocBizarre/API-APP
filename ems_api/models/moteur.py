@@ -1,5 +1,5 @@
 """Modèle Moteur."""
-from sqlalchemy import Column, String, DateTime, ForeignKey, func
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, func
 from sqlalchemy.orm import relationship
 from ..database import Base
 
@@ -24,6 +24,7 @@ class Moteur(Base):
     type_client         = Column(String, default="")
     date_mise_service   = Column(String, default="")   # JJ/MM/AAAA
     duree_garantie      = Column(String, default="")   # ex. "24" (mois)
+    version             = Column(Integer, default=1)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
     updated_at          = Column(DateTime(timezone=True), server_default=func.now(),
                                   onupdate=func.now())

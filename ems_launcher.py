@@ -35,6 +35,7 @@ def _demarrer_app(app_key, here_str):
     sous_dossiers = {
         "bons":          here / "ems_project",
         "parc":          here / "ems_project",
+        "pieces":          here / "pieces_app",
         "garanties":     here / "garanties_app",
         "amelioration":  here / "amelioration_app",
         "BI":            here / "BI_app",
@@ -54,6 +55,10 @@ def _demarrer_app(app_key, here_str):
     elif app_key == "parc":
         from main import AppEMS
         AppEMS(mode="parc").mainloop()
+
+    elif app_key == "pieces":
+        from app_pieces import PiecesApp
+        PiecesApp().mainloop()
 
     elif app_key == "garanties":
         from app_garanties import GarantiesApp
@@ -78,12 +83,15 @@ APPS = [
     {"key": "parc",         "titre": "Gestion de parc",
      "desc": "Saisie des clients, moteurs et techniciens",
      "icone": "🗂", "couleur": "#00796b", "dossier": "ems_project"},
+    {"key": "pieces",         "titre": "Gestion des pièces",
+     "desc": "référencement des pièces",
+     "icone": "🧰", "couleur": "#9BB3B0", "dossier": "ems_project"},
     {"key": "garanties",    "titre": "Garanties",
      "desc": "Dossiers des garanties appareils",
      "icone": "🛡", "couleur": "#aa14cf", "dossier": "garanties_app"},
     {"key": "amelioration", "titre": "Amélioration continue",
-     "desc": "Tickets de demande d'amélioration des clients",
-     "icone": "💡", "couleur": "#1e7e3e", "dossier": "amelioration_app"},
+    "desc": "Tickets de demande d'amélioration des clients",
+    "icone": "💡", "couleur": "#1e7e3e", "dossier": "amelioration_app"},
 ]
 
 

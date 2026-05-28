@@ -1,5 +1,5 @@
 """Modèle Amelioration (amélioration continue / tickets)."""
-from sqlalchemy import Column, String, DateTime, ForeignKey, func
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, func
 from sqlalchemy.orm import relationship
 from ..database import Base
 
@@ -18,6 +18,7 @@ class Amelioration(Base):
     date_cible      = Column(String, default="")   # JJ/MM/AAAA
     commentaires    = Column(String, default="")
     dossier_path    = Column(String, default="")
+    version         = Column(Integer, default=1)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
     updated_at      = Column(DateTime(timezone=True), server_default=func.now(),
                               onupdate=func.now())

@@ -1,5 +1,5 @@
 """Modèle Garantie."""
-from sqlalchemy import Column, String, DateTime, ForeignKey, func
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, func
 from sqlalchemy.orm import relationship
 from ..database import Base
 
@@ -12,6 +12,7 @@ class Garantie(Base):
     num_constructeur    = Column(String, default="")
     moteur_id           = Column(String, ForeignKey("moteurs.id"), index=True)
     client_id           = Column(String, ForeignKey("clients.id"), index=True)
+    intervention_id     = Column(String, ForeignKey("interventions.id"), index=True)
     attribution         = Column(String, default="Constructeur")  # Constructeur / EMS
     statut              = Column(String, default="Suivi EMS", index=True)
     date_ouverture      = Column(String, default="")   # JJ/MM/AAAA
@@ -20,9 +21,11 @@ class Garantie(Base):
     description         = Column(String, default="")
     commentaires        = Column(String, default="")
     dossier_path        = Column(String, default="")
+    version             = Column(Integer, default=1)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
     updated_at          = Column(DateTime(timezone=True), server_default=func.now(),
                                   onupdate=func.now())
 
     client = relationship("Client", back_populates="garanties")
     moteur = relationship("Moteur", back_populates="garanties")
+    intervention = relationship("Intervention", foreign_keys=[intervention_id])

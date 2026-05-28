@@ -22,6 +22,7 @@ class TechnicienOut(BaseModel):
     nom:        str
     email:      str
     telephone:  str
+    version:    int = 1
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
  

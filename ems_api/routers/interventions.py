@@ -126,7 +126,8 @@ def create_intervention(data: InterventionCreate, db: Session = Depends(get_db))
     payload = data.model_dump()
     # Si num_bon non fourni → génération auto
     if not payload.get("num_bon"):
-        payload["num_bon"] = next_num_bon(db)
+        from ..config import settings
+        payload["num_bon"] = next_num_bon(db, settings.DEVICE_PREFIX)
     inv = Intervention(id=str(uuid4()), **payload)
     db.add(inv)
     db.commit()
@@ -142,6 +143,8 @@ def update_intervention(inv_id: str, data: InterventionUpdate,
         raise HTTPException(404, f"Intervention {inv_id} introuvable")
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(inv, field, value)
+    # Incrémenter la version pour la détection de conflit lors de la synchro
+    inv.version = (inv.version or 0) + 1
     db.commit()
     db.refresh(inv)
     return _to_out(inv)
@@ -173,6 +176,16 @@ def enregistrer_signature(inv_id: str, payload: SignatureIn,
         inv.signature_b64 = payload.signature_b64
         inv.signature_nom = payload.signature_nom
         inv.signature_date = horod
+
+    # Bascule automatique : si client ET technicien ont signe, et que le bon
+    # est encore "En cours", on passe a "A facturer". Sans ecraser un statut
+    # deja modifie manuellement (Facture, Clos, etc.)
+    has_client_sig = bool(inv.signature_b64)
+    has_tech_sig   = bool(inv.signature_tech_b64)
+    if has_client_sig and has_tech_sig and inv.statut == "En cours" and inv.facturable:
+        inv.statut = "À facturer"
+
+    inv.version = (inv.version or 0) + 1
     db.commit()
     db.refresh(inv)
     return _to_out(inv)

@@ -115,6 +115,7 @@ def update_moteur(moteur_id: str, data: MoteurUpdate,
         raise HTTPException(404, f"Moteur {moteur_id} introuvable")
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(m, field, value)
+    m.version = (m.version or 0) + 1
     db.commit()
     db.refresh(m)
     return _to_out(m)

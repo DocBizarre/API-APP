@@ -30,7 +30,7 @@ from .database import init_db
 from .routers import (
     clients, moteurs, techniciens,
     interventions, garanties, ameliorations, documents,
-    types_intervention, statuts_garantie, stats_config,
+    types_intervention, statuts_garantie, stats_config, pieces, sync,
 )
 
 
@@ -108,7 +108,8 @@ app.include_router(types_intervention.router, dependencies=deps)
 app.include_router(statuts_garantie.router, dependencies=deps)
 app.include_router(stats_config.router_stats, dependencies=deps)
 app.include_router(stats_config.router_config, dependencies=deps)
-
+app.include_router(pieces.router, dependencies=deps)
+app.include_router(sync.router, dependencies=deps)
 
 if __name__ == "__main__":
     import uvicorn

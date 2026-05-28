@@ -19,6 +19,7 @@ class InterventionCreate(BaseModel):
     nom_signataire:         str = ""
     email_signataire:       str = ""
     nb_heures_fct:          str = ""
+    num_commande_client:    str = ""
     # Classifications
     garantie_intervention:  int = 0
     facturable:             int = 0
@@ -69,6 +70,7 @@ class InterventionUpdate(BaseModel):
     nom_signataire:         Optional[str] = None
     email_signataire:       Optional[str] = None
     nb_heures_fct:          Optional[str] = None
+    num_commande_client:    Optional[str] = None
     garantie_intervention:  Optional[int] = None
     facturable:             Optional[int] = None
     interne:                Optional[int] = None
@@ -122,6 +124,7 @@ class InterventionOut(BaseModel):
     nom_signataire:         str
     email_signataire:       str
     nb_heures_fct:          str
+    num_commande_client:    str = ""
     garantie_intervention:  int
     facturable:             int
     interne:                int
@@ -150,6 +153,10 @@ class InterventionOut(BaseModel):
     signature_tech_b64:     str
     signature_tech_nom:     str
     signature_tech_date:    str
+    version:                int = 1
+    sync_state:             str = "atelier"
+    sync_device:            str = ""
+    sync_checkout_at:       str = ""
     created_at:             Optional[datetime] = None
     updated_at:             Optional[datetime] = None
  

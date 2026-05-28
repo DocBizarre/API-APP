@@ -20,6 +20,11 @@ class Settings:
     HOST: str = os.environ.get("EMS_API_HOST", "127.0.0.1")
     PORT: int = int(os.environ.get("EMS_API_PORT", "8765"))
 
+    # ─── Identité de l'appareil (synchronisation hors-ligne) ────────────
+    # Vide = serveur central (numeros BON-2026-XXXX)
+    # "T1", "T2"... = tablette terrain (numeros BON-T1-2026-XXXX)
+    DEVICE_PREFIX: str = os.environ.get("EMS_DEVICE_PREFIX", "")
+
     # ─── CORS (utile si UI web plus tard) ───────────────────────────────
     CORS_ORIGINS: list = os.environ.get(
         "EMS_CORS", "*").split(",")

@@ -1,20 +1,35 @@
 """
 ═══════════════════════════════════════════════════════════════════════════════
-  EMS CLIENT — Wrapper API pour les apps Tkinter
+  EMS CLIENT — Wrapper API pour les apps Tkinter — VERSION CONSOLIDEE FINALE
 ═══════════════════════════════════════════════════════════════════════════════
 
 Drop-in remplacement de l'ancien `database.py`. Toutes les fonctions ont
 exactement la même signature que ce que le code Tkinter (main.py,
 app_garanties.py, app_amelioration.py) attend.
 
+Cette version regroupe TOUS les correctifs et ajouts de la journee :
+  • Filtres "Toutes"/"Tous" ignorés (urgence, statut, priorite, attribution)
+  • Signatures upsert avec _id kwarg (client_id, moteur_id, tech_id, piece_id)
+  • add_type_intervention / add_statut_garantie retournent bool (True/False)
+  • update_type_intervention / update_statut_garantie idem
+  • Constantes : GARANTIE_ATTRIBUTION_DEFAULT, AMELIO_STATUTS, AMELIO_PRIORITES,
+    GARANTIE_DIR, AMELIO_DIR
+  • garantie_status(date, duree) -> (statut, jours)
+  • get_moteurs_garantie_expirante renvoie [{moteur, jours_restants}]
+  • get_stats_garanties avec Total / Ouvertes / Cloturees / par_attribution / par_statut
+  • Timeout 60s
+  • Catalogue pieces (CRUD + bulk import + search + count + find_by_reference)
+
 Configuration via variables d'environnement :
-    EMS_API_URL   (défaut : http://127.0.0.1:8765)
+    EMS_API_URL   (defaut : http://127.0.0.1:8765)
     EMS_API_KEY   (vide = pas d'authentification)
 ═══════════════════════════════════════════════════════════════════════════════
 """
 from __future__ import annotations
 import os
+from collections import Counter
 from datetime import datetime, timedelta
+from pathlib import Path as _Path
 from typing import Any, Optional, List, Dict, Tuple
 import requests
 
@@ -24,7 +39,7 @@ import requests
 # ═══════════════════════════════════════════════════════════════════════════
 
 class APIError(Exception):
-    """Erreur retournée par l'API EMS."""
+    """Erreur retournee par l'API EMS."""
     def __init__(self, message: str, status_code: int = 0, detail: Any = None):
         super().__init__(message)
         self.status_code = status_code
@@ -100,7 +115,6 @@ def format_techniciens(noms: List[str]) -> str:
 
 
 def email_looks_valid(email: str) -> bool:
-    """Validation email basique (pas d'API)."""
     if not email or "@" not in email:
         return False
     parts = email.split("@")
@@ -108,10 +122,7 @@ def email_looks_valid(email: str) -> bool:
 
 
 def fmt_paris_short(dt_str) -> str:
-    """
-    Formate un datetime ISO (string ou datetime) en 'JJ/MM HH:MM' (heure Paris).
-    Accepte aussi un None ou une string vide.
-    """
+    """Formate un datetime ISO (string ou datetime) en 'JJ/MM HH:MM'."""
     if not dt_str:
         return ""
     if isinstance(dt_str, datetime):
@@ -132,11 +143,12 @@ def fmt_paris_short(dt_str) -> str:
     return dt.strftime("%d/%m %H:%M")
 
 
-def garantie_status(date_mise_service: str, duree_garantie: str) -> Tuple[str, int]:
+def garantie_status(date_mise_service: str,
+                     duree_garantie: str) -> Tuple[str, int]:
     """
     Retourne (statut, jours) :
       - statut : 'Active' / 'Expiree' / '-'
-      - jours  : nombre de jours restants (positif) ou ecoules (positif si expiree)
+      - jours  : nombre de jours restants (>=0) ou ecoules (>=0 si expiree)
     """
     if not date_mise_service or not duree_garantie:
         return ("-", 0)
@@ -153,7 +165,6 @@ def garantie_status(date_mise_service: str, duree_garantie: str) -> Tuple[str, i
 
 
 def get_technicien_by_nom(nom: str) -> Optional[Dict]:
-    """Cherche un technicien par son nom (utilitaire pratique)."""
     if not nom:
         return None
     for t in get_techniciens():
@@ -182,10 +193,7 @@ def get_client(client_id: str) -> Optional[Dict]:
 
 
 def upsert_client(data: Dict, client_id: Optional[str] = None) -> str:
-    """
-    Si client_id fourni -> PUT (mise a jour de CE client precis).
-    Sinon -> POST (upsert par nom : cree ou met a jour).
-    """
+    """Si client_id fourni -> PUT ; sinon POST (upsert par nom)."""
     if client_id:
         _client.put(f"/clients/{client_id}", json=data)
         return client_id
@@ -228,10 +236,6 @@ def find_moteur_by_serie(num_serie: str) -> Optional[Dict]:
 
 
 def upsert_moteur(data: Dict, moteur_id: Optional[str] = None) -> str:
-    """
-    Si moteur_id fourni -> PUT (mise a jour).
-    Sinon -> POST (upsert par num_serie).
-    """
     if moteur_id:
         _client.put(f"/moteurs/{moteur_id}", json=data)
         return moteur_id
@@ -247,10 +251,7 @@ def delete_moteur(moteur_id: str) -> None:
 
 
 def get_moteurs_garantie_expirante(jours_max: int = 90) -> List[Dict]:
-    """
-    Retourne [{'moteur': {...}, 'jours_restants': N}, ...]
-    pour matcher le format attendu par le widget Tkinter.
-    """
+    """Retourne [{'moteur': {...}, 'jours_restants': N}, ...]"""
     moteurs = _client.get("/moteurs/garantie-expirante", jours_max=jours_max)
     res = []
     for m in moteurs:
@@ -295,7 +296,6 @@ def delete_technicien(tech_id: str) -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def get_types_intervention() -> List[str]:
-    """Retourne juste les libelles (pas les dicts complets)."""
     items = _client.get("/types-intervention")
     return [it["libelle"] for it in items]
 
@@ -312,7 +312,7 @@ def add_type_intervention(libelle: str) -> bool:
 
 
 def update_type_intervention(old_libelle: str, new_libelle: str) -> bool:
-    """Retourne True si OK, False si le nouveau nom existe déjà."""
+    """Retourne True si OK, False si le nouveau nom existe deja."""
     try:
         _client.put("/types-intervention",
                      json={"old": old_libelle, "new": new_libelle})
@@ -344,7 +344,7 @@ def add_statut_garantie(libelle: str) -> bool:
 
 
 def update_statut_garantie(old_libelle: str, new_libelle: str) -> bool:
-    """Retourne True si OK, False si le nouveau nom existe déjà."""
+    """Retourne True si OK, False si le nouveau nom existe deja."""
     try:
         _client.put("/statuts-garantie",
                      json={"old": old_libelle, "new": new_libelle})
@@ -366,7 +366,6 @@ def delete_statut_garantie(libelle: str) -> None:
 def get_interventions(statut: Optional[str] = None,
                        search: str = "",
                        urgence: Optional[str] = None) -> List[Dict]:
-    # Ignorer les valeurs "Tous" / "Toutes" cote Tkinter
     if statut in ("Tous", "tous", ""):
         statut = None
     if urgence in ("Toutes", "toutes", ""):
@@ -404,7 +403,6 @@ def get_non_notifies(limit: int = 50) -> List[Dict]:
 
 
 def create_intervention(data: Dict) -> Tuple[str, str]:
-    """Retourne (id, num_bon)."""
     r = _client.post("/interventions", json=data)
     return r["id"], r["num_bon"]
 
@@ -419,7 +417,6 @@ def delete_intervention(inv_id: str) -> None:
 
 def enregistrer_signature(inv_id: str, signature_b64: str,
                            signature_nom: str, role: str = "client") -> str:
-    """Retourne l'horodatage de la signature (compat ancien database.py)."""
     r = _client.post(f"/interventions/{inv_id}/signature",
                       json={"signature_b64": signature_b64,
                             "signature_nom": signature_nom,
@@ -474,7 +471,6 @@ def get_attributions_garantie() -> List[str]:
 
 
 def create_garantie(data: Dict) -> Tuple[str, str]:
-    """Retourne (id, num_ems)."""
     r = _client.post("/garanties", json=data)
     return r["id"], r["num_ems"]
 
@@ -489,18 +485,10 @@ def delete_garantie(garantie_id: str) -> None:
 
 def get_stats_garanties() -> Dict:
     """
-    Statistiques des garanties, calculees en local.
-    Retourne : {
-        'Total':         int,
-        'Ouvertes':      int,    # toutes celles non cloturees
-        'Cloturees':     int,
-        'par_attribution': {nom: count, ...},
-        'par_statut':    {nom: count, ...},
-    }
-    Note : la cle 'Clôturées' (avec accent) est aussi presente pour
-    matcher exactement ce qu'attend app_garanties.py.
+    Stats calculees en local. Retourne :
+      {Total, Ouvertes, Cloturees, 'Clôturées' (avec accent),
+       par_attribution: {...}, par_statut: {...}}
     """
-    from collections import Counter
     par_statut = Counter()
     par_attrib = Counter()
     total = 0
@@ -510,16 +498,18 @@ def get_stats_garanties() -> Dict:
         par_statut[s] += 1
         a = g.get("attribution") or "Non assignee"
         par_attrib[a] += 1
-    cloturees = par_statut.get("Cloturee", 0) + par_statut.get("Cloturees", 0) + par_statut.get("Clôturée", 0) + par_statut.get("Clôturées", 0)
+    cloturees = (par_statut.get("Cloturee", 0)
+                  + par_statut.get("Cloturees", 0)
+                  + par_statut.get("Clôturée", 0)
+                  + par_statut.get("Clôturées", 0))
     return {
         "Total":           total,
         "Ouvertes":        total - cloturees,
         "Cloturees":       cloturees,
-        "Clôturées":       cloturees,    # cle avec accent attendue
+        "Clôturées":       cloturees,
         "par_attribution": dict(par_attrib),
         "par_statut":      dict(par_statut),
     }
-
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -552,7 +542,6 @@ def get_amelioration(amelio_id: Optional[str] = None,
 
 
 def create_amelioration(data: Dict) -> Tuple[str, str]:
-    """Retourne (id, num_ticket)."""
     r = _client.post("/ameliorations", json=data)
     return r["id"], r["num_ticket"]
 
@@ -565,8 +554,65 @@ def delete_amelioration(amelio_id: str) -> None:
     _client.delete(f"/ameliorations/{amelio_id}")
 
 
-def get_stats_ameliorations() -> Dict[str, int]:
+def get_stats_ameliorations() -> Dict:
     return _client.get("/ameliorations/stats")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#   Pieces detachees (catalogue stock)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def get_pieces(search: str = "", ref_only: bool = False,
+                limit: int = 500) -> List[Dict]:
+    """Retourne jusqu'a `limit` pieces (500 par defaut, max 5000)."""
+    return _client.get("/pieces",
+                        search=search,
+                        ref_only=str(bool(ref_only)).lower(),
+                        limit=limit)
+
+
+def get_piece(piece_id: str) -> Optional[Dict]:
+    if not piece_id:
+        return None
+    try:
+        return _client.get(f"/pieces/{piece_id}")
+    except APIError as e:
+        if e.status_code == 404:
+            return None
+        raise
+
+
+def find_piece_by_reference(reference: str) -> Optional[Dict]:
+    if not reference:
+        return None
+    return _client.get(f"/pieces/by-reference/{reference}")
+
+
+def count_pieces() -> int:
+    return _client.get("/pieces/count").get("total", 0)
+
+
+def upsert_piece(data: Dict, piece_id: Optional[str] = None) -> str:
+    if piece_id:
+        _client.put(f"/pieces/{piece_id}", json=data)
+        return piece_id
+    return _client.post("/pieces", json=data)["id"]
+
+
+def update_piece(piece_id: str, data: Dict) -> Dict:
+    return _client.put(f"/pieces/{piece_id}", json=data)
+
+
+def delete_piece(piece_id: str) -> None:
+    _client.delete(f"/pieces/{piece_id}")
+
+
+def bulk_import_pieces(pieces: List[Dict],
+                         skip_doublons: bool = True) -> Dict:
+    """Import en masse. Retourne {importees, mises_a_jour, ignorees, erreurs, details_erreurs}."""
+    return _client.post("/pieces/bulk",
+                         json={"pieces": pieces,
+                               "skip_doublons": skip_doublons})
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -609,8 +655,6 @@ def set_dashboard_cards(cards: List[str]) -> None:
 #   Constantes (compat ancien database.py)
 # ═══════════════════════════════════════════════════════════════════════════
 
-from pathlib import Path as _Path
-
 GARANTIE_STATUT_DEFAULT      = "Suivi EMS"
 GARANTIE_ATTRIBUTION_DEFAULT = "Constructeur"
 STATUTS_GARANTIE = ["Suivi EMS", "Expertise en cours",
@@ -624,7 +668,7 @@ AMELIO_STATUT_DEFAULT   = "Nouveau"
 AMELIO_PRIORITE_DEFAULT = "Moyenne"
 AMELIO_STATUTS    = ["Nouveau", "À étudier", "En cours", "Résolu", "Refusé"]
 AMELIO_PRIORITES  = ["Basse", "Moyenne", "Haute", "Critique"]
-PRIORITES_AMELIORATION = AMELIO_PRIORITES  # alias
+PRIORITES_AMELIORATION = AMELIO_PRIORITES   # alias
 
 # Dossiers de stockage (modifiables a chaud par les apps)
 GARANTIE_DIR = _Path(__file__).resolve().parent.parent / "garanties"
@@ -632,9 +676,9 @@ AMELIO_DIR   = _Path(__file__).resolve().parent.parent / "ameliorations"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#   Init (no-op, l'API gere sa base)
+#   Init (no-op)
 # ═══════════════════════════════════════════════════════════════════════════
 
 def init_db() -> None:
-    """Compat ancien database.py. L'API initialise sa propre base."""
+    """Compat ancien database.py. L'API gere sa propre base."""
     pass

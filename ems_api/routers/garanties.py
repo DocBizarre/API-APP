@@ -24,6 +24,7 @@ def _to_out(g: Garantie) -> dict:
             val = ""
         d[c.name] = val
     d["client_nom"]    = g.client.nom if g.client else ""
+    d["intervention_num_bon"] = g.intervention.num_bon if g.intervention else ""
     d["moteur_serie"]  = g.moteur.num_serie if g.moteur else ""
     # Alias pour le code Tkinter qui utilise num_serie directement
     d["num_serie"]     = g.moteur.num_serie if g.moteur else ""
@@ -102,7 +103,8 @@ def get_garantie(garantie_id: str, db: Session = Depends(get_db)):
 def create_garantie(data: GarantieCreate, db: Session = Depends(get_db)):
     payload = data.model_dump()
     if not payload.get("num_ems"):
-        payload["num_ems"] = next_num_garantie(db)
+        from ..config import settings
+        payload["num_ems"] = next_num_garantie(db, settings.DEVICE_PREFIX)
     g = Garantie(id=str(uuid4()), **payload)
     db.add(g)
     db.commit()
@@ -118,6 +120,7 @@ def update_garantie(garantie_id: str, data: GarantieUpdate,
         raise HTTPException(404, f"Garantie {garantie_id} introuvable")
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(g, field, value)
+    g.version = (g.version or 0) + 1
     db.commit()
     db.refresh(g)
     return _to_out(g)
