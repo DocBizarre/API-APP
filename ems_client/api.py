@@ -46,15 +46,38 @@ class APIError(Exception):
         self.detail = detail
 
 
+def _read_ini_server_url() -> Optional[str]:
+    """Lit l'URL serveur depuis config.ini place a cote de l'executable
+    (ou du script). Retourne None si non trouve."""
+    import sys
+    from configparser import ConfigParser
+    # Determiner le repertoire de l'exe (PyInstaller) ou du script
+    base = _Path(sys.executable).parent if getattr(sys, "frozen", False) \
+        else _Path(__file__).resolve().parent.parent
+    for candidate in (base / "config.ini",
+                       _Path(__file__).resolve().parent.parent / "config.ini"):
+        if candidate.is_file():
+            try:
+                cp = ConfigParser()
+                cp.read(candidate, encoding="utf-8")
+                url = cp.get("server", "url", fallback="").strip()
+                if url:
+                    return url
+            except Exception:
+                continue
+    return None
+
+
 class EMSClient:
     """Client REST minimaliste pour l'API EMS."""
 
     def __init__(self, base_url: Optional[str] = None,
                  api_key: Optional[str] = None,
                  timeout: float = 60.0):
-        self.base_url = (base_url or
-                         os.environ.get("EMS_API_URL",
-                                        "http://127.0.0.1:8765")).rstrip("/")
+        self.base_url = (base_url
+                         or _read_ini_server_url()
+                         or os.environ.get("EMS_API_URL",
+                                            "http://127.0.0.1:8765")).rstrip("/")
         self.api_key = api_key or os.environ.get("EMS_API_KEY", "")
         self.timeout = timeout
         self._session = requests.Session()

@@ -2,11 +2,11 @@
 
 
 a = Analysis(
-    ['ems_launcher.py'],
-    pathex=[],
+    ['lancer_parc.py'],
+    pathex=['C:\\Users\\Stagiaire.be\\Desktop\\APP API', 'C:\\Users\\Stagiaire.be\\Desktop\\APP API\\ems_project', 'C:\\Users\\Stagiaire.be\\Desktop\\APP API\\garanties_app', 'C:\\Users\\Stagiaire.be\\Desktop\\APP API\\amelioration_app'],
     binaries=[],
-    datas=[],
-    hiddenimports=[],
+    datas=[('config.ini', '.')],
+    hiddenimports=['ems_client.api', 'ems_client.sync_config', 'ems_client.sync_client', 'bon_generator', 'mailer', 'logo_data', 'amelioration_generator', 'garantie_generator', 'csv_importer'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='EMS_Launcher',
+    name='EMS_Parc',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -35,4 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=['favicon.ico'],
 )

@@ -2,11 +2,11 @@
 
 
 a = Analysis(
-    ['ems_launcher.py'],
-    pathex=[],
+    ['amelioration_app\\app_amelioration.py'],
+    pathex=['C:\\Users\\Stagiaire.be\\Desktop\\APP API'],
     binaries=[],
-    datas=[],
-    hiddenimports=[],
+    datas=[('config.ini', '.')],
+    hiddenimports=['ems_client.api', 'ems_client.sync_config', 'ems_client.sync_client'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='EMS_Launcher',
+    name='EMS_Amelioration',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

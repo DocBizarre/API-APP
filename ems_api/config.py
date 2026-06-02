@@ -17,7 +17,7 @@ class Settings:
     AMELIORATIONS_DIR: Path = DATA_DIR / "ameliorations"
 
     # ─── Serveur ─────────────────────────────────────────────────────────
-    HOST: str = os.environ.get("EMS_API_HOST", "127.0.0.1")
+    HOST: str = os.environ.get("EMS_API_HOST", "0.0.0.0")
     PORT: int = int(os.environ.get("EMS_API_PORT", "8765"))
 
     # ─── Identité de l'appareil (synchronisation hors-ligne) ────────────

@@ -160,6 +160,127 @@ C = {
     "text": "#1a2332", "muted": "#6b7785",
 }
 
+class ParametresSyncDialog(tk.Toplevel):
+    """Configuration de la synchronisation : serveur central + ID appareil."""
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Paramètres de synchronisation")
+        self.geometry("520x420")
+        self.configure(bg=C["bg"])
+        self.resizable(False, False)
+        self.grab_set()
+
+        # Charger la config actuelle
+        try:
+            from ems_client import sync_config
+            self._sync_config = sync_config
+            cfg = sync_config.load()
+        except Exception as e:
+            self._sync_config = None
+            cfg = {"server_url": "", "local_url": "", "device_id": ""}
+            messagebox.showwarning(
+                "Module manquant",
+                f"Le module de synchronisation n'a pas pu être chargé :\n{e}")
+
+        # En-tete
+        head = tk.Frame(self, bg=C["header"], height=60)
+        head.pack(fill="x"); head.pack_propagate(False)
+        tk.Frame(head, bg=C["accent"], width=5).pack(side="left", fill="y")
+        tk.Label(head, text="⚙️  Synchronisation",
+                 font=("Segoe UI", 14, "bold"),
+                 bg=C["header"], fg="white").pack(side="left", padx=16)
+
+        body = tk.Frame(self, bg=C["bg"])
+        body.pack(fill="both", expand=True, padx=24, pady=18)
+
+        # Adresse serveur central
+        tk.Label(body, text="Adresse du serveur central",
+                 font=("Segoe UI", 10, "bold"),
+                 bg=C["bg"], fg=C["text"]).pack(anchor="w")
+        tk.Label(body, text="Le serveur de l'atelier (base partagée). "
+                            "Ex : http://192.168.1.50:8765",
+                 font=("Segoe UI", 8), bg=C["bg"], fg=C["muted"]).pack(anchor="w")
+        self.server_var = tk.StringVar(value=cfg.get("server_url", ""))
+        tk.Entry(body, textvariable=self.server_var, width=50,
+                 font=("Consolas", 10)).pack(anchor="w", pady=(2, 14), ipady=3)
+
+        # Identifiant appareil
+        tk.Label(body, text="Identifiant de cet appareil",
+                 font=("Segoe UI", 10, "bold"),
+                 bg=C["bg"], fg=C["text"]).pack(anchor="w")
+        tk.Label(body, text="Vide = poste bureau. Sur une tablette : T1, T2... "
+                            "(évite les collisions de numéros de bon)",
+                 font=("Segoe UI", 8), bg=C["bg"], fg=C["muted"],
+                 wraplength=460, justify="left").pack(anchor="w")
+        self.device_var = tk.StringVar(value=cfg.get("device_id", ""))
+        tk.Entry(body, textvariable=self.device_var, width=20,
+                 font=("Consolas", 10)).pack(anchor="w", pady=(2, 14), ipady=3)
+
+        # Adresse locale (cache) - rarement modifiee
+        tk.Label(body, text="Adresse de l'API locale (cache)",
+                 font=("Segoe UI", 10, "bold"),
+                 bg=C["bg"], fg=C["text"]).pack(anchor="w")
+        tk.Label(body, text="En général http://127.0.0.1:8765 (ne pas changer "
+                            "sauf cas particulier)",
+                 font=("Segoe UI", 8), bg=C["bg"], fg=C["muted"]).pack(anchor="w")
+        self.local_var = tk.StringVar(value=cfg.get("local_url", ""))
+        tk.Entry(body, textvariable=self.local_var, width=50,
+                 font=("Consolas", 10)).pack(anchor="w", pady=(2, 16), ipady=3)
+
+        # Zone de statut du test
+        self.status_lbl = tk.Label(body, text="", font=("Segoe UI", 9),
+                                    bg=C["bg"], anchor="w")
+        self.status_lbl.pack(anchor="w", pady=(0, 8))
+
+        # Boutons
+        bf = tk.Frame(self, bg=C["bg"])
+        bf.pack(side="bottom", fill="x", padx=24, pady=14)
+        tk.Button(bf, text="🔌 Tester la connexion", font=("Segoe UI", 9, "bold"),
+                  bg="#0056b3", fg="white", relief="flat", padx=12, pady=6,
+                  cursor="hand2", command=self._tester).pack(side="left")
+        tk.Button(bf, text="💾 Enregistrer", font=("Segoe UI", 9, "bold"),
+                  bg="#1e7e3e", fg="white", relief="flat", padx=12, pady=6,
+                  cursor="hand2", command=self._save).pack(side="right")
+        tk.Button(bf, text="Annuler", font=("Segoe UI", 9),
+                  bg="#888", fg="white", relief="flat", padx=12, pady=6,
+                  cursor="hand2", command=self.destroy).pack(side="right", padx=8)
+
+    def _tester(self):
+        """Teste si le serveur central repond a l'adresse saisie."""
+        url = self.server_var.get().strip().rstrip("/")
+        if not url:
+            self.status_lbl.config(text="⚠ Adresse serveur vide.", fg=C["accent"])
+            return
+        self.status_lbl.config(text="Test en cours...", fg=C["muted"])
+        self.update_idletasks()
+        try:
+            import requests
+            r = requests.get(f"{url}/health", timeout=4)
+            if r.ok:
+                self.status_lbl.config(
+                    text="✅ Serveur central joignable !", fg="#1e7e3e")
+            else:
+                self.status_lbl.config(
+                    text=f"❌ Réponse inattendue ({r.status_code})",
+                    fg=C["accent"])
+        except Exception:
+            self.status_lbl.config(
+                text="❌ Serveur injoignable à cette adresse.", fg=C["accent"])
+
+    def _save(self):
+        if not self._sync_config:
+            messagebox.showerror("Erreur",
+                "Module de synchronisation indisponible.")
+            return
+        self._sync_config.save({
+            "server_url": self.server_var.get().strip().rstrip("/"),
+            "device_id":  self.device_var.get().strip(),
+            "local_url":  self.local_var.get().strip().rstrip("/"),
+        })
+        messagebox.showinfo("Enregistré",
+            "Paramètres de synchronisation enregistrés.")
+        self.destroy()
+
 
 class Launcher(tk.Tk):
     def __init__(self):
@@ -187,6 +308,12 @@ class Launcher(tk.Tk):
                  font=("Segoe UI", 10),
                  bg=C["header"], fg="#aac4e8").pack(anchor="w")
 
+        # Bouton parametres synchro (en haut a droite du header)
+        tk.Button(head, text="⚙️", font=("Segoe UI", 16),
+                  bg=C["header"], fg="white", relief="flat", bd=0,
+                  cursor="hand2", activebackground="#013a7a",
+                  command=self._ouvrir_params).pack(side="right", padx=16)
+
         body = tk.Frame(self, bg=C["bg"])
         body.pack(fill="both", expand=True, padx=24, pady=16)
         for app in APPS:
@@ -199,6 +326,9 @@ class Launcher(tk.Tk):
                       "données. Vous pouvez en ouvrir plusieurs en même temps.",
                  font=("Segoe UI", 7), bg=C["bg"], fg=C["muted"],
                  justify="center").pack()
+    
+    def _ouvrir_params(self):
+        ParametresSyncDialog(self)
 
     def _carte(self, parent, app):
         dispo = _app_disponible(app)
