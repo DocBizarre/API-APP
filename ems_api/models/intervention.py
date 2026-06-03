@@ -20,6 +20,10 @@ class Intervention(Base):
     lieu_intervention     = Column(String, default="")
     nom_signataire        = Column(String, default="")
     email_signataire      = Column(String, default="")
+    telephone_signataire = Column(String, default="")
+    nom_demandeur     = Column(String, default="")
+    email_demandeur   = Column(String, default="")
+    telephone_demandeur = Column(String, default="")
     nb_heures_fct         = Column(String, default="")
     num_commande_client   = Column(String, default="")
 

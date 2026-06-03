@@ -24,57 +24,21 @@ import sys
 import os
 from pathlib import Path
 
-# ─── Résolution des dépendances (database.py / garantie_generator.py) ─────────
-# On cherche à côté de ce script, puis dans les dossiers parents et voisins.
+# Resolution des chemins pour PyInstaller (.exe) et dev
 _HERE = Path(__file__).resolve().parent
 
-
-def _dossiers_candidats():
-    """
-    Liste ordonnée des dossiers où chercher database.py et la base ems.db.
-    Couvre : à côté du script, dossiers parents, et dossiers voisins dont
-    le nom évoque le projet EMS (ems*, *intervention*).
-    """
-    vus = []
-    def _ajouter(p):
-        try:
-            p = p.resolve()
-        except OSError:
-            return
-        if p not in vus and p.is_dir():
-            vus.append(p)
-
-    _ajouter(_HERE)
-    # Remonter jusqu'à 3 niveaux de parents
-    p = _HERE
-    for _ in range(3):
-        p = p.parent
-        _ajouter(p)
-        # Et scanner les sous-dossiers de chaque parent qui ressemblent à EMS
-        try:
-            for sub in p.iterdir():
-                if sub.is_dir():
-                    nom = sub.name.lower()
-                    if ("ems" in nom or "intervention" in nom or "project" in nom or "amelior" in nom
-                            or "emeraude" in nom or "garantie" in nom):
-                        _ajouter(sub)
-                        # sous-niveau (ex: EMS_v1.4/ems_project)
-                        for sub2 in sub.iterdir():
-                            if sub2.is_dir():
-                                _ajouter(sub2)
-        except (OSError, PermissionError):
-            pass
-    return vus
-
-
-_CANDIDATS = _dossiers_candidats()
-for _c in _CANDIDATS:
-    if (_c / "garantie_generator.py").is_file():
-        sys.path.insert(0, str(_c))
-        break
+# En .exe, _MEIPASS est le dossier temporaire d'extraction
+if getattr(sys, "frozen", False):
+    _ROOT = Path(sys.executable).parent
 else:
-    sys.path.insert(0, str(_HERE))
+    _ROOT = _HERE.parent  # ../ depuis garanties_app/ vers projet racine
 
+# Ajouter les chemins necessaires pour les imports
+for p in (_ROOT, _HERE, _ROOT / "ems_project"):
+    if p.is_dir() and str(p) not in sys.path:
+        sys.path.insert(0, str(p))
+
+# Imports principaux
 try:
     from ems_client import api as db
     import garantie_generator as gargen
@@ -83,57 +47,13 @@ except ImportError as e:
     from tkinter import messagebox as _mb
     _r = _tk.Tk(); _r.withdraw()
     _mb.showerror(
-        "Dépendances manquantes",
-        "Impossible de trouver « database.py » et « garantie_generator.py ».\n\n"
-        "Placez ce script dans le dossier du projet EMS, ou copiez ces deux "
-        "fichiers à côté de app_garanties.py.\n\n"
-        f"Détail : {e}")
+        "Dependances manquantes",
+        f"Impossible d'importer les modules requis :\n{e}\n\n"
+        "Verifiez que l'application est lancee depuis le dossier EMS "
+        "ou que le serveur API est joignable.")
     sys.exit(1)
 
-# ─── Base de données PARTAGÉE avec l'application principale ───────────────────
-# Par défaut, database.py place la base dans  <dossier_database>/data/ems.db.
-# Pour PARTAGER la base avec l'app principale, on peut surcharger ce chemin :
-#
-#   1. Variable d'environnement  EMS_DB_PATH  (priorité 1)
-#   2. Fichier  config_garanties.txt  contenant une ligne  db=<chemin>  (prio 2)
-#   3. Auto-détection : si une base EMS existe dans un projet voisin (prio 3)
-#
-# Si aucune de ces options n'est trouvée, l'app utilise sa propre base locale
-# (data/ems.db à côté de ce script) — utile pour un usage indépendant.
-
-def _resoudre_base_partagee():
-    # 1. Variable d'environnement
-    env = os.environ.get("EMS_DB_PATH", "").strip()
-    if env and Path(env).is_file():
-        return Path(env)
-    # 2. Fichier de config
-    cfg = _HERE / "config_garanties.txt"
-    if cfg.is_file():
-        for ligne in cfg.read_text(encoding="utf-8").splitlines():
-            ligne = ligne.strip()
-            if ligne.lower().startswith("db="):
-                p = Path(ligne[3:].strip())
-                if p.is_file():
-                    return p
-    # 3. Auto-détection d'une base EMS dans un projet voisin
-    for c in _CANDIDATS:
-        cand = c / "data" / "ems.db"
-        if cand.is_file():
-            return cand
-    return None
-
-_base = _resoudre_base_partagee()
-if _base is not None:
-    # On force database.py à utiliser cette base et les dossiers associés
-    db.DB_PATH = _base
-    racine = _base.parent.parent  # <projet>/data/ems.db → <projet>
-    db.DOSSIERS_PATH = racine / "dossiers"
-    db.GARANTIE_DIR = racine / "garanties"
-    if hasattr(db, "AMELIO_DIR"):
-        db.AMELIO_DIR = racine / "ameliorations"
-    _BASE_INFO = f"Base partagée : {_base}"
-else:
-    _BASE_INFO = f"Base locale autonome : {db.DB_PATH}"
+_BASE_INFO = f"API : {getattr(db, 'BASE_URL', 'inconnue')}"
 
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog

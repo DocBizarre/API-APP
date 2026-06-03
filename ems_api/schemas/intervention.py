@@ -18,6 +18,10 @@ class InterventionCreate(BaseModel):
     lieu_intervention:      str = ""
     nom_signataire:         str = ""
     email_signataire:       str = ""
+    telephone_signataire:   str = ""
+    nom_demandeur:          str = ""
+    email_demandeur:        str = ""
+    telephone_demandeur:    str = ""
     nb_heures_fct:          str = ""
     num_commande_client:    str = ""
     # Classifications
@@ -69,6 +73,10 @@ class InterventionUpdate(BaseModel):
     lieu_intervention:      Optional[str] = None
     nom_signataire:         Optional[str] = None
     email_signataire:       Optional[str] = None
+    telephone_signataire:   Optional[str] = None
+    nom_demandeur:          Optional[str] = None
+    email_demandeur:        Optional[str] = None
+    telephone_demandeur:    Optional[str] = None
     nb_heures_fct:          Optional[str] = None
     num_commande_client:    Optional[str] = None
     garantie_intervention:  Optional[int] = None
@@ -123,6 +131,10 @@ class InterventionOut(BaseModel):
     lieu_intervention:      str
     nom_signataire:         str
     email_signataire:       str
+    telephone_signataire:   str = ""
+    nom_demandeur:          str = ""
+    email_demandeur:        str = ""
+    telephone_demandeur:    str = ""
     nb_heures_fct:          str
     num_commande_client:    str = ""
     garantie_intervention:  int
