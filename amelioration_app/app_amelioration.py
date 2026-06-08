@@ -29,13 +29,13 @@ if getattr(sys, "frozen", False):
 else:
     _ROOT = _HERE.parent
 
-for p in (_ROOT, _HERE, _ROOT / "ems_project"):
+for p in (_ROOT, _HERE):
     if p.is_dir() and str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
 try:
     from ems_client import api as db
-    import amelioration_generator as amgen
+    from shared import amelioration_generator as amgen
 except ImportError as e:
     import tkinter as _tk
     from tkinter import messagebox as _mb
@@ -47,7 +47,19 @@ except ImportError as e:
         "ou que le serveur API est joignable.")
     sys.exit(1)
 
-_BASE_INFO = f"API : {getattr(db, 'BASE_URL', 'inconnue')}"
+# Vérification connexion API avant d'afficher l'UI
+_ok, _msg = db.check_api()
+if not _ok:
+    import tkinter as _tk
+    from tkinter import messagebox as _mb
+    _r = _tk.Tk(); _r.withdraw()
+    if not _mb.askokcancel(
+        "Serveur introuvable",
+        f"{_msg}\n\nVérifiez que le serveur EMS est démarré.\n\n"
+        "Continuer quand même ?"):
+        sys.exit(0)
+
+_BASE_INFO = f"API : {db._client.base_url}"
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 from datetime import date, datetime

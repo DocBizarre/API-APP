@@ -25,13 +25,25 @@ from fastapi import FastAPI, Depends, HTTPException, status, Header
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 
+import logging
+
 from .config import settings
+from ._logging import setup_logging
+try:
+    import sys, os; sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+    from shared.version import __version__ as _APP_VERSION
+except ImportError:
+    _APP_VERSION = "1.8.0"
 from .database import init_db
+
+setup_logging()
+logger = logging.getLogger(__name__)
 from .routers import (
-    clients, moteurs, techniciens,
-    interventions, garanties, ameliorations, documents,
-    types_intervention, statuts_garantie, stats_config, pieces, sync, admin
-)
+       clients, moteurs, techniciens,
+       interventions, garanties, ameliorations, documents,
+       types_intervention, statuts_garantie, stats_config, pieces, sync, admin,
+       pdf_export, marques
+   )
 
 
 @asynccontextmanager
@@ -43,7 +55,7 @@ async def lifespan(app: FastAPI):
         from .backup import planifier_quotidien
         planifier_quotidien()
     except Exception as e:
-        print(f"⚠ Sauvegarde auto non démarrée : {e}")
+        logger.warning("Sauvegarde auto non démarrée : %s", e)
     yield
 
 
@@ -51,7 +63,7 @@ app = FastAPI(
     title="EMS API",
     description="API interne Emeraude Moteurs Systèmes — "
                 "gestion des bons d'intervention, garanties, etc.",
-    version="0.1.0",
+    version=_APP_VERSION,
     lifespan=lifespan,
 )
 
@@ -106,11 +118,13 @@ app.include_router(ameliorations.router, dependencies=deps)
 app.include_router(documents.router, dependencies=deps)
 app.include_router(types_intervention.router, dependencies=deps)
 app.include_router(statuts_garantie.router, dependencies=deps)
+app.include_router(marques.router, dependencies=deps)
 app.include_router(stats_config.router_stats, dependencies=deps)
 app.include_router(stats_config.router_config, dependencies=deps)
 app.include_router(pieces.router, dependencies=deps)
 app.include_router(sync.router, dependencies=deps)
 app.include_router(admin.router, dependencies=deps)
+app.include_router(pdf_export.router, dependencies=deps)
 
 if __name__ == "__main__":
     import uvicorn

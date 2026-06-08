@@ -13,6 +13,7 @@ Usage :
 À intégrer dans le démarrage de l'API pour automatiser.
 ═══════════════════════════════════════════════════════════════════════════════
 """
+import logging
 import shutil
 import sys
 import time
@@ -22,14 +23,14 @@ from pathlib import Path
 
 from .config import settings
 
-
+logger = logging.getLogger(__name__)
 JOURS_RETENTION = 30
 
 
 def sauvegarder() -> Path:
     """Copie la base actuelle vers data/backups/ems_YYYY-MM-DD_HHMM.db."""
     if not settings.DB_PATH.is_file():
-        print(f"⚠ Base introuvable : {settings.DB_PATH}")
+        logger.warning("Base introuvable : %s", settings.DB_PATH)
         return None
     backups_dir = settings.DATA_DIR / "backups"
     backups_dir.mkdir(exist_ok=True)
@@ -37,7 +38,7 @@ def sauvegarder() -> Path:
     dest = backups_dir / f"ems_{timestamp}.db"
     shutil.copy2(settings.DB_PATH, dest)
     taille_mo = dest.stat().st_size / (1024 * 1024)
-    print(f"✓ Sauvegarde : {dest.name} ({taille_mo:.2f} Mo)")
+    logger.info("Sauvegarde : %s (%.2f Mo)", dest.name, taille_mo)
     nettoyer_anciennes()
     return dest
 
@@ -55,7 +56,7 @@ def nettoyer_anciennes():
             f.unlink()
             n_supprimees += 1
     if n_supprimees:
-        print(f"  → {n_supprimees} ancienne(s) sauvegarde(s) supprimée(s)")
+        logger.info("%d ancienne(s) sauvegarde(s) supprimée(s)", n_supprimees)
 
 
 def planifier_quotidien():
@@ -71,19 +72,18 @@ def planifier_quotidien():
             try:
                 sauvegarder()
             except Exception as e:
-                print(f"⚠ Échec sauvegarde planifiée : {e}",
-                      file=sys.stderr)
+                logger.error("Échec sauvegarde planifiée : %s", e)
     th = threading.Thread(target=boucle, daemon=True, name="ems-backup")
     th.start()
-    print("✓ Sauvegarde quotidienne planifiée (2h00 du matin)")
+    logger.info("Sauvegarde quotidienne planifiée (2h00 du matin)")
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s %(levelname)s %(message)s")
     if "--schedule" in sys.argv:
         planifier_quotidien()
-        # Sauvegarde immédiate au lancement
         sauvegarder()
-        # Garder le thread vivant
         try:
             while True:
                 time.sleep(3600)

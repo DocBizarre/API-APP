@@ -50,9 +50,13 @@ class Intervention(Base):
     description           = Column(String, default="")
     pieces                = Column(String, default="")
 
+    marque                        = Column(String, default="")
+    commentaire                   = Column(String, default="")
+
     # JSON brut
-    materiels_json        = Column(String, default="[]")
-    deplacements_json     = Column(String, default="{}")
+    materiels_json                = Column(String, default="[]")
+    deplacements_json             = Column(String, default="{}")
+    moteurs_supplementaires_json  = Column(String, default="[]")
     dossier_path          = Column(String, default="")
 
     # Notifications

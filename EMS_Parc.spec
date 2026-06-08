@@ -1,16 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
-
+import os
 
 a = Analysis(
-    ['lancer_parc.py'],
-    pathex=['C:\\Users\\Stagiaire.be\\Desktop\\APP API', 'C:\\Users\\Stagiaire.be\\Desktop\\APP API\\ems_project', 'C:\\Users\\Stagiaire.be\\Desktop\\APP API\\garanties_app', 'C:\\Users\\Stagiaire.be\\Desktop\\APP API\\amelioration_app'],
+    ['ems_project\\app_parc.py'],
+    pathex=[SPECPATH, os.path.join(SPECPATH, 'ems_project')],
     binaries=[],
     datas=[('config.ini', '.')],
-    hiddenimports=['ems_client.api', 'ems_client.sync_config', 'ems_client.sync_client', 'bon_generator', 'mailer', 'logo_data', 'amelioration_generator', 'garantie_generator', 'csv_importer'],
+    hiddenimports=['ems_client.api', 'ems_client.sync_config', 'ems_client.sync_client', 'shared.bon_generator', 'shared.mailer', 'shared.logo_data', 'shared.amelioration_generator', 'shared.garantie_generator', 'shared.csv_importer'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['weasyprint', 'pydyf', 'tinyhtml5'],
     noarchive=False,
     optimize=0,
 )

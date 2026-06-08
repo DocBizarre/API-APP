@@ -2,15 +2,15 @@
 import os
 
 a = Analysis(
-    ['ems_project\\app_bons.py'],
-    pathex=[SPECPATH, os.path.join(SPECPATH, 'ems_project')],
+    ['garanties_app\\app_garanties.py'],
+    pathex=[SPECPATH, os.path.join(SPECPATH, 'garanties_app')],
     binaries=[],
     datas=[('config.ini', '.')],
-    hiddenimports=['ems_client.api', 'ems_client.sync_config', 'ems_client.sync_client', 'shared.bon_generator', 'shared.mailer', 'shared.logo_data', 'shared.amelioration_generator', 'shared.garantie_generator', 'shared.csv_importer', 'win32com', 'win32com.client', 'win32com.server', 'pywintypes'],
+    hiddenimports=['ems_client.api', 'ems_client.sync_config', 'ems_client.sync_client', 'shared.garantie_generator', 'shared.bon_generator', 'shared.logo_data'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['weasyprint', 'pydyf', 'tinyhtml5'],
+    excludes=[],
     noarchive=False,
     optimize=0,
 )
@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='EMS_Bons',
+    name='EMS_Garanties',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

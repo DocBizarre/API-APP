@@ -43,6 +43,16 @@ except ImportError as e:
         "Placez ce script à côté du dossier 'ems_client' du projet EMS.\n\n"
         f"Détail : {e}")
     sys.exit(1)
+
+# Vérification connexion API avant d'afficher l'UI
+_ok, _msg = db.check_api()
+if not _ok:
+    _r = tk.Tk(); _r.withdraw()
+    if not messagebox.askokcancel(
+        "Serveur introuvable",
+        f"{_msg}\n\nVérifiez que le serveur EMS est démarré.\n\n"
+        "Continuer quand même ?"):
+        sys.exit(0)
  
  
 # ─── Constantes UI ───────────────────────────────────────────────────────────

@@ -1,9 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
-
+import os
 
 a = Analysis(
     ['pieces_app\\app_pieces.py'],
-    pathex=['C:\\Users\\Stagiaire.be\\Desktop\\APP API'],
+    pathex=[SPECPATH],
     binaries=[],
     datas=[('config.ini', '.')],
     hiddenimports=['ems_client.api', 'ems_client.sync_config'],

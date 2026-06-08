@@ -1,0 +1,31 @@
+# PyInstaller build artifacts
+build/
+dist/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Database (ne pas versionner les données)
+ems_api/data/ems.db
+ems_project/data/ems.db
+
+# Config locale (contient IP du serveur)
+# config.ini est versionné intentionnellement (template)
+
+# Environnement virtuel
+venv/
+.venv/
+env/
+
+# Éditeurs
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+Thumbs.db
+.DS_Store

@@ -187,6 +187,19 @@ def garantie_status(date_mise_service: str,
         return ("-", 0)
 
 
+def check_api(timeout: float = 5.0) -> Tuple[bool, str]:
+    """Vérifie que le serveur est joignable. Retourne (ok, message)."""
+    url = _client.base_url
+    try:
+        import requests as _req
+        r = _req.get(f"{url}/health", timeout=timeout)
+        if r.ok:
+            return True, url
+        return False, f"Serveur {url} a répondu {r.status_code}"
+    except Exception as e:
+        return False, f"Serveur injoignable à {url} : {e}"
+
+
 def get_technicien_by_nom(nom: str) -> Optional[Dict]:
     if not nom:
         return None
@@ -213,6 +226,18 @@ def get_client(client_id: str) -> Optional[Dict]:
         if e.status_code == 404:
             return None
         raise
+
+
+def find_client_by_nom(nom: str) -> Optional[Dict]:
+    """Retourne le premier client dont le nom correspond exactement (insensible à la casse)."""
+    if not nom:
+        return None
+    results = get_clients(search=nom.strip())
+    nom_norm = nom.strip().lower()
+    for c in results:
+        if (c.get("nom") or "").strip().lower() == nom_norm:
+            return c
+    return None
 
 
 def upsert_client(data: Dict, client_id: Optional[str] = None) -> str:
@@ -348,6 +373,35 @@ def update_type_intervention(old_libelle: str, new_libelle: str) -> bool:
 
 def delete_type_intervention(libelle: str) -> None:
     _client.delete(f"/types-intervention/{libelle}")
+
+
+def get_marques() -> List[str]:
+    items = _client.get("/marques-moteur")
+    return [it["libelle"] for it in items]
+
+
+def add_marque(libelle: str) -> bool:
+    try:
+        _client.post("/marques-moteur", json={"libelle": libelle})
+        return True
+    except APIError as e:
+        if e.status_code == 409:
+            return False
+        raise
+
+
+def update_marque(old: str, new: str) -> bool:
+    try:
+        _client.put("/marques-moteur", json={"old": old, "new": new})
+        return True
+    except APIError as e:
+        if e.status_code in (404, 409):
+            return False
+        raise
+
+
+def delete_marque(libelle: str) -> None:
+    _client.delete(f"/marques-moteur/{libelle}")
 
 
 def get_statuts_garantie() -> List[str]:

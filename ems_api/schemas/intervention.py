@@ -44,10 +44,13 @@ class InterventionCreate(BaseModel):
     preconisation_text:     str = ""
     description:            str = ""
     pieces:                 str = ""
+    marque:                        str = ""
+    commentaire:                   str = ""
     # JSON
-    materiels_json:         str = "[]"
-    deplacements_json:      str = "{}"
-    dossier_path:           str = ""
+    materiels_json:                str = "[]"
+    deplacements_json:             str = "{}"
+    moteurs_supplementaires_json:  str = "[]"
+    dossier_path:                  str = ""
     # Notifications
     client_notifie:         int = 0
     tech_notifie:           int = 0
@@ -96,9 +99,12 @@ class InterventionUpdate(BaseModel):
     preconisation_text:     Optional[str] = None
     description:            Optional[str] = None
     pieces:                 Optional[str] = None
-    materiels_json:         Optional[str] = None
-    deplacements_json:      Optional[str] = None
-    dossier_path:           Optional[str] = None
+    marque:                        Optional[str] = None
+    commentaire:                   Optional[str] = None
+    materiels_json:                Optional[str] = None
+    deplacements_json:             Optional[str] = None
+    moteurs_supplementaires_json:  Optional[str] = None
+    dossier_path:                  Optional[str] = None
     client_notifie:         Optional[int] = None
     tech_notifie:           Optional[int] = None
     signature_b64:          Optional[str] = None
@@ -154,9 +160,12 @@ class InterventionOut(BaseModel):
     preconisation_text:     str
     description:            str
     pieces:                 str
-    materiels_json:         str
-    deplacements_json:      str
-    dossier_path:           str
+    marque:                        str = ""
+    commentaire:                   str = ""
+    materiels_json:                str
+    deplacements_json:             str
+    moteurs_supplementaires_json:  str = "[]"
+    dossier_path:                  str
     client_notifie:         int
     tech_notifie:           int
     signature_b64:          str

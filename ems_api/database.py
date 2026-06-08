@@ -29,9 +29,39 @@ def get_db():
 
 
 def init_db():
-    """Crée toutes les tables si elles n'existent pas."""
-    # Import des modèles ici pour qu'ils s'enregistrent dans Base.metadata
+    """Crée toutes les tables si elles n'existent pas + migrations légères."""
     from .models import client, moteur, intervention, garantie  # noqa
     from .models import amelioration, technicien  # noqa
-    from .models import configurations #noqa
+    from .models import configurations  # noqa
     Base.metadata.create_all(bind=engine)
+
+    # Migrations : ajout de colonnes manquantes sur tables existantes
+    from sqlalchemy import text, inspect as _inspect
+    _migrations = [
+        ("interventions", "moteurs_supplementaires_json", "TEXT DEFAULT '[]'"),
+        ("interventions", "marque",                       "TEXT DEFAULT ''"),
+        ("interventions", "commentaire",                  "TEXT DEFAULT ''"),
+    ]
+    insp = _inspect(engine)
+    for table, col, col_def in _migrations:
+        try:
+            existing = [c["name"] for c in insp.get_columns(table)]
+            if col not in existing:
+                with engine.connect() as conn:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_def}"))
+                    conn.commit()
+        except Exception:
+            pass
+
+    # Seed marques par défaut si la table est vide
+    from .models.configurations import MarqueMoteur
+    from sqlalchemy.orm import Session as _Session
+    with _Session(engine) as _s:
+        if _s.query(MarqueMoteur).count() == 0:
+            _defaults = [
+                "Volvo Penta", "Caterpillar", "John Deere", "Yanmar",
+                "MTU", "MAN", "Cummins", "Perkins", "Deutz", "Scania",
+            ]
+            for i, lib in enumerate(_defaults):
+                _s.add(MarqueMoteur(libelle=lib, ordre=i))
+            _s.commit()

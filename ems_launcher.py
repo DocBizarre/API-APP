@@ -20,6 +20,12 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import messagebox
 
+try:
+    from shared.version import __version__, APP_NAME
+except ImportError:
+    __version__ = "1.8.0"
+    APP_NAME = "EMS – Emeraude Moteurs Systèmes"
+
 
 _HERE = Path(__file__).resolve().parent
 
@@ -122,8 +128,8 @@ def _charger_logo(hauteur=52):
     try:
         import base64, io, importlib.util
         data = None
-        for base in (_HERE, _HERE / "ems_project", _HERE.parent,
-                     _HERE.parent / "ems_project"):
+        for base in (_HERE / "shared", _HERE, _HERE / "ems_project",
+                     _HERE.parent / "shared", _HERE.parent / "ems_project"):
             f = base / "logo_data.py"
             if f.is_file():
                 spec = importlib.util.spec_from_file_location("logo_data", f)
@@ -285,7 +291,7 @@ class ParametresSyncDialog(tk.Toplevel):
 class Launcher(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("EMS – Lanceur d'applications")
+        self.title(f"{APP_NAME}  v{__version__}")
         self.geometry("560x740")
         self.resizable(False, False)
         self.configure(bg=C["bg"])

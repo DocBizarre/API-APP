@@ -4,9 +4,10 @@ Supporte un préfixe d'appareil optionnel pour la synchronisation hors-ligne :
   - Au bureau (device_prefix vide)      : BON-2026-0008
   - Sur tablette (device_prefix="T1")   : BON-T1-2026-0008
 
-Le compteur est INDEPENDANT par appareil : chaque device compte ses propres
-numéros, ce qui garantit l'absence de collision entre le serveur et les
-tablettes (ou entre tablettes) lors de la synchronisation.
+Garantie d'unicité même après suppression :
+  Un "high water mark" (HWM) est stocké dans la table config sous la clé
+  "hwm:<prefixe>". Le prochain numéro est toujours max(db_max, hwm) + 1,
+  ce qui assure qu'un numéro supprimé ne soit jamais réattribué.
 """
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -16,7 +17,7 @@ from ..models.garantie import Garantie
 from ..models.amelioration import Amelioration
 
 
-def _prochain_numero(db: Session, model, colonne, type_prefix: str,
+def _prochain_numero(db: Session, model, colonne: str, type_prefix: str,
                      device_prefix: str = "") -> str:
     """
     Génère le prochain numéro séquentiel pour un type donné.
@@ -29,26 +30,47 @@ def _prochain_numero(db: Session, model, colonne, type_prefix: str,
     """
     annee = datetime.now().year
     dev = (device_prefix or "").strip()
-    if dev:
-        prefixe = f"{type_prefix}-{dev}-{annee}-"
-    else:
-        prefixe = f"{type_prefix}-{annee}-"
+    prefixe = f"{type_prefix}-{dev}-{annee}-" if dev else f"{type_prefix}-{annee}-"
 
     col = getattr(model, colonne)
-    dernier = (
+
+    # ── 1. Max des enregistrements existants ──────────────────────────────────
+    dernier_db = (
         db.query(model)
         .filter(col.like(f"{prefixe}%"))
         .order_by(col.desc())
         .first()
     )
-    if dernier:
+    num_db = 0
+    if dernier_db:
         try:
-            num = int(getattr(dernier, colonne).split("-")[-1]) + 1
+            num_db = int(getattr(dernier_db, colonne).split("-")[-1])
         except (ValueError, AttributeError):
-            num = 1
+            num_db = 0
+
+    # ── 2. High water mark stocké en config (résiste aux suppressions) ────────
+    from ..models.configurations import Config
+    hwm_key = f"hwm:{prefixe}"
+    cfg = db.query(Config).filter(Config.cle == hwm_key).first()
+    num_hwm = 0
+    if cfg and cfg.valeur:
+        try:
+            num_hwm = int(cfg.valeur)
+        except ValueError:
+            num_hwm = 0
+
+    # ── 3. Prochain numéro = max des deux sources + 1 ─────────────────────────
+    num = max(num_db, num_hwm) + 1
+    new_num_str = f"{prefixe}{num:04d}"
+
+    # ── 4. Mise à jour du HWM ─────────────────────────────────────────────────
+    if cfg:
+        cfg.valeur = str(num)
     else:
-        num = 1
-    return f"{prefixe}{num:04d}"
+        db.add(Config(cle=hwm_key, valeur=str(num)))
+    db.commit()
+
+    return new_num_str
 
 
 def next_num_bon(db: Session, device_prefix: str = "") -> str:

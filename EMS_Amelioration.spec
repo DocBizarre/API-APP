@@ -1,12 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
-
+import os
 
 a = Analysis(
     ['amelioration_app\\app_amelioration.py'],
-    pathex=['C:\\Users\\Stagiaire.be\\Desktop\\APP API'],
+    pathex=[SPECPATH, os.path.join(SPECPATH, 'amelioration_app')],
     binaries=[],
     datas=[('config.ini', '.')],
-    hiddenimports=['ems_client.api', 'ems_client.sync_config', 'ems_client.sync_client'],
+    hiddenimports=['ems_client.api', 'ems_client.sync_config', 'ems_client.sync_client', 'shared.amelioration_generator', 'shared.bon_generator', 'shared.logo_data'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -35,4 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=['favicon.ico'],
 )
