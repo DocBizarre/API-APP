@@ -813,9 +813,8 @@ tr, .sign-box {{ page-break-inside: avoid; break-inside: avoid; }}
 
 <div class="footer">
   <strong>Emeraude Moteurs Systemes</strong> - Constructeur de groupe de puissance<br>
-  9bis avenue Louis Martin - 35400 Saint Malo &nbsp;|&nbsp;
   9 Rue d'Armorique - 35540 Miniac Morvan<br>
-  Tel : 02.99.19.01.99 &nbsp;|&nbsp; Fax : 02.99.81.11.75 &nbsp;|&nbsp;
+  Tel : 02.99.19.01.99 &nbsp;|&nbsp;
   <strong>www.emeraudemoteurs.com</strong><br>
   <em style="color:#888;">Document genere le {datetime.now().strftime('%d/%m/%Y a %H:%M')}</em>
 </div>

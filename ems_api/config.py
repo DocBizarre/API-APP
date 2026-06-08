@@ -36,10 +36,10 @@ class Settings:
     # ─── Entreprise (utilisé par le générateur de bons HTML/PDF) ────────
     ENTREPRISE = {
         "nom": "Emeraude Moteurs Systèmes",
-        "adresse_1": "9bis avenue Louis Martin – 35400 Saint Malo",
-        "adresse_2": "9 Rue d'Armorique – 35540 Miniac Morvan",
+        "adresse_1": "9 Rue d'Armorique – 35540 Miniac Morvan",
+        "adresse_2": "",
         "tel": "02.99.19.01.99",
-        "fax": "02.99.81.11.75",
+        "fax": "",
         "email": "service.technique@emeraudemoteurs.com",
         "siret": "431 976 729 00027",
         "tva": "FR 14 431 976 729",

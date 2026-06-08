@@ -24,8 +24,12 @@ from typing import Dict
 
 
 # ─── Configuration ───────────────────────────────────────────────────────────
+import sys as _sys
 _HERE = Path(__file__).resolve().parent
-_DOSSIERS_BASE = _HERE / "dossiers"   # racine ou seront crees les sous-dossiers
+if getattr(_sys, "frozen", False):
+    _DOSSIERS_BASE = Path(_sys.executable).parent / "garanties"
+else:
+    _DOSSIERS_BASE = _HERE / "dossiers"
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────

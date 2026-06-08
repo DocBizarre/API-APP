@@ -2,8 +2,11 @@
 EMS - Notifications par email.
 
 Strategie d'envoi (ordre de priorite) :
-  1. Outlook COM (win32com) : brouillon avec PDF en piece jointe automatique.
-  2. Fallback mailto: + ouverture du dossier pour drag&drop manuel.
+  1. Outlook classique COM (win32com) — PJ automatique, si OUTLOOK.EXE installe.
+  2. Simple MAPI (MAPISendMailW) — PJ automatique (Thunderbird, Windows Mail…),
+     uniquement si Outlook classique est present (evite le dialogue d'erreur
+     Windows avec le nouvel Outlook Store qui ne supporte pas MAPI).
+  3. Fallback mailto: + ouverture du dossier + message informatif.
 """
 
 import os
@@ -29,47 +32,229 @@ def _build_mailto(to="", cc="", subject="", body=""):
     return f"mailto:{_esc(to)}" + (f"?{qs}" if qs else "")
 
 
+def _outlook_classique_installe():
+    """
+    Retourne True uniquement si l'Outlook desktop (Microsoft Office/365) est installe.
+    Le nouvel Outlook (application Microsoft Store) n'est PAS detecte comme classique.
+    """
+    try:
+        import winreg
+        for hive, path in [
+            (winreg.HKEY_LOCAL_MACHINE,
+             r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\OUTLOOK.EXE"),
+            (winreg.HKEY_LOCAL_MACHINE,
+             r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths\OUTLOOK.EXE"),
+        ]:
+            try:
+                k = winreg.OpenKey(hive, path)
+                v, _ = winreg.QueryValueEx(k, "")
+                winreg.CloseKey(k)
+                if v and os.path.isfile(v):
+                    return True
+            except FileNotFoundError:
+                continue
+    except Exception:
+        pass
+    return False
+
+
+def _mapi_dialog(to, cc, subject, body, pj=""):
+    """
+    Ouvre un brouillon via Windows Simple MAPI (MAPISendMailW).
+    Compatible avec Thunderbird, Windows Mail, Outlook classique (sans COM).
+    Retourne True si le dialogue a ete ouvert avec succes.
+    NE PAS appeler avec le nouvel Outlook Store (provoque une erreur Windows).
+    """
+    import ctypes
+
+    try:
+        mapi = ctypes.WinDLL("mapi32.dll")
+        fn = mapi.MAPISendMailW
+    except (OSError, AttributeError):
+        return False
+
+    class _Recip(ctypes.Structure):
+        _fields_ = [
+            ("ulReserved",   ctypes.c_ulong),
+            ("ulRecipClass", ctypes.c_ulong),
+            ("lpszName",     ctypes.c_wchar_p),
+            ("lpszAddress",  ctypes.c_wchar_p),
+            ("ulEIDSize",    ctypes.c_ulong),
+            ("lpEntryID",    ctypes.c_void_p),
+        ]
+
+    class _File(ctypes.Structure):
+        _fields_ = [
+            ("ulReserved",   ctypes.c_ulong),
+            ("flFlags",      ctypes.c_ulong),
+            ("nPosition",    ctypes.c_ulong),
+            ("lpszPathName", ctypes.c_wchar_p),
+            ("lpszFileName", ctypes.c_wchar_p),
+            ("lpFileType",   ctypes.c_void_p),
+        ]
+
+    class _Msg(ctypes.Structure):
+        _fields_ = [
+            ("ulReserved",         ctypes.c_ulong),
+            ("lpszSubject",        ctypes.c_wchar_p),
+            ("lpszNoteText",       ctypes.c_wchar_p),
+            ("lpszMessageType",    ctypes.c_wchar_p),
+            ("lpszDateReceived",   ctypes.c_wchar_p),
+            ("lpszConversationID", ctypes.c_wchar_p),
+            ("flFlags",            ctypes.c_ulong),
+            ("lpOriginator",       ctypes.c_void_p),
+            ("nRecipCount",        ctypes.c_ulong),
+            ("lpRecips",           ctypes.c_void_p),
+            ("nFileCount",         ctypes.c_ulong),
+            ("lpFiles",            ctypes.c_void_p),
+        ]
+
+    MAPI_DIALOG = 0x00000008
+
+    recips = []
+    for addr in (to or "").split(","):
+        addr = addr.strip()
+        if addr:
+            recips.append(_Recip(ulRecipClass=1, lpszName=addr,
+                                 lpszAddress=f"SMTP:{addr}"))
+    for addr in (cc or "").split(","):
+        addr = addr.strip()
+        if addr:
+            recips.append(_Recip(ulRecipClass=2, lpszName=addr,
+                                 lpszAddress=f"SMTP:{addr}"))
+
+    files = []
+    if pj and os.path.isfile(pj):
+        files.append(_File(nPosition=0xFFFFFFFF,
+                           lpszPathName=pj,
+                           lpszFileName=Path(pj).name))
+
+    recip_arr = (_Recip * len(recips))(*recips) if recips else None
+    file_arr  = (_File  * len(files)) (*files)  if files  else None
+
+    msg = _Msg(
+        lpszSubject  = subject or "",
+        lpszNoteText = body    or "",
+        nRecipCount  = len(recips),
+        lpRecips     = ctypes.cast(recip_arr, ctypes.c_void_p) if recip_arr else None,
+        nFileCount   = len(files),
+        lpFiles      = ctypes.cast(file_arr,  ctypes.c_void_p) if file_arr  else None,
+    )
+
+    try:
+        ret = fn(
+            ctypes.c_ulong(0),
+            ctypes.c_ulong(0),
+            ctypes.byref(msg),
+            ctypes.c_ulong(MAPI_DIALOG),
+            ctypes.c_ulong(0),
+        )
+        return ret == 0
+    except Exception:
+        return False
+
+
 def _ouvrir_brouillon(to, cc, subject, body, attachment_path=""):
     """
-    Ouvre un brouillon email avec la PJ déjà attachée.
+    Ouvre un brouillon email.
+    Retourne True si la PJ a ete attachee automatiquement, False sinon.
 
-    Stratégie :
-      1. Outlook COM (win32com.client) — PJ automatique
-      2. Fallback : mailto: + Explorateur ouvert sur le dossier
+    Strategie :
+      1. Outlook classique COM — PJ automatique (seulement si OUTLOOK.EXE present)
+      2. Simple MAPI           — PJ automatique (seulement si Outlook classique present)
+      3. mailto: + dossier     — PJ manuelle (fonctionne avec le nouvel Outlook Store)
     """
     import logging as _log
     _logger = _log.getLogger(__name__)
 
-    # Chemin absolu obligatoire pour Outlook COM
     pj = os.path.abspath(str(attachment_path)) if attachment_path else ""
+    outlook_ok = _outlook_classique_installe()
 
-    # ── Tentative Outlook COM ─────────────────────────────────────────────
-    if pj and os.path.isfile(pj):
+    # ── 1 & 2. Methodes avec PJ auto (uniquement Outlook classique) ────────
+    if pj and os.path.isfile(pj) and outlook_ok:
+        # Tentative Outlook COM
         try:
             import pythoncom
             import win32com.client as _wc
-            # Initialiser COM sur le thread courant (requis hors thread COM natif)
             pythoncom.CoInitialize()
             ol   = _wc.Dispatch("Outlook.Application")
-            mail = ol.CreateItem(0)       # 0 = olMailItem
+            mail = ol.CreateItem(0)
             mail.To      = to or ""
             mail.CC      = cc or ""
             mail.Subject = subject or ""
             mail.Body    = body or ""
-            mail.Attachments.Add(Source=pj)   # Source= requis, chemin absolu
-            mail.Display(True)                 # True = fenêtre modale (+ fiable)
-            return
+            mail.Attachments.Add(Source=pj)
+            mail.Display(True)
+            return True
         except Exception as _e:
-            _logger.warning("Outlook COM indisponible (%s) — fallback mailto", _e)
+            _logger.warning("Outlook COM indisponible (%s) — tentative MAPI", _e)
 
-    # ── Fallback : mailto + ouvrir le dossier pour drag-and-drop ─────────
+        # Tentative Simple MAPI
+        try:
+            if _mapi_dialog(to=to, cc=cc, subject=subject, body=body, pj=pj):
+                return True
+            _logger.warning("MAPI a echoue — fallback mailto")
+        except Exception as _e:
+            _logger.warning("MAPI indisponible (%s) — fallback mailto", _e)
+
+    # ── 3. Fallback universel : mailto: + ouverture du dossier ────────────
+    # Compatible avec le nouvel Outlook (Store), Thunderbird, webmail, etc.
     url = _build_mailto(to=to, cc=cc, subject=subject, body=body)
-    webbrowser.open(url)
+    try:
+        webbrowser.open(url)
+    except Exception as _e:
+        _logger.warning("webbrowser.open echoue (%s)", _e)
+
     if pj:
         try:
             dossier = Path(pj).parent
             if dossier.is_dir():
-                os.startfile(str(dossier))
+                _ouvrir_dossier_reduit(dossier)
+        except Exception:
+            pass
+
+    return False  # PJ non attachee automatiquement
+
+
+def _ouvrir_dossier_reduit(dossier):
+    """
+    Ouvre le dossier dans une fenetre de taille normale (non maximisee),
+    positionnee sur le cote droit de l'ecran pour ne pas recouvrir le mail.
+    Utilise Shell.Application via PowerShell pour controler taille et position.
+    """
+    import subprocess, ctypes
+
+    dossier_str = str(dossier)
+    dossier_ps  = dossier_str.replace("'", "''")   # echapper apostrophes PowerShell
+
+    screen_w = ctypes.windll.user32.GetSystemMetrics(0)
+    screen_h = ctypes.windll.user32.GetSystemMetrics(1)
+
+    # Fenetre a droite : ~42 % de la largeur, ~65 % de la hauteur
+    w = max(520, int(screen_w * 0.42))
+    h = max(420, int(screen_h * 0.65))
+    x = screen_w - w - 20          # collée au bord droit, 20px de marge
+    y = max(40, (screen_h - h) // 2)
+
+    # Shell.Application.Open() crée toujours une nouvelle fenetre Explorer.
+    # On attend 700 ms puis on redimensionne la derniere fenetre ouverte.
+    ps = (
+        f"$s = New-Object -ComObject Shell.Application; "
+        f"$s.Open('{dossier_ps}'); "
+        f"Start-Sleep -Milliseconds 700; "
+        f"$w = ($s.Windows() | Sort-Object {{$_.HWND}} | Select-Object -Last 1); "
+        f"if ($w) {{ $w.Left={x}; $w.Top={y}; $w.Width={w}; $w.Height={h} }}"
+    )
+
+    try:
+        subprocess.Popen(
+            ["powershell", "-WindowStyle", "Hidden",
+             "-ExecutionPolicy", "Bypass", "-Command", ps],
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+    except Exception:
+        try:
+            os.startfile(dossier_str)      # fallback si PowerShell indisponible
         except Exception:
             pass
 
@@ -92,7 +277,7 @@ Pour toute question, n'hesitez pas a nous contacter au 02.99.19.01.99.
 Cordialement,
 
 L'equipe EMS - Emeraude Moteurs Systemes
-9bis avenue Louis Martin - 35400 Saint Malo
+9 Rue d'Armorique - 35540 Miniac Morvan
 Tel : 02.99.19.01.99
 www.emeraudemoteurs.com
 """
@@ -248,9 +433,9 @@ def email_client(inv, client, moteur, bon_path=""):
         technicien_line=technicien_line,
     )
 
-    _ouvrir_brouillon(to=email, cc=cc, subject=subject, body=body,
-                      attachment_path=bon_path)
-    return email
+    pj_auto = _ouvrir_brouillon(to=email, cc=cc, subject=subject, body=body,
+                               attachment_path=bon_path)
+    return email, pj_auto
 
 
 def email_technicien(inv, client, moteur, technicien_email="", bon_path=""):
@@ -288,9 +473,9 @@ def email_technicien(inv, client, moteur, technicien_email="", bon_path=""):
         description=_safe(inv, "description"),
         bon_path=bon_path or "(a generer)",
     )
-    _ouvrir_brouillon(to=to_str, cc="", subject=subject, body=body,
-                      attachment_path=bon_path)
-    return to_str
+    pj_auto = _ouvrir_brouillon(to=to_str, cc="", subject=subject, body=body,
+                               attachment_path=bon_path)
+    return to_str, pj_auto
 
 
 def email_cloture(inv, client, moteur, technicien_emails=None, bon_path=""):
@@ -346,6 +531,6 @@ def email_cloture(inv, client, moteur, technicien_emails=None, bon_path=""):
         preconisation=preco,
     )
 
-    _ouvrir_brouillon(to=to_str, cc=cc_str, subject=subject, body=body,
-                      attachment_path=bon_path)
-    return to_str
+    pj_auto = _ouvrir_brouillon(to=to_str, cc=cc_str, subject=subject, body=body,
+                               attachment_path=bon_path)
+    return to_str, pj_auto

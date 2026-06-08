@@ -748,8 +748,19 @@ AMELIO_PRIORITES  = ["Basse", "Moyenne", "Haute", "Critique"]
 PRIORITES_AMELIORATION = AMELIO_PRIORITES   # alias
 
 # Dossiers de stockage (modifiables a chaud par les apps)
-GARANTIE_DIR = _Path(__file__).resolve().parent.parent / "garanties"
-AMELIO_DIR   = _Path(__file__).resolve().parent.parent / "ameliorations"
+def _data_dir(name: str) -> _Path:
+    """Retourne le chemin du dossier de donnees, cote exe ou cote sources."""
+    import sys as _sys
+    if getattr(_sys, "frozen", False):
+        base = _Path(_sys.executable).parent   # a cote du .exe
+    else:
+        base = _Path(__file__).resolve().parent.parent  # racine projet en dev
+    p = base / name
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+GARANTIE_DIR = _data_dir("garanties")
+AMELIO_DIR   = _data_dir("ameliorations")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

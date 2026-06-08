@@ -8,7 +8,11 @@ from datetime import datetime
 
 from .bon_generator import _esc, _logo_data_uri, ouvrir_fichier
 
-AMELIO_DIR = Path(__file__).parent / "ameliorations"
+import sys as _sys
+if getattr(_sys, "frozen", False):
+    AMELIO_DIR = Path(_sys.executable).parent / "ameliorations"
+else:
+    AMELIO_DIR = Path(__file__).parent / "ameliorations"
 
 _PRIO_CLS = {"Basse": "p-basse", "Moyenne": "p-moy",
              "Haute": "p-haute", "Critique": "p-crit"}
@@ -140,7 +144,7 @@ td {{ border:1px solid #b8c0c9; padding:7px 10px; font-size:10.5px;
 
 <div class="footer">
   <strong>Emeraude Moteurs Systèmes</strong> – Amélioration continue<br>
-  9bis avenue Louis Martin – 35400 Saint Malo |
+  9 Rue d'Armorique – 35540 Miniac Morvan |
   Tél : 02.99.19.01.99 | www.emeraudemoteurs.com<br>
   <em>Fiche générée le {gen_date}</em>
 </div>

@@ -522,7 +522,8 @@ class AmeliorationsFrame(tk.Frame):
         r = self._sel()
         if not r:
             return
-        d = Path(__file__).parent / "ameliorations" / r["num_ticket"]
+        from amelioration_generator import AMELIO_DIR
+        d = AMELIO_DIR / r["num_ticket"]
         d.mkdir(parents=True, exist_ok=True)
         ouvrir_fichier(d)
 
