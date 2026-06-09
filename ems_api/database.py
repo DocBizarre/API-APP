@@ -33,6 +33,7 @@ def init_db():
     from .models import client, moteur, intervention, garantie  # noqa
     from .models import amelioration, technicien  # noqa
     from .models import configurations  # noqa
+    from .models import affaire  # noqa
     Base.metadata.create_all(bind=engine)
 
     # Migrations : ajout de colonnes manquantes sur tables existantes

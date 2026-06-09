@@ -198,10 +198,10 @@ class PiecesApp(tk.Tk):
         tf, self.tree = mk_tree(self, cols, col_defs, height=22)
         tf.pack(fill="both", expand=True, padx=20, pady=4)
         self.tree.bind("<Double-1>", lambda e: self._modifier())
- 
+
         # Message d'aide quand vide
         self._show_help_message()
- 
+
         # ── Boutons d'action ──────────────────────────────────────────────────
         af = tk.Frame(self, bg=C["bg"])
         af.pack(fill="x", padx=20, pady=10)
@@ -212,7 +212,7 @@ class PiecesApp(tk.Tk):
                                    fg=C["muted"], font=F["small"])
         self.sel_info.pack(side="left", padx=(12, 0))
         self.tree.bind("<<TreeviewSelect>>", self._on_select_change)
- 
+
         self._cache = []           # liste de pieces actuellement affichees
         self._search_after_id = None
  
@@ -243,6 +243,7 @@ class PiecesApp(tk.Tk):
  
         self._cache = list(pieces)
         self._fill_tree()
+        self._refresh_count()
  
     def _show_help_message(self, msg=None):
         """Affiche un message d'aide dans le tableau."""
@@ -376,8 +377,8 @@ class PieceDialog(tk.Toplevel):
         self.on_save = on_save
         self.title("Modifier la pièce" if piece else "Nouvelle pièce")
         self.configure(bg=C["bg"])
-        self.geometry("520x340")
-        self.resizable(False, False)
+        self.geometry("520x420")
+        self.resizable(False, True)
         self.grab_set()
  
         mk_header(self, "Pièce détachée",
@@ -425,10 +426,15 @@ class PieceDialog(tk.Toplevel):
                                   parent=self)
             return
         if self.on_save:
+            if not self.piece:
+                try:
+                    self.master.search_var.set(data["reference"])
+                except AttributeError:
+                    pass
             self.on_save()
         self.destroy()
- 
- 
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 #   ImportPiecesDialog — Import CSV/Excel
 # ═════════════════════════════════════════════════════════════════════════════

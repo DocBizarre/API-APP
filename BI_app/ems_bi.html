@@ -1030,16 +1030,16 @@ function toggleDark(){
 function buildAlerts(){
   if(!db)return;
   const alerts=[];
-  const today=new Date().toISOString().slice(0,10);
-  const d30=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
-  const d7=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+  const d30=_daysAgoISO(30);
+  const d7=_daysAgoISO(7);
 
   // Bons critiques sans technicien
   const crit=q(`SELECT num_bon FROM interventions WHERE urgence='Critique' AND (technicien IS NULL OR technicien='') AND statut='En cours'`);
   if(crit.length) alerts.push({level:'crit',ico:'🚨',txt:`${crit.length} bon${crit.length>1?'s':''} <strong>Critique(s)</strong> sans technicien affecté`,link:'Voir',page:'interventions',filter:{id:'fi-urgence',val:'Critique'}});
 
   // Bons en cours depuis > 30 jours
-  const old=q(`SELECT num_bon,date_creation FROM interventions WHERE statut='En cours' AND date_creation!='' AND date_creation<?`,[d30]);
+  const _ints30=q(`SELECT num_bon,date_creation,statut,urgence,client_notifie FROM interventions`);
+  const old=_ints30.filter(r=>r.statut==='En cours'&&toISO(r.date_creation)<d30&&toISO(r.date_creation)!='');
   if(old.length) alerts.push({level:'warn',ico:'⏰',txt:`${old.length} bon${old.length>1?'s':''} en cours depuis <strong>plus de 30 jours</strong>`,link:'Voir',page:'interventions',filter:{id:'fi-statut',val:'En cours'}});
 
   // Bons urgents non notifiés
@@ -1047,7 +1047,8 @@ function buildAlerts(){
   if(notif[0]?.n>0) alerts.push({level:'warn',ico:'📣',txt:`${notif[0].n} intervention${notif[0].n>1?'s':''} urgente${notif[0].n>1?'s':''} sans notification client`,link:'Voir',page:'interventions'});
 
   // Bons à facturer anciens
-  const fact=q(`SELECT COUNT(*) n FROM interventions WHERE statut='À facturer' AND date_creation<?`,[d30]);
+  const factOld=_ints30.filter(r=>r.statut==='À facturer'&&toISO(r.date_creation)<d30&&toISO(r.date_creation)!='');
+  const fact=[{n:factOld.length}];
   if(fact[0]?.n>0) alerts.push({level:'info',ico:'💰',txt:`${fact[0].n} bon${fact[0].n>1?'s':''} <strong>À facturer</strong> depuis plus de 30 jours`,link:'Voir',page:'interventions',filter:{id:'fi-statut',val:'À facturer'}});
 
   // Garanties sans date de clôture (si table existe)
@@ -1213,11 +1214,13 @@ function buildDash(){
   const cnt={tot:invAll.length,'En cours':0,'À facturer':0,'Facturé':0,'Clos':0,Urg:0,Crit:0};
   invAll.forEach(r=>{if(r.statut in cnt)cnt[r.statut]++;if(r.urgence==='Urgente')cnt.Urg++;if(r.urgence==='Critique')cnt.Crit++;});
 
-  // Trend vs previous period (same duration)
-  const getMonthAgo=(n)=>new Date(Date.now()-n*30*864e5).toISOString().slice(0,7);
-  const prevMonth=q(`SELECT COUNT(*) n FROM interventions WHERE substr(date_creation,1,7)=?`,[getMonthAgo(1)]);
-  const thisMonth=q(`SELECT COUNT(*) n FROM interventions WHERE substr(date_creation,1,7)=?`,[getMonthAgo(0)]);
-  const tmn=thisMonth[0]?.n||0,pmn=prevMonth[0]?.n||0;
+  // Groupement mensuel (géré en JS pour supporter DD/MM/YYYY et YYYY-MM-DD)
+  const _mMap={};
+  invAll.forEach(r=>{const m=dateToYearMonth(r.date_creation);if(m)_mMap[m]=(_mMap[m]||0)+1;});
+
+  // Trend vs previous period
+  const _tm=_monthStr(0),_pm=_monthStr(-1);
+  const tmn=(_mMap[_tm]||0),pmn=(_mMap[_pm]||0);
   const trendPct=pmn>0?Math.round((tmn-pmn)/pmn*100):0;
   const trendCls=trendPct>0?'up':trendPct<0?'dn':'flat';
   const trendTxt=trendPct>0?`↑ +${trendPct}%`:trendPct<0?`↓ ${trendPct}%`:'→ stable';
@@ -1264,11 +1267,11 @@ function buildDash(){
   const gridColor=isDark?'rgba(255,255,255,.06)':'rgba(0,0,0,.04)';
   const tickColor=isDark?'#4a5568':'#7a8fa8';
 
-  const byMonth=q(`SELECT substr(date_creation,1,7) m,COUNT(*) n FROM interventions WHERE date_creation!='' GROUP BY m ORDER BY m DESC LIMIT 18`).reverse();
+  const byMonth=Object.entries(_mMap).map(([m,n])=>({m,n})).sort((a,b)=>a.m.localeCompare(b.m)).slice(-18);
   const r1=document.getElementById('dr1');r1.innerHTML='';
-  if(byMonth.length>1){
+  if(byMonth.length>=1){
     r1.insertAdjacentHTML('beforeend',`<div class="cc gcol2"><div class="cc-head"><div><div class="cc-title">Activité mensuelle</div><div class="cc-sub">Bons créés par mois</div></div></div><div class="cc-body"><canvas id="ch-months"></canvas></div></div>`);
-    _C.months=new Chart(document.getElementById('ch-months'),{type:'bar',data:{labels:byMonth.map(r=>r.m),datasets:[{data:byMonth.map(r=>r.n),backgroundColor:'rgba(29,110,245,.18)',borderColor:'rgba(29,110,245,.85)',borderWidth:2,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0,color:tickColor},grid:{color:gridColor}},x:{ticks:{color:tickColor},grid:{display:false}}}}});
+    _C.months=new Chart(document.getElementById('ch-months'),{type:'bar',data:{labels:byMonth.map(r=>fmtMonth(r.m)),datasets:[{data:byMonth.map(r=>r.n),backgroundColor:'rgba(29,110,245,.18)',borderColor:'rgba(29,110,245,.85)',borderWidth:2,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false},tooltip:{callbacks:{title:tt=>tt[0].label}}},scales:{y:{beginAtZero:true,ticks:{precision:0,color:tickColor},grid:{color:gridColor}},x:{ticks:{color:tickColor,maxRotation:45,minRotation:30},grid:{display:false}}}}});
   }
   r1.insertAdjacentHTML('beforeend',`<div class="cc"><div class="cc-head"><div><div class="cc-title">Statuts</div><div class="cc-sub">Répartition</div></div></div><div class="cc-body"><canvas id="ch-statuts"></canvas></div></div>`);
   _C.statuts=new Chart(document.getElementById('ch-statuts'),{type:'doughnut',data:{labels:['En cours','À facturer','Facturé','Clos'],datasets:[{data:[cnt['En cours'],cnt['À facturer'],cnt['Facturé'],cnt['Clos']],backgroundColor:['#f08c00','#7048e8','#1d6ef5','#2f9e44'],borderWidth:3,borderColor:isDark?'#1c2230':'#fff',hoverOffset:4}]},options:{responsive:true,cutout:'68%',plugins:{legend:{position:'bottom',labels:{padding:10,font:{size:11},color:isDark?'#a0aec0':'#3d4f6b'}}}}});
@@ -1319,8 +1322,8 @@ function buildPivot(){
 
   // Get dimension value for a row
   function getDim(r,dim){
-    if(dim==='mois') return (r.date_creation||'').slice(0,7)||'—';
-    if(dim==='annee') return (r.date_creation||'').slice(0,4)||'—';
+    if(dim==='mois'){return dateToYearMonth(r.date_creation)||'—';}
+    if(dim==='annee'){const ym=dateToYearMonth(r.date_creation);return ym?ym.slice(0,4):'—';}
     if(dim==='client_nom') return r.client_nom||'—';
     return r[dim]||'—';
   }
@@ -1442,7 +1445,10 @@ function buildTimeline(){
     html+=`<div class="tl-row"><div class="tl-label" title="${esc(key)}">${esc(key)}</div><div class="tl-track">`;
     items.forEach(r=>{
       if(!r.date_creation)return;
-      const start=(new Date(r.date_creation)-new Date(minDate))/864e5;
+      const dStart=parseDateStr(r.date_creation);
+      if(!dStart||isNaN(dStart))return;
+      const start=(dStart-parseDateStr(minDate))/864e5;
+      if(isNaN(start))return;
       const leftPct=Math.max(0,Math.min(100,start/totalDays*100));
       const widthPct=Math.max(.5,1/totalDays*100);
       const col=statusColor[r.statut]||'#94a3b8';
@@ -1484,8 +1490,8 @@ function fInt(){
     if(cf==='garantie'  &&!r.garantie_intervention)return false;
     if(cf==='facturable'&&!r.facturable)return false;
     if(cf==='interne'   &&!r.interne)return false;
-    if(fr&&(r.date_creation||'')<fr)return false;
-    if(to&&(r.date_creation||'')>to+'z')return false;
+    if(fr&&toISO(r.date_creation)<fr)return false;
+    if(to&&toISO(r.date_creation)>to)return false;
     if(nc!==''&&String(r.client_notifie)!==nc)return false;
     if(nt!==''&&String(r.tech_notifie)!==nt)return false;
     return true;
@@ -1675,7 +1681,46 @@ function exportCSV(name){
 // ══════════════════════════════════════════════════════════════════
 function gv(id){const e=document.getElementById(id);return e?e.value.trim():'';}
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function fmt(s){if(!s||s==='—')return'—';const m=String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);return m?`${m[3]}/${m[2]}/${m[1]}`:esc(String(s).slice(0,10));}
+function fmt(s){
+  if(!s||s==='—')return'—';
+  // DD/MM/YYYY → affiché tel quel
+  if(/^\d{2}\/\d{2}\/\d{4}/.test(s))return s.slice(0,10);
+  // YYYY-MM-DD → DD/MM/YYYY
+  const m=String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m?`${m[3]}/${m[2]}/${m[1]}`:esc(String(s).slice(0,10));
+}
+// Convertit DD/MM/YYYY ou YYYY-MM-DD en "YYYY-MM-DD" (ISO) pour comparaisons
+function toISO(s){
+  if(!s)return'';
+  const fr=s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if(fr)return`${fr[3]}-${fr[2]}-${fr[1]}`;
+  return String(s).slice(0,10);
+}
+// Parse une date (DD/MM/YYYY ou YYYY-MM-DD) en objet Date local
+function parseDateStr(s){
+  if(!s)return null;
+  const fr=s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if(fr)return new Date(+fr[3],+fr[2]-1,+fr[1]);
+  const iso=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(iso)return new Date(+iso[1],+iso[2]-1,+iso[3]);
+  return null;
+}
+// Retourne "YYYY-MM" (pour groupement mensuel) depuis une date quelconque
+function dateToYearMonth(s){
+  if(!s)return null;
+  const fr=s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if(fr)return`${fr[3]}-${fr[2]}`;
+  const iso=s.match(/^(\d{4})-(\d{2})/);
+  if(iso)return`${iso[1]}-${iso[2]}`;
+  return null;
+}
+// Formate "2026-06" → "Juin '26"
+const _MOIS=['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Aoû','Sep','Oct','Nov','Déc'];
+function fmtMonth(m){if(!m||m==='—')return'—';const p=String(m).split('-');if(p.length<2)return m;const mo=parseInt(p[1],10)-1;return`${_MOIS[mo]??p[1]} '${p[0].slice(2)}`;}
+// Retourne "YYYY-MM" du mois courant + offset (offset=-1 → mois précédent)
+function _monthStr(offset){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()+offset);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;}
+// Retourne "YYYY-MM-DD" d'il y a N jours
+function _daysAgoISO(n){return new Date(Date.now()-n*864e5).toISOString().slice(0,10);}
 function popSel(id,vals){const e=document.getElementById(id);if(!e)return;e.innerHTML='<option value="">Tous</option>'+vals.map(v=>`<option>${esc(v)}</option>`).join('');}
 function setCnt(id,f,t){const e=document.getElementById(id);if(!e)return;e.innerHTML=f===t?`<strong>${t.toLocaleString('fr-FR')}</strong> résultat${t>1?'s':''}`:`<strong>${f.toLocaleString('fr-FR')}</strong> / ${t.toLocaleString('fr-FR')} résultats`;}
 let _tt;function toast(msg){const e=document.getElementById('toast');e.textContent=msg;e.classList.add('on');clearTimeout(_tt);_tt=setTimeout(()=>e.classList.remove('on'),3000);}

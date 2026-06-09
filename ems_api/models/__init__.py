@@ -7,8 +7,9 @@ from .amelioration import Amelioration
 from .technicien import Technicien
 from .configurations import TypeIntervention, StatutGarantie, Config
 from .piece import Piece
+from .affaire import Affaire, AffaireItem
 
 __all__ = ["Client", "Moteur", "Intervention",
            "Garantie", "Amelioration", "Technicien",
            "TypeIntervention", "StatutGarantie", "Config",
-           "Piece"]
+           "Piece", "Affaire", "AffaireItem"]

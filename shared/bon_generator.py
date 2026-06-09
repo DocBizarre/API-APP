@@ -289,9 +289,30 @@ def _build_html(inv, client=None, moteur=None, photos_annexe=None,
     except (json.JSONDecodeError, TypeError):
         materiels = []
     try:
-        depl = json.loads(_g(inv, "deplacements_json", "{}") or "{}")
+        _depl_raw = json.loads(_g(inv, "deplacements_json", "{}") or "{}")
     except (json.JSONDecodeError, TypeError):
-        depl = {}
+        _depl_raw = {}
+
+    # Normalise vers liste de jours, chaque jour ayant une liste de techniciens.
+    # Retrocompat : ancien format plat, ou jours sans cle "techniciens".
+    _TECH_KEYS = ["nom", "trajet_aller_retour", "duree_intervention",
+                  "temps_preparation", "temps_rangement",
+                  "frais_repas", "frais_hotel", "frais_peages"]
+
+    def _norm_jour(j):
+        if "techniciens" in j and isinstance(j.get("techniciens"), list):
+            return j
+        return {"date": j.get("date", ""),
+                "techniciens": [{k: j.get(k, "") for k in _TECH_KEYS}]}
+
+    if "jours" in _depl_raw and isinstance(_depl_raw.get("jours"), list):
+        jours_list = [_norm_jour(j) for j in _depl_raw["jours"]] or \
+                     [{"date": "", "techniciens": [{}]}]
+    else:
+        jours_list = [{"date": "", "techniciens":
+                       [{k: _depl_raw.get(k, "") for k in _TECH_KEYS}]}]
+
+    depl = jours_list[0]["techniciens"][0] if jours_list else {}  # retrocompat
 
     legacy_pieces = _g(inv, "pieces")
     if legacy_pieces and not materiels:
@@ -315,6 +336,137 @@ def _build_html(inv, client=None, moteur=None, photos_annexe=None,
 
     def d(k):
         return _esc(depl.get(k, ""))
+
+    def _build_jour_table(jour_data, jour_num):
+        date_jour = _esc(jour_data.get("date", ""))
+        techs = jour_data.get("techniciens", [{}])
+        multi_jours = len(jours_list) > 1
+
+        if multi_jours or date_jour:
+            hdr_txt = f"JOUR {jour_num}"
+            if date_jour:
+                hdr_txt += f" &ndash; {date_jour}"
+            jour_hdr = (f'<tr><td colspan="4" style="background:#eef2f7;'
+                        f'font-weight:700;font-size:9.5px;color:#002b5c;'
+                        f'padding:3px 8px;">{hdr_txt}</td></tr>')
+        else:
+            jour_hdr = ""
+
+        rows_html = ""
+        multi_techs = len(techs) > 1
+        for i, tech in enumerate(techs):
+            nom = _esc(tech.get("nom", ""))
+            if multi_techs or nom:
+                lbl = nom or f"Technicien {i + 1}"
+                sep = ('<tr><td colspan="4" style="padding:0;height:1px;'
+                       'background:#d0d4d9;border:none;"></td></tr>'
+                       if i > 0 else "")
+                rows_html += (f'{sep}<tr><td colspan="4" style="font-style:italic;'
+                              f'color:#4a5560;font-size:9px;padding:2px 8px;'
+                              f'background:#fafbfc;">{lbl}</td></tr>')
+            t_ar = _esc(tech.get("trajet_aller_retour", ""))
+            d_i  = _esc(tech.get("duree_intervention", ""))
+            t_p  = _esc(tech.get("temps_preparation", ""))
+            t_r  = _esc(tech.get("temps_rangement", ""))
+            rows_html += (
+                f'<tr><td class="lbl">Trajet aller-retour</td>'
+                f'<td class="val">{t_ar}</td>'
+                f'<td class="lbl">Frais de repas</td>'
+                f'<td class="val">{_check(tech.get("frais_repas", 0))}</td></tr>'
+                f'<tr><td class="lbl">Duree de l\'intervention</td>'
+                f'<td class="val">{d_i}</td>'
+                f'<td class="lbl">Frais d\'hotel</td>'
+                f'<td class="val">{_check(tech.get("frais_hotel", 0))}</td></tr>'
+                f'<tr><td class="lbl">Temps de preparation</td>'
+                f'<td class="val">{t_p}</td>'
+                f'<td class="lbl">Frais de peages</td>'
+                f'<td class="val">{_check(tech.get("frais_peages", 0))}</td></tr>'
+                f'<tr><td class="lbl">Temps de rangement</td>'
+                f'<td class="val">{t_r}</td>'
+                f'<td class="lbl"></td><td class="val"></td></tr>'
+            )
+        return f'<table class="depl">{jour_hdr}{rows_html}</table>'
+
+    # Totaux
+    import re as _re
+
+    def _parse_h(s):
+        s = str(s).strip().lower().replace(',', '.')
+        if not s:
+            return None
+        m = _re.match(r'^(\d+):(\d{2})$', s)
+        if m:
+            return int(m.group(1)) + int(m.group(2)) / 60
+        m = _re.match(r'^(\d+(?:\.\d+)?)h(\d{0,2})$', s)
+        if m:
+            return float(m.group(1)) + (int(m.group(2)) if m.group(2) else 0) / 60
+        m = _re.match(r'^(\d+(?:\.\d+)?)min$', s)
+        if m:
+            return float(m.group(1)) / 60
+        m = _re.match(r'^(\d+(?:\.\d+)?)$', s)
+        if m:
+            return float(m.group(1))
+        return None
+
+    def _fmt_h(h):
+        hi = int(h)
+        mi = round((h - hi) * 60)
+        if mi == 60:
+            hi += 1; mi = 0
+        return f"{hi}h{mi:02d}" if mi else f"{hi}h"
+
+    _t_keys = ["trajet_aller_retour", "duree_intervention",
+               "temps_preparation", "temps_rangement"]
+    _f_keys = ["frais_repas", "frais_hotel", "frais_peages"]
+    _totaux = {k: None for k in _t_keys}
+    _frais  = {k: 0 for k in _f_keys}
+    _nb_tech_jours = 0
+    for _j in jours_list:
+        for _t in _j.get("techniciens", []):
+            _nb_tech_jours += 1
+            for _k in _t_keys:
+                _v = _parse_h(_t.get(_k, ""))
+                if _v is not None:
+                    _totaux[_k] = (_totaux[_k] or 0) + _v
+            for _k in _f_keys:
+                _frais[_k] += 1 if _t.get(_k, 0) else 0
+
+    def _tv(k):
+        return _fmt_h(_totaux[k]) if _totaux[k] is not None else "&mdash;"
+
+    _show_totaux = (len(jours_list) > 1 or _nb_tech_jours > 1 or
+                    any(v is not None for v in _totaux.values()))
+
+    if _show_totaux:
+        _nb_j_lbl = f"{len(jours_list)}&nbsp;jour{'s' if len(jours_list) > 1 else ''}"
+        _nb_t_lbl = (f"{_nb_tech_jours}&nbsp;technicien"
+                     f"{'s' if _nb_tech_jours > 1 else ''}-jour"
+                     f"{'s' if _nb_tech_jours > 1 else ''}")
+        _totaux_html = (
+            f'<table class="depl" style="margin-top:8px;">'
+            f'<tr><td colspan="4" style="background:#002b5c;color:#fff;'
+            f'font-weight:700;font-size:9.5px;padding:3px 8px;letter-spacing:.3px;">'
+            f'TOTAUX ({_nb_j_lbl} &ndash; {_nb_t_lbl})</td></tr>'
+            f'<tr><td class="lbl">Duree interventions</td>'
+            f'<td class="val"><strong>{_tv("duree_intervention")}</strong></td>'
+            f'<td class="lbl">Trajet total</td>'
+            f'<td class="val">{_tv("trajet_aller_retour")}</td></tr>'
+            f'<tr><td class="lbl">Preparation</td>'
+            f'<td class="val">{_tv("temps_preparation")}</td>'
+            f'<td class="lbl">Rangement</td>'
+            f'<td class="val">{_tv("temps_rangement")}</td></tr>'
+            f'<tr><td class="lbl">Repas</td>'
+            f'<td class="val">{_frais["frais_repas"]}</td>'
+            f'<td class="lbl">Hotel / Peages</td>'
+            f'<td class="val">{_frais["frais_hotel"]} / {_frais["frais_peages"]}</td></tr>'
+            f'</table>'
+        )
+    else:
+        _totaux_html = ""
+
+    _depl_tables_html = ("\n".join(
+        _build_jour_table(j, i) for i, j in enumerate(jours_list, 1)
+    ) + _totaux_html)
 
     statut_cls = {"En cours": "ec", "A facturer": "afact",
                   "Facture": "fact", "Clos": "clos"}.get(statut, "ec")
@@ -764,32 +916,7 @@ tr, .sign-box {{ page-break-inside: avoid; break-inside: avoid; }}
 <!-- DEPLACEMENTS / TEMPS / FRAIS -->
 <div class="section-bloc">
 <div class="section-title">TEMPS &amp; FRAIS</div>
-<table class="depl">
-  <tr>
-    <td class="lbl">Trajet aller-retour</td>
-    <td class="val">{d("trajet_aller_retour")}</td>
-    <td class="lbl">Frais de repas</td>
-    <td class="val">{_check(depl.get("frais_repas", 0))}</td>
-  </tr>
-  <tr>
-    <td class="lbl">Duree de l'intervention</td>
-    <td class="val">{d("duree_intervention")}</td>
-    <td class="lbl">Frais d'hotel</td>
-    <td class="val">{_check(depl.get("frais_hotel", 0))}</td>
-  </tr>
-  <tr>
-    <td class="lbl">Temps de preparation</td>
-    <td class="val">{d("temps_preparation")}</td>
-    <td class="lbl">Frais de peages</td>
-    <td class="val">{_check(depl.get("frais_peages", 0))}</td>
-  </tr>
-  <tr>
-    <td class="lbl">Temps de rangement</td>
-    <td class="val">{d("temps_rangement")}</td>
-    <td class="lbl"></td>
-    <td class="val"></td>
-  </tr>
-</table>
+{_depl_tables_html}
 </div>
 
 <!-- COMMENTAIRE -->
@@ -922,46 +1049,39 @@ def generer_bon_pdf(inv, output_path, client=None, moteur=None,
     car le PDF est genere sur le serveur. Si l'API est injoignable,
     tombe en fallback sur WeasyPrint local si disponible.
     """
-    output_path = Path(output_path)
+    # 1. Tenter de recuperer le PDF via API (cas normal cote client)
+    #    On utilise POST /pdf/render avec le HTML complet (photos embarquees
+    #    en base64 cote client) plutot que GET /interventions/{id}/pdf qui
+    #    reconstruit le HTML cote serveur sans acces aux fichiers locaux.
+    try:
+        from ems_client import api as _api
+        base_url = getattr(_api, "BASE_URL", None)
+        if not base_url and hasattr(_api, "_read_ini_server_url"):
+            base_url = _api._read_ini_server_url()
+        if not base_url:
+            base_url = getattr(getattr(_api, "_client", None), "base_url", None)
+        if base_url:
+            import urllib.request
+            html_str = _build_html(inv, client=client, moteur=moteur,
+                                   photos_annexe=photos_annexe, for_pdf=True)
+            url = f"{base_url.rstrip('/')}/pdf/render"
+            req = urllib.request.Request(
+                url,
+                data=html_str.encode("utf-8"),
+                method="POST",
+            )
+            req.add_header("Content-Type", "text/html; charset=utf-8")
+            api_key = (getattr(getattr(_api, "_client", None), "api_key", "")
+                       or os.environ.get("EMS_API_KEY", ""))
+            if api_key:
+                req.add_header("X-API-Key", api_key)
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                _write_pdf_bytes(Path(output_path), resp.read())
+            return Path(output_path)
+    except Exception as e:
+        print(f"[bon_generator] API indisponible ({e}), tentative WeasyPrint local")
 
-    # Retire l'attribut lecture-seule + ajuste les droits NTFS si necessaire
-    if output_path.exists():
-        _unlock_file(output_path)
-
-    import sys
-    _frozen = getattr(sys, "frozen", False)   # True quand lance depuis un .exe
-
-    # 1. Tenter de recuperer le PDF via API (chemin normal : client ou .exe)
-    inv_id = _g(inv, "id")
-    if inv_id:
-        try:
-            from ems_client import api as _api
-            base_url = _api._client.base_url
-            if base_url:
-                from urllib.request import urlopen
-                url = f"{base_url.rstrip('/')}/interventions/{inv_id}/pdf"
-                with urlopen(url, timeout=60) as resp:
-                    data = resp.read()
-                _write_pdf_bytes(output_path, data)
-                return output_path
-        except PermissionError:
-            raise
-        except Exception as e:
-            if _frozen:
-                # Dans un .exe, pas de WeasyPrint local : erreur explicite
-                raise RuntimeError(
-                    "Impossible de générer le PDF : le serveur EMS est injoignable.\n\n"
-                    f"Détail : {e}\n\n"
-                    "Vérifiez que le serveur EMS est démarré, puis réessayez."
-                ) from e
-            logger.warning("API indisponible (%s), tentative WeasyPrint local", e)
-    elif _frozen:
-        raise RuntimeError(
-            "Impossible de générer le PDF : identifiant de bon manquant.\n"
-            "Enregistrez d'abord le bon avant de générer le PDF."
-        )
-
-    # 2. Fallback WeasyPrint local (developpement uniquement, jamais en .exe)
+    # 2. Fallback : WeasyPrint local (cote serveur ou dev avec WeasyPrint installe)
     try:
         from weasyprint import HTML
     except ImportError as e:
@@ -972,16 +1092,8 @@ def generer_bon_pdf(inv, output_path, client=None, moteur=None,
 
     html_str = _build_html(inv, client=client, moteur=moteur,
                            photos_annexe=photos_annexe, for_pdf=True)
-    import tempfile as _tmp, os as _os
-    fd, tmp = _tmp.mkstemp(dir=output_path.parent, suffix=".tmp")
-    tmp_path = Path(tmp)
-    try:
-        _os.close(fd)
-        HTML(string=html_str).write_pdf(str(tmp_path))
-        _write_pdf_bytes(output_path, tmp_path.read_bytes())
-    finally:
-        tmp_path.unlink(missing_ok=True)
-    return output_path
+    HTML(string=html_str).write_pdf(str(output_path))
+    return Path(output_path)
 
 
 def sauvegarder_bon(inv, photos_annexe=None, generer_pdf=False,

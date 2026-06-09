@@ -5,12 +5,11 @@ Endpoints de génération de documents :
     GET /garanties/{id}/document.html       → fiche garantie HTML
     GET /ameliorations/{id}/document.html   → ticket amélioration HTML
 
-Le HTML est généré par le `bon_generator.py` du projet ems_project.
+Le HTML est généré par `shared/bon_generator.py`.
 Le PDF est généré à la volée via Playwright (optionnel : si non installé,
 l'endpoint PDF renvoie 501 Not Implemented).
 """
 from pathlib import Path
-import sys
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -22,14 +21,6 @@ from ..models import Intervention, Garantie, Amelioration
 
 
 router = APIRouter(tags=["documents"])
-
-
-# ─── Chargement dynamique des générateurs ────────────────────────────────────
-# Les générateurs (bon_generator.py, etc.) sont dans ems_project/ pour ne pas
-# dupliquer. On ajoute le path au démarrage du module.
-_GENERATORS_PATH = Path(__file__).resolve().parent.parent.parent / "ems_project"
-if _GENERATORS_PATH.is_dir() and str(_GENERATORS_PATH) not in sys.path:
-    sys.path.insert(0, str(_GENERATORS_PATH))
 
 
 def _intervention_to_dict(inv: Intervention) -> dict:
@@ -64,11 +55,11 @@ def bon_html(inv_id: str, db: Session = Depends(get_db)):
     if not inv:
         raise HTTPException(404, f"Intervention {inv_id} introuvable")
     try:
-        from bon_generator import generer_bon_html
+        from shared.bon_generator import generer_bon_html
     except ImportError as e:
         raise HTTPException(501,
                             f"Générateur indisponible : {e}. "
-                            f"Vérifiez que ems_project/ est accessible.")
+                            f"Vérifiez que shared/ est accessible.")
     return generer_bon_html(_intervention_to_dict(inv))
 
 
@@ -79,7 +70,7 @@ def bon_pdf(inv_id: str, db: Session = Depends(get_db)):
     if not inv:
         raise HTTPException(404, f"Intervention {inv_id} introuvable")
     try:
-        from bon_generator import generer_bon_html
+        from shared.bon_generator import generer_bon_html
     except ImportError as e:
         raise HTTPException(501, f"Générateur indisponible : {e}")
     try:

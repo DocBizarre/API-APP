@@ -764,6 +764,53 @@ AMELIO_DIR   = _data_dir("ameliorations")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+#   Affaires
+# ═══════════════════════════════════════════════════════════════════════════
+
+def get_affaires(statut: str = "", search: str = "") -> List[Dict]:
+    return _client.get("/affaires", statut=statut, search=search)
+
+
+def get_affaire(affaire_id: str) -> Optional[Dict]:
+    if not affaire_id:
+        return None
+    try:
+        return _client.get(f"/affaires/{affaire_id}")
+    except APIError:
+        return None
+
+
+def create_affaire(data: Dict) -> Dict:
+    return _client.post("/affaires", json=data)
+
+
+def update_affaire(affaire_id: str, data: Dict) -> Dict:
+    return _client.put(f"/affaires/{affaire_id}", json=data)
+
+
+def delete_affaire(affaire_id: str) -> None:
+    _client.delete(f"/affaires/{affaire_id}")
+
+
+# ─── Items d'affaire ─────────────────────────────────────────────────────────
+
+def get_affaire_items(affaire_id: str) -> List[Dict]:
+    return _client.get(f"/affaires/{affaire_id}/items")
+
+
+def create_affaire_item(affaire_id: str, data: Dict) -> Dict:
+    return _client.post(f"/affaires/{affaire_id}/items", json=data)
+
+
+def update_affaire_item(affaire_id: str, item_id: str, data: Dict) -> Dict:
+    return _client.put(f"/affaires/{affaire_id}/items/{item_id}", json=data)
+
+
+def delete_affaire_item(affaire_id: str, item_id: str) -> None:
+    _client.delete(f"/affaires/{affaire_id}/items/{item_id}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 #   Init (no-op)
 # ═══════════════════════════════════════════════════════════════════════════
 

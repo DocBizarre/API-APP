@@ -8,13 +8,23 @@ Garantie d'unicité même après suppression :
   Un "high water mark" (HWM) est stocké dans la table config sous la clé
   "hwm:<prefixe>". Le prochain numéro est toujours max(db_max, hwm) + 1,
   ce qui assure qu'un numéro supprimé ne soit jamais réattribué.
+
+Concurrence :
+  SQLite : un verrou threading (_num_lock) serialise les appels dans le même
+  processus. Si la DB est migrée vers PostgreSQL, remplacer le verrou par un
+  SELECT FOR UPDATE sur la ligne HWM en config.
 """
+import threading
 from datetime import datetime
 from sqlalchemy.orm import Session
 
 from ..models.intervention import Intervention
 from ..models.garantie import Garantie
 from ..models.amelioration import Amelioration
+from ..models.affaire import Affaire
+
+# Serialize sequence generation within a single process (SQLite safety).
+_num_lock = threading.Lock()
 
 
 def _prochain_numero(db: Session, model, colonne: str, type_prefix: str,
@@ -28,6 +38,13 @@ def _prochain_numero(db: Session, model, colonne: str, type_prefix: str,
       - sans device : BON-2026-0008
       - avec device : BON-T1-2026-0008
     """
+    with _num_lock:
+        return _prochain_numero_locked(db, model, colonne, type_prefix, device_prefix)
+
+
+def _prochain_numero_locked(db: Session, model, colonne: str, type_prefix: str,
+                             device_prefix: str = "") -> str:
+    """Corps de _prochain_numero exécuté sous _num_lock."""
     annee = datetime.now().year
     dev = (device_prefix or "").strip()
     prefixe = f"{type_prefix}-{dev}-{annee}-" if dev else f"{type_prefix}-{annee}-"
@@ -86,3 +103,8 @@ def next_num_garantie(db: Session, device_prefix: str = "") -> str:
 def next_num_amelioration(db: Session, device_prefix: str = "") -> str:
     """Génère le prochain numéro de ticket : AME-AAAA-XXXX."""
     return _prochain_numero(db, Amelioration, "num_ticket", "AME", device_prefix)
+
+
+def next_num_affaire(db: Session, device_prefix: str = "") -> str:
+    """Génère le prochain numéro d'affaire : AFF-AAAA-XXXX."""
+    return _prochain_numero(db, Affaire, "num_affaire", "AFF", device_prefix)

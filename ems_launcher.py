@@ -44,6 +44,7 @@ def _demarrer_app(app_key, here_str):
         "pieces":          here / "pieces_app",
         "garanties":     here / "garanties_app",
         "amelioration":  here / "amelioration_app",
+        "affaire":       here / "affaire_app",
         "BI":            here / "BI_app",
     }
     dossier = sous_dossiers.get(app_key)
@@ -74,12 +75,19 @@ def _demarrer_app(app_key, here_str):
         from app_amelioration import AmeliorationApp
         AmeliorationApp().mainloop()
 
+    elif app_key == "affaire":
+        from app_affaire import AffaireApp
+        AffaireApp().mainloop()
+
     elif app_key == "BI":
         import app_bi
         app_bi.main()
 
 
 APPS = [
+    {"key": "affaire",      "titre": "Affaires",
+     "desc": "Suivi des affaires clients, équipements et objectifs",
+     "icone": "📋", "couleur": "#d97706", "dossier": "affaire_app"},
     {"key": "BI",           "titre": "Business Intelligence",
      "desc": "Analyse d'affaire",
      "icone": "📈", "couleur": "#b8bb0e", "dossier": "BI_app"},
@@ -292,14 +300,22 @@ class Launcher(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(f"{APP_NAME}  v{__version__}")
-        self.geometry("560x740")
-        self.resizable(False, False)
+        self.geometry("700x560")
+        self.minsize(600, 420)
+        self.resizable(True, True)
         self.configure(bg=C["bg"])
 
-        head = tk.Frame(self, bg=C["header"], height=90)
+        # ── En-tête ───────────────────────────────────────────────────────────
+        head = tk.Frame(self, bg=C["header"], height=80)
         head.pack(fill="x")
         head.pack_propagate(False)
         tk.Frame(head, bg=C["accent"], width=5).pack(side="left", fill="y")
+
+        tk.Button(head, text="⚙️", font=("Segoe UI", 16),
+                  bg=C["header"], fg="white", relief="flat", bd=0,
+                  cursor="hand2", activebackground="#013a7a",
+                  command=self._ouvrir_params).pack(side="right", padx=16)
+
         logo = _charger_logo()
         if logo is not None:
             ll = tk.Label(head, image=logo, bg=C["header"])
@@ -308,80 +324,100 @@ class Launcher(tk.Tk):
         hin = tk.Frame(head, bg=C["header"])
         hin.pack(side="left", fill="both", expand=True, padx=14)
         tk.Label(hin, text="Emeraude Moteurs Systèmes",
-                 font=("Segoe UI", 17, "bold"),
-                 bg=C["header"], fg="white").pack(anchor="w", pady=(20, 0))
+                 font=("Segoe UI", 16, "bold"),
+                 bg=C["header"], fg="white").pack(anchor="w", pady=(18, 0))
         tk.Label(hin, text="Choisissez une application à ouvrir",
-                 font=("Segoe UI", 10),
+                 font=("Segoe UI", 9),
                  bg=C["header"], fg="#aac4e8").pack(anchor="w")
 
-        # Bouton parametres synchro (en haut a droite du header)
-        tk.Button(head, text="⚙️", font=("Segoe UI", 16),
-                  bg=C["header"], fg="white", relief="flat", bd=0,
-                  cursor="hand2", activebackground="#013a7a",
-                  command=self._ouvrir_params).pack(side="right", padx=16)
+        # ── Corps scrollable ──────────────────────────────────────────────────
+        wrap = tk.Frame(self, bg=C["bg"])
+        wrap.pack(fill="both", expand=True)
 
-        body = tk.Frame(self, bg=C["bg"])
-        body.pack(fill="both", expand=True, padx=24, pady=16)
-        for app in APPS:
-            self._carte(body, app)
+        from tkinter import ttk
+        canvas = tk.Canvas(wrap, bg=C["bg"], highlightthickness=0)
+        ys = ttk.Scrollbar(wrap, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=ys.set)
+        ys.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
 
-        foot = tk.Frame(self, bg=C["bg"])
-        foot.pack(fill="x", padx=10, pady=(0, 0))
-        tk.Label(foot,
-                 text="Les applications partagent la même base de "
-                      "données. Vous pouvez en ouvrir plusieurs en même temps.",
+        grid_frame = tk.Frame(canvas, bg=C["bg"])
+        win_id = canvas.create_window((0, 0), window=grid_frame, anchor="nw")
+
+        def _on_frame_cfg(*_):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        def _on_canvas_cfg(ev):
+            canvas.itemconfig(win_id, width=ev.width)
+        grid_frame.bind("<Configure>", _on_frame_cfg)
+        canvas.bind("<Configure>", _on_canvas_cfg)
+        canvas.bind("<MouseWheel>",
+                    lambda e: canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
+
+        grid_frame.columnconfigure(0, weight=1, uniform="col")
+        grid_frame.columnconfigure(1, weight=1, uniform="col")
+
+        for i, app in enumerate(APPS):
+            row, col = divmod(i, 2)
+            colspan = 2 if (i == len(APPS) - 1 and len(APPS) % 2 == 1) else 1
+            self._carte(grid_frame, app, row, col, colspan)
+
+        # ── Pied de page ──────────────────────────────────────────────────────
+        foot = tk.Frame(self, bg=C["border"], height=1)
+        foot.pack(fill="x")
+        tk.Label(self,
+                 text="Les applications partagent la même base de données."
+                      "  Vous pouvez en ouvrir plusieurs simultanément.",
                  font=("Segoe UI", 7), bg=C["bg"], fg=C["muted"],
-                 justify="center").pack()
-    
+                 justify="center").pack(pady=(4, 6))
+
     def _ouvrir_params(self):
         ParametresSyncDialog(self)
 
-    def _carte(self, parent, app):
+    def _carte(self, parent, app, row, col, colspan=1):
         dispo = _app_disponible(app)
 
         outer = tk.Frame(parent, bg=C["border"])
-        outer.pack(fill="x", pady=7)
-        card = tk.Frame(outer, bg=C["card"], cursor="hand2" if dispo else "")
-        card.pack(fill="x", padx=1, pady=1)
+        outer.grid(row=row, column=col, columnspan=colspan,
+                   padx=10, pady=6, sticky="nsew")
 
+        card = tk.Frame(outer, bg=C["card"], cursor="hand2" if dispo else "")
+        card.pack(fill="both", expand=True, padx=1, pady=1)
+
+        # Barre colorée à gauche
         tk.Frame(card, bg=app["couleur"], width=5).pack(side="left", fill="y")
 
-        right = tk.Frame(card, bg=C["card"], width=140)
-        right.pack(side="right", fill="y", padx=(0, 16))
-        right.pack_propagate(False)
-
         inner = tk.Frame(card, bg=C["card"])
-        inner.pack(side="left", fill="both", expand=True, padx=16, pady=14)
+        inner.pack(side="left", fill="both", expand=True, padx=14, pady=12)
 
-        ligne = tk.Frame(inner, bg=C["card"])
-        ligne.pack(fill="x", expand=True)
-        tk.Label(ligne, text=app["icone"], font=("Segoe UI", 20),
-                 bg=C["card"]).pack(side="left", padx=(0, 12))
-        txt = tk.Frame(ligne, bg=C["card"])
-        txt.pack(side="left", fill="x", expand=True)
-        tk.Label(txt, text=app["titre"], font=("Segoe UI", 13, "bold"),
-                 bg=C["card"], fg=C["text"], anchor="w").pack(anchor="w")
-        tk.Label(txt, text=app["desc"], font=("Segoe UI", 9),
-                 bg=C["card"], fg=C["muted"], anchor="w",
-                 wraplength=300, justify="left").pack(anchor="w")
+        # Icône + titre
+        header_row = tk.Frame(inner, bg=C["card"])
+        header_row.pack(fill="x")
+        tk.Label(header_row, text=app["icone"], font=("Segoe UI", 18),
+                 bg=C["card"]).pack(side="left", padx=(0, 10))
+        tk.Label(header_row, text=app["titre"], font=("Segoe UI", 12, "bold"),
+                 bg=C["card"], fg=C["text"]).pack(side="left", anchor="w")
 
+        # Description
+        tk.Label(inner, text=app["desc"], font=("Segoe UI", 8),
+                 bg=C["card"], fg=C["muted"],
+                 wraplength=240, justify="left", anchor="w").pack(
+                     anchor="w", pady=(3, 8))
+
+        # Bouton
         if dispo:
             btn = tk.Button(
-                right, text="Ouvrir  ▸", font=("Segoe UI", 10, "bold"),
+                inner, text="Ouvrir  ▸", font=("Segoe UI", 9, "bold"),
                 bg=app["couleur"], fg="white", relief="flat", bd=0,
-                padx=14, pady=7, cursor="hand2",
+                padx=12, pady=5, cursor="hand2",
                 activebackground=app["couleur"], activeforeground="white",
                 command=lambda k=app["key"]: _lancer(k, self))
-            btn.place(relx=0.5, rely=0.5, anchor="center")
-            for w in (card, inner, ligne, txt):
+            btn.pack(anchor="w")
+            for w in (card, inner, header_row):
                 w.bind("<Button-1>", lambda _e, k=app["key"]: _lancer(k, self))
         else:
-            tk.Label(right,
-                     text="⚠ Introuvable",
+            tk.Label(inner, text="⚠ Dossier introuvable",
                      font=("Segoe UI", 8, "italic"),
-                     bg=C["card"], fg=C["accent"],
-                     wraplength=120, justify="center").place(
-                         relx=0.5, rely=0.5, anchor="center")
+                     bg=C["card"], fg=C["accent"]).pack(anchor="w")
 
 
 if __name__ == "__main__":
