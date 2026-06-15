@@ -267,6 +267,29 @@ a{color:inherit;text-decoration:none}
 .moteur-search-result:hover{background:#f0f4ff}
 .moteur-search-result:last-child{border-bottom:none}
 
+/* Motor picker chips */
+.moteur-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.moteur-chip{
+  padding:5px 12px;border:1px solid var(--border);border-radius:20px;
+  background:#fff;font-size:12px;font-weight:500;color:var(--text);cursor:pointer;
+  transition:all .15s;white-space:nowrap;display:inline-flex;align-items:center;gap:5px
+}
+.moteur-chip:hover{border-color:var(--accent);color:var(--accent);background:#eff6ff}
+.moteur-chip.selected{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* Custom type input */
+#ch-type-custom{margin-top:6px}
+
+/* Section moteur dans modal chapitre */
+.moteur-picker-box{
+  background:#f0f6ff;border:1px solid #bfdbfe;border-radius:8px;
+  padding:12px 14px;margin-bottom:12px
+}
+.moteur-picker-box .picker-label{
+  font-size:11px;font-weight:600;color:#1d4ed8;text-transform:uppercase;
+  letter-spacing:.4px;margin-bottom:8px;display:block
+}
+
 /* Interventions list */
 .interv-item{
   padding:10px 12px;border:1px solid var(--border);border-radius:6px;
@@ -441,6 +464,35 @@ const ITEM_TYPES = [
 ];
 const ITEM_STATUTS = ['À faire','En cours','Terminé','NC'];
 const AFFAIRE_STATUTS = ['En cours','En attente','Clos','Annulé'];
+
+// Types qui déclenchent le sélecteur de moteur
+const MOTOR_TYPE_RE = /moteur|inverseur|réducteur|pompe|compresseur|échangeur/i;
+
+// Champs pré-définis par type de chapitre
+const TYPE_FIELD_TEMPLATES = {
+  'Moteur principal':        [['Puissance (kW)',''],['Couple (Nm)',''],['Cylindrée (L)',''],['Régime max (tr/min)',''],['Norme émissions','']],
+  'Moteur auxiliaire':       [['Puissance (kW)',''],['Régime (tr/min)',''],['Carburant','']],
+  'Inverseur / Réducteur':   [['Rapport de réduction',''],['Type huile',''],['Capacité huile (L)',''],['Couple max (Nm)','']],
+  'Pompe':                   [['Débit (L/min)',''],['Pression max (bar)',''],['Fluide','']],
+  'Compresseur':             [['Débit (m³/h)',''],['Pression (bar)',''],['Puissance (kW)','']],
+  'Échangeur':               [['Fluide primaire',''],['Fluide secondaire',''],['Débit (L/min)','']],
+  'Contrôle / Mesures':      [['Valeur relevée',''],['Valeur référence',''],['Écart',''],['Unité',''],['Instrument utilisé','']],
+  'Pièces à commander':      [['Quantité',''],['Référence fournisseur',''],['Fournisseur',''],['Délai',''],['Prix unitaire (€)','']],
+  'Fournitures':             [['Quantité',''],['Unité',''],['Fournisseur','']],
+  'Travaux planifiés':       [['Durée estimée (h)',''],['Technicien prévu',''],['Date prévue','']],
+  'Rapport / Documentation': [['Type de document',''],['Référence',''],['Version',''],['Auteur','']],
+};
+
+function isMotorType(t) { return MOTOR_TYPE_RE.test(t); }
+
+function getCustomTypes() {
+  try { return JSON.parse(localStorage.getItem('ems_chapter_types')||'[]'); } catch(e) { return []; }
+}
+function saveCustomType(t) {
+  const arr = getCustomTypes();
+  if (!arr.includes(t)) { arr.push(t); localStorage.setItem('ems_chapter_types', JSON.stringify(arr)); }
+}
+function getAllTypes() { return [...ITEM_TYPES, ...getCustomTypes()]; }
 
 /* ═══════════════════════════════════════════════
    STATE
@@ -895,24 +947,40 @@ function openEditChapter(id) {
   const it = state.currentItems.find(x => x.id === id) || {};
   openChapterModal(it);
 }
+
 function openChapterModal(it) {
   let details = {};
   try { details = JSON.parse(it.details_json||'{}'); } catch(e) {}
+  const currentType = it.type_item || 'Moteur principal';
+  const showMotorPicker = isMotorType(currentType);
+  const hasTemplate = !!TYPE_FIELD_TEMPLATES[currentType];
+  const allTypes = getAllTypes();
+
+  // Chips des moteurs déjà liés à l'affaire
+  const linkedChips = state.currentMoteurs.map(m => `
+    <button type="button" class="moteur-chip" data-id="${m.id}" onclick="pickLinkedMoteur('${m.id}')">
+      🔧 ${escHtml(m.num_serie)}${m.marque ? ' — '+escHtml(m.marque) : ''}
+    </button>`).join('');
+
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
-  <div class="modal modal-lg">
+  <div class="modal modal-lg" style="max-height:92vh">
     <div class="modal-header">
       <h2>${editingChapterId ? '✏️ Modifier le chapitre' : '+ Nouveau chapitre'}</h2>
       <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
     </div>
-    <div class="modal-body">
-      <div class="form-row">
+    <div class="modal-body" style="overflow-y:auto;flex:1">
+
+      <!-- Catégorie + Statut -->
+      <div class="form-row" style="margin-bottom:10px">
         <div>
-          <label class="form-label">Type de chapitre *</label>
-          <select class="form-control" id="ch-type">
-            ${ITEM_TYPES.map(t=>`<option ${t===(it.type_item||'Moteur principal')?'selected':''}>${t}</option>`).join('')}
+          <label class="form-label">Catégorie *</label>
+          <select class="form-control" id="ch-type" onchange="onChTypeChange(this.value)">
+            ${allTypes.map(t=>`<option ${t===currentType?'selected':''}>${escHtml(t)}</option>`).join('')}
+            <option value="__new__">✏️ Nouvelle catégorie…</option>
           </select>
+          <input class="form-control" id="ch-type-custom" placeholder="Nom de la nouvelle catégorie" style="margin-top:6px;display:none" onblur="onCustomTypeBlur(this.value)">
         </div>
         <div>
           <label class="form-label">Statut</label>
@@ -921,48 +989,74 @@ function openChapterModal(it) {
           </select>
         </div>
       </div>
-      <div class="form-row single">
-        <div>
-          <label class="form-label">Libellé / Désignation</label>
-          <input class="form-control" id="ch-libelle" value="${escHtml(it.libelle||'')}" placeholder="Désignation de l'équipement ou de la tâche">
+
+      <!-- Sélecteur de moteur (affiché si catégorie = moteur/inverseur/pompe…) -->
+      <div id="moteur-picker-section" class="moteur-picker-box" style="display:${showMotorPicker?'block':'none'}">
+        <span class="picker-label">🔧 Moteur / équipement lié</span>
+        ${state.currentMoteurs.length ? `
+          <div style="font-size:11px;color:#1d4ed8;margin-bottom:6px">Moteurs déjà liés à cette affaire — cliquez pour remplir automatiquement :</div>
+          <div class="moteur-chips" id="linked-moteurs-chips">${linkedChips}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin:6px 0 4px">Ou rechercher un autre moteur du parc :</div>` :
+          '<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Rechercher un moteur du parc :</div>'
+        }
+        <div class="search-dropdown" id="ch-moteur-dd">
+          <input class="form-control" id="ch-moteur-search" placeholder="N° série, marque, navire…"
+            oninput="searchMoteursInChapter(this.value)" autocomplete="off" style="font-size:13px">
+          <div class="search-results" id="ch-moteur-results"></div>
         </div>
       </div>
-      <div class="form-row">
+
+      <!-- Libellé -->
+      <div style="margin-bottom:10px">
+        <label class="form-label">Libellé / Désignation</label>
+        <input class="form-control" id="ch-libelle" value="${escHtml(it.libelle||'')}" placeholder="Ex : Moteur principal bâbord, Groupe hydraulique…">
+      </div>
+
+      <!-- Marque · Référence · N° Série -->
+      <div class="form-row triple" style="margin-bottom:10px">
         <div>
           <label class="form-label">Marque</label>
           <input class="form-control" id="ch-marque" value="${escHtml(it.marque||'')}" placeholder="Ex: Volvo Penta">
         </div>
         <div>
           <label class="form-label">Référence</label>
-          <input class="form-control" id="ch-ref" value="${escHtml(it.reference||'')}" placeholder="Référence constructeur">
+          <input class="form-control" id="ch-ref" value="${escHtml(it.reference||'')}" placeholder="Réf. constructeur">
         </div>
-      </div>
-      <div class="form-row single">
         <div>
-          <label class="form-label">Numéro de série</label>
+          <label class="form-label">N° Série</label>
           <input class="form-control" id="ch-serie" value="${escHtml(it.num_serie||'')}" placeholder="N° de série">
         </div>
       </div>
-      <div class="form-row single">
-        <div>
-          <label class="form-label">Objectif / Travaux à réaliser</label>
-          <textarea class="form-control" id="ch-objectif" rows="3" placeholder="Décrivez l'objectif ou les travaux à réaliser…">${escHtml(it.objectif||'')}</textarea>
-        </div>
+
+      <!-- Objectif -->
+      <div style="margin-bottom:10px">
+        <label class="form-label">Objectif / Travaux à réaliser</label>
+        <textarea class="form-control" id="ch-objectif" rows="3"
+          placeholder="Décrivez l'objectif ou les travaux à réaliser…">${escHtml(it.objectif||'')}</textarea>
       </div>
-      <div class="form-row single">
-        <div>
-          <label class="form-label">Suivi / Notes de progression</label>
-          <textarea class="form-control" id="ch-suivi" rows="3" placeholder="Notes de suivi, étapes réalisées…">${escHtml(it.suivi||'')}</textarea>
-        </div>
+
+      <!-- Suivi -->
+      <div style="margin-bottom:12px">
+        <label class="form-label">Suivi / Notes de progression</label>
+        <textarea class="form-control" id="ch-suivi" rows="2"
+          placeholder="Notes de suivi, étapes réalisées…">${escHtml(it.suivi||'')}</textarea>
       </div>
-      <!-- Details JSON editor -->
+
+      <!-- Champs complémentaires -->
       <div class="details-editor">
         <div class="details-editor-header">
           <span>Champs complémentaires</span>
-          <button class="btn btn-ghost btn-xs" onclick="addDetailRow()">+ Ajouter un champ</button>
+          <div style="display:flex;gap:6px;align-items:center">
+            <button class="btn btn-ghost btn-xs" id="btn-template"
+              style="display:${hasTemplate?'inline-flex':'none'}"
+              onclick="applyFieldTemplate()">📋 Modèle ${escHtml(currentType)}</button>
+            <button class="btn btn-ghost btn-xs" onclick="addDetailRow()">+ Champ</button>
+          </div>
         </div>
         <div id="details-rows">
-          ${Object.entries(details).map(([k,v]) => detailRowHtml(k,v)).join('') || '<div style="padding:8px 12px;font-size:12px;color:var(--text-muted)">Aucun champ complémentaire</div>'}
+          ${Object.entries(details).length
+            ? Object.entries(details).map(([k,v]) => detailRowHtml(k,v)).join('')
+            : '<div id="details-placeholder" style="padding:10px 12px;font-size:12px;color:var(--text-muted)">Aucun champ — utilisez « Modèle » pour pré-remplir selon la catégorie, ou « + Champ » pour ajouter manuellement.</div>'}
         </div>
       </div>
     </div>
@@ -974,46 +1068,154 @@ function openChapterModal(it) {
   document.body.appendChild(overlay);
   overlay.onclick = e => { if(e.target===overlay) overlay.remove(); };
 }
+
+/* ── Gestion du type de chapitre ── */
+function onChTypeChange(val) {
+  const customInput = document.getElementById('ch-type-custom');
+  const motorSection = document.getElementById('moteur-picker-section');
+  const templateBtn  = document.getElementById('btn-template');
+
+  customInput.style.display = val === '__new__' ? 'block' : 'none';
+  if (val === '__new__') { customInput.value = ''; customInput.focus(); }
+
+  if (motorSection) motorSection.style.display = isMotorType(val) ? 'block' : 'none';
+
+  if (templateBtn) {
+    const tpl = TYPE_FIELD_TEMPLATES[val];
+    templateBtn.style.display = tpl ? 'inline-flex' : 'none';
+    if (tpl) templateBtn.textContent = `📋 Modèle ${val}`;
+  }
+}
+
+function onCustomTypeBlur(val) {
+  // Quand l'utilisateur a saisi un nom et quitte le champ, on l'ajoute à la liste
+  val = val.trim();
+  if (!val) return;
+  const sel = document.getElementById('ch-type');
+  // Chercher si déjà dans la liste
+  const exists = [...sel.options].some(o => o.value === val);
+  if (!exists) {
+    const opt = new Option(val, val);
+    sel.insertBefore(opt, sel.querySelector('option[value="__new__"]'));
+  }
+  sel.value = val;
+  document.getElementById('ch-type-custom').style.display = 'none';
+  onChTypeChange(val);
+}
+
+/* ── Modèle de champs ── */
+function applyFieldTemplate() {
+  const type   = document.getElementById('ch-type').value;
+  const fields = TYPE_FIELD_TEMPLATES[type];
+  if (!fields) return;
+  const container = document.getElementById('details-rows');
+  document.getElementById('details-placeholder')?.remove();
+  const existing = new Set([...container.querySelectorAll('.details-key')].map(i => i.value.trim()));
+  fields.forEach(([k,v]) => { if (!existing.has(k)) container.insertAdjacentHTML('beforeend', detailRowHtml(k,v)); });
+}
+
+/* ── Sélecteur moteur dans le modal chapitre ── */
+function pickLinkedMoteur(id) {
+  const m = state.currentMoteurs.find(x => x.id === id);
+  if (!m) return;
+  const serie  = document.getElementById('ch-serie');
+  const marque = document.getElementById('ch-marque');
+  const ref    = document.getElementById('ch-ref');
+  const libelle= document.getElementById('ch-libelle');
+  serie.value  = m.num_serie || '';
+  if (!marque.value)  marque.value  = m.marque || '';
+  if (!ref.value)     ref.value     = m.ref_constructeur || '';
+  if (!libelle.value) libelle.value = [m.marque, m.type_moteur].filter(Boolean).join(' ');
+  document.querySelectorAll('.moteur-chip').forEach(c =>
+    c.classList.toggle('selected', c.dataset.id === id));
+}
+
+async function searchMoteursInChapter(q) {
+  const dd = document.getElementById('ch-moteur-dd');
+  const el = document.getElementById('ch-moteur-results');
+  if (q.length < 2) { el.innerHTML = ''; dd.classList.remove('open'); return; }
+  try {
+    const res = await GET(`/moteurs?search=${encodeURIComponent(q)}`);
+    if (!res.length) {
+      el.innerHTML = '<div style="padding:12px;text-align:center;color:var(--text-muted);font-size:13px">Aucun résultat</div>';
+    } else {
+      el.innerHTML = res.map(m => `
+        <div class="moteur-search-result" onclick='pickSearchedMoteur(${JSON.stringify({
+          id:m.id, num_serie:m.num_serie, marque:m.marque||'',
+          ref_constructeur:m.ref_constructeur||'', type_moteur:m.type_moteur||''
+        })})'>
+          <span style="font-size:16px;flex-shrink:0">🔧</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700">${escHtml(m.num_serie)}</div>
+            <div style="font-size:12px;color:var(--text-muted)">
+              ${[m.marque, m.type_moteur, m.navire, m.client_nom].filter(Boolean).map(escHtml).join(' · ')}
+            </div>
+          </div>
+          ${m.code_affaire && m.code_affaire !== state.currentAffaire.num_affaire
+            ? `<span style="font-size:11px;background:var(--warning-bg);color:var(--warning);padding:2px 7px;border-radius:10px">Lié: ${escHtml(m.code_affaire)}</span>`:''}
+        </div>`).join('');
+    }
+    dd.classList.add('open');
+  } catch(e) {}
+}
+
+function pickSearchedMoteur(m) {
+  const serie  = document.getElementById('ch-serie');
+  const marque = document.getElementById('ch-marque');
+  const ref    = document.getElementById('ch-ref');
+  const libelle= document.getElementById('ch-libelle');
+  serie.value  = m.num_serie || '';
+  if (!marque.value)  marque.value  = m.marque || '';
+  if (!ref.value)     ref.value     = m.ref_constructeur || '';
+  if (!libelle.value) libelle.value = [m.marque, m.type_moteur].filter(Boolean).join(' ');
+  document.getElementById('ch-moteur-search').value = m.num_serie;
+  document.getElementById('ch-moteur-dd').classList.remove('open');
+}
+
 function detailRowHtml(k='', v='') {
   return `<div class="details-row">
-    <input class="details-key" placeholder="Clé (ex: Puissance)" value="${escHtml(k)}">
+    <input class="details-key" placeholder="Nom du champ (ex: Puissance)" value="${escHtml(k)}">
     <input placeholder="Valeur (ex: 250 kW)" value="${escHtml(v)}">
     <button class="btn-rm-detail" onclick="this.parentElement.remove()">✕</button>
   </div>`;
 }
 function addDetailRow() {
   const container = document.getElementById('details-rows');
-  // Remove "Aucun champ" placeholder if present
-  const placeholder = container.querySelector('div[style]');
-  if(placeholder) placeholder.remove();
+  document.getElementById('details-placeholder')?.remove();
   container.insertAdjacentHTML('beforeend', detailRowHtml());
+  container.querySelectorAll('.details-row:last-child .details-key')[0]?.focus();
 }
+
 async function saveChapter() {
-  const type_item = document.getElementById('ch-type').value;
-  const statut = document.getElementById('ch-statut').value;
-  const libelle = document.getElementById('ch-libelle').value.trim();
-  const marque = document.getElementById('ch-marque').value.trim();
+  let type_item = document.getElementById('ch-type').value;
+  // Nouvelle catégorie saisie manuellement
+  if (type_item === '__new__') {
+    type_item = document.getElementById('ch-type-custom').value.trim();
+    if (!type_item) { toast('Entrez un nom pour la nouvelle catégorie','warning'); return; }
+    saveCustomType(type_item);
+  }
+  const statut    = document.getElementById('ch-statut').value;
+  const libelle   = document.getElementById('ch-libelle').value.trim();
+  const marque    = document.getElementById('ch-marque').value.trim();
   const reference = document.getElementById('ch-ref').value.trim();
   const num_serie = document.getElementById('ch-serie').value.trim();
-  const objectif = document.getElementById('ch-objectif').value.trim();
-  const suivi = document.getElementById('ch-suivi').value.trim();
-  // Build details JSON
-  const details = {};
+  const objectif  = document.getElementById('ch-objectif').value.trim();
+  const suivi     = document.getElementById('ch-suivi').value.trim();
+  const details   = {};
   document.querySelectorAll('#details-rows .details-row').forEach(row => {
-    const [keyInput, valInput] = row.querySelectorAll('input');
-    const k = keyInput.value.trim();
-    const v = valInput.value.trim();
-    if(k) details[k] = v;
+    const [ki, vi] = row.querySelectorAll('input');
+    const k = ki.value.trim();
+    if (k) details[k] = vi.value.trim();
   });
   const body = { type_item, statut, libelle, marque, reference, num_serie, objectif, suivi,
-                 details_json: JSON.stringify(details), ordre: editingChapterId ? undefined :
-                 state.currentItems.length };
+                 details_json: JSON.stringify(details),
+                 ordre: editingChapterId ? undefined : state.currentItems.length };
   try {
     let saved;
     if (editingChapterId) {
       saved = await PUT(`/affaires/${state.currentAffaire.id}/items/${editingChapterId}`, body);
       const idx = state.currentItems.findIndex(x => x.id === editingChapterId);
-      if(idx >= 0) state.currentItems[idx] = saved;
+      if (idx >= 0) state.currentItems[idx] = saved;
     } else {
       saved = await POST(`/affaires/${state.currentAffaire.id}/items`, body);
       state.currentItems.push(saved);
@@ -1024,6 +1226,7 @@ async function saveChapter() {
     toast(editingChapterId ? 'Chapitre mis à jour' : 'Chapitre ajouté', 'success');
   } catch(e) { toast(e.message,'error'); }
 }
+
 async function deleteChapter(id) {
   const ok = await confirm('Supprimer ce chapitre ?','Cette action est irréversible.');
   if(!ok) return;
