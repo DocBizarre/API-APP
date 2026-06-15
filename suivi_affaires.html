@@ -45,59 +45,33 @@ a{color:inherit;text-decoration:none}
 /* ── Layout ── */
 #app{display:flex;height:100vh;overflow:hidden}
 
-/* ── Sidebar ── */
+/* ── Sidebar / Nav ── */
 #sidebar{
-  width:var(--sidebar-w);flex-shrink:0;
+  width:190px;flex-shrink:0;
   background:var(--primary);color:#fff;
-  display:flex;flex-direction:column;
-  overflow:hidden;
+  display:flex;flex-direction:column;overflow:hidden;
 }
-#sidebar-header{padding:20px 16px 16px;border-bottom:1px solid rgba(255,255,255,.1)}
-#sidebar-header .logo{font-size:18px;font-weight:700;letter-spacing:-.3px}
-#sidebar-header .logo span{color:#60a5fa}
-#sidebar-header .subtitle{font-size:11px;color:rgba(255,255,255,.5);margin-top:2px;text-transform:uppercase;letter-spacing:.5px}
+#sidebar-header{padding:18px 14px 14px;border-bottom:1px solid rgba(255,255,255,.1)}
+.logo{font-size:17px;font-weight:700;letter-spacing:-.3px}
+.logo span{color:#60a5fa}
+.subtitle{font-size:10px;color:rgba(255,255,255,.4);margin-top:2px;text-transform:uppercase;letter-spacing:.5px}
 
-#sidebar-search{padding:12px 12px 8px}
-#sidebar-search input{
-  width:100%;padding:7px 10px;border:none;border-radius:6px;
-  background:rgba(255,255,255,.12);color:#fff;font-size:13px;
-  outline:none;transition:background .2s
+#nav-items{flex:1;padding:10px 8px}
+.nav-item{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;border-radius:8px;cursor:pointer;
+  color:rgba(255,255,255,.65);font-size:13px;font-weight:500;
+  transition:all .15s;margin-bottom:2px;user-select:none;
 }
-#sidebar-search input::placeholder{color:rgba(255,255,255,.4)}
-#sidebar-search input:focus{background:rgba(255,255,255,.2)}
-
-#sidebar-filters{padding:4px 8px 4px}
-.filter-chip{
-  display:inline-flex;align-items:center;gap:4px;
-  padding:4px 10px;border-radius:20px;font-size:11px;font-weight:500;
-  border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.7);
-  background:transparent;margin:2px;cursor:pointer;transition:all .15s
+.nav-item:hover{background:rgba(255,255,255,.1);color:#fff}
+.nav-item.active{background:rgba(255,255,255,.15);color:#fff}
+.nav-icon{font-size:16px;flex-shrink:0}
+.nav-count{
+  margin-left:auto;font-size:11px;font-weight:600;
+  background:rgba(255,255,255,.15);padding:1px 7px;border-radius:10px;
+  min-width:28px;text-align:center;
 }
-.filter-chip.active,.filter-chip:hover{background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.3)}
-.filter-chip .dot{width:6px;height:6px;border-radius:50%;display:inline-block}
-
-#affaire-list{flex:1;overflow-y:auto;padding:8px}
-#affaire-list::-webkit-scrollbar{width:4px}
-#affaire-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:2px}
-
-.sidebar-item{
-  padding:10px 10px;border-radius:6px;cursor:pointer;
-  transition:background .15s;margin-bottom:2px;
-}
-.sidebar-item:hover{background:rgba(255,255,255,.08)}
-.sidebar-item.active{background:rgba(255,255,255,.15)}
-.sidebar-item .num{font-size:11px;font-weight:600;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.3px}
-.sidebar-item .name{font-size:13px;font-weight:500;color:#fff;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sidebar-item .meta{display:flex;align-items:center;gap:6px;margin-top:4px}
-.sidebar-item .client-tag{font-size:11px;color:rgba(255,255,255,.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.s-badge{font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;flex-shrink:0}
-.s-badge.en-cours{background:#2563eb;color:#fff}
-.s-badge.en-attente{background:#d97706;color:#fff}
-.s-badge.clos{background:#059669;color:#fff}
-.s-badge.annule{background:#6b7280;color:#fff}
-
-.sidebar-item .progress-mini{height:2px;background:rgba(255,255,255,.15);border-radius:2px;margin-top:6px}
-.sidebar-item .progress-mini-fill{height:100%;border-radius:2px;background:#60a5fa;transition:width .3s}
+.nav-item.active .nav-count{background:rgba(255,255,255,.25)}
 
 #sidebar-footer{padding:12px;border-top:1px solid rgba(255,255,255,.1)}
 #btn-new-affaire{
@@ -107,7 +81,62 @@ a{color:inherit;text-decoration:none}
   transition:background .15s
 }
 #btn-new-affaire:hover{background:#1d4ed8}
-.sidebar-empty{padding:24px 12px;text-align:center;color:rgba(255,255,255,.35);font-size:13px}
+.api-status{font-size:10px;color:rgba(255,255,255,.3);text-align:center;margin-top:8px}
+
+/* ── Affaire list table ── */
+.list-toolbar{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.list-search-wrap{position:relative;flex:1;min-width:200px}
+.list-search-wrap input{
+  width:100%;padding:9px 12px 9px 36px;border:1px solid var(--border);
+  border-radius:8px;background:#fff;outline:none;font-size:14px;transition:border-color .15s
+}
+.list-search-wrap input:focus{border-color:var(--border-focus);box-shadow:0 0 0 3px rgba(147,197,253,.3)}
+.list-search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-light);pointer-events:none}
+
+.list-filters{display:flex;gap:4px;flex-wrap:wrap}
+.list-filter-btn{
+  padding:6px 14px;border-radius:20px;font-size:12px;font-weight:500;
+  border:1px solid var(--border);background:#fff;color:var(--text-muted);
+  cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:5px
+}
+.list-filter-btn:hover{border-color:#94a3b8;color:var(--text)}
+.list-filter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.fdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+
+.affaire-table-wrap{background:#fff;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.affaire-table{width:100%;border-collapse:collapse;font-size:13px}
+.affaire-table thead{position:sticky;top:0;z-index:10}
+.affaire-table th{
+  padding:10px 12px;text-align:left;font-size:11px;font-weight:600;
+  color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;
+  background:#f8fafc;border-bottom:1px solid var(--border);white-space:nowrap;user-select:none;
+}
+.affaire-table th.sortable{cursor:pointer}
+.affaire-table th.sortable:hover{color:var(--accent);background:#f0f4ff}
+.sort-icon{display:inline-block;margin-left:3px;opacity:.35;font-size:10px}
+.affaire-table th.sorted .sort-icon{opacity:1;color:var(--accent)}
+.affaire-table td{padding:10px 12px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+.affaire-table tr:last-child td{border-bottom:none}
+.affaire-table tbody tr{cursor:pointer;transition:background .1s}
+.affaire-table tbody tr:hover{background:#f8fafc}
+.td-num{font-size:11px;font-weight:700;color:var(--text-muted);font-family:monospace;white-space:nowrap}
+.td-projet{font-weight:600;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.td-muted{color:var(--text-muted);max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
+.td-date{color:var(--text-muted);white-space:nowrap;font-size:12px}
+.prog-wrap{display:flex;align-items:center;gap:6px;min-width:70px}
+.prog-bar{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;border-radius:2px;background:var(--accent);transition:width .3s}
+.prog-fill.full{background:var(--success)}
+.prog-label{font-size:11px;color:var(--text-muted);flex-shrink:0;width:26px;text-align:right}
+
+.pagination{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border);background:#fafbfc;flex-wrap:wrap;gap:8px}
+.pagination-info{font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:8px}
+.pagination-btns{display:flex;gap:3px}
+.page-btn{min-width:30px;height:30px;padding:0 6px;border:1px solid var(--border);border-radius:5px;background:#fff;font-size:12px;font-weight:500;color:var(--text-muted);cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;justify-content:center}
+.page-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.page-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.page-btn:disabled{opacity:.4;cursor:not-allowed}
+.page-size-sel{padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:12px;outline:none;cursor:pointer}
 
 /* ── Main ── */
 #main{flex:1;display:flex;flex-direction:column;overflow:hidden}
@@ -410,24 +439,24 @@ select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3C
 </head>
 <body>
 <div id="app">
-  <!-- Sidebar -->
+  <!-- Sidebar / Nav -->
   <nav id="sidebar">
     <div id="sidebar-header">
       <div class="logo">EMS <span>Affaires</span></div>
       <div class="subtitle">Suivi d'affaires</div>
     </div>
-    <div id="sidebar-search">
-      <input type="text" id="sidebar-search-input" placeholder="🔍  Rechercher…" oninput="filterSidebar(this.value)">
+    <div id="nav-items">
+      <div class="nav-item" data-view="dashboard" onclick="showDashboard()">
+        <span class="nav-icon">🏠</span> Tableau de bord
+      </div>
+      <div class="nav-item" data-view="list" onclick="showAffaireList()">
+        <span class="nav-icon">📋</span> Affaires
+        <span class="nav-count" id="nav-affaires-count">…</span>
+      </div>
     </div>
-    <div id="sidebar-filters">
-      <button class="filter-chip active" onclick="setFilter('all',this)">Tout</button>
-      <button class="filter-chip" onclick="setFilter('En cours',this)"><span class="dot" style="background:#2563eb"></span>En cours</button>
-      <button class="filter-chip" onclick="setFilter('En attente',this)"><span class="dot" style="background:#d97706"></span>Attente</button>
-      <button class="filter-chip" onclick="setFilter('Clos',this)"><span class="dot" style="background:#059669"></span>Clos</button>
-    </div>
-    <div id="affaire-list"><div class="sidebar-empty">Chargement…</div></div>
     <div id="sidebar-footer">
       <button id="btn-new-affaire" onclick="openCreateModal()">+ Nouvelle affaire</button>
+      <div class="api-status" id="api-status">localhost:8765</div>
     </div>
   </nav>
 
@@ -438,10 +467,9 @@ select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3C
       <div id="topbar-actions"></div>
     </div>
     <div id="content">
-      <div class="empty-state" style="padding:80px 20px">
-        <div class="icon">📋</div>
-        <h3>Sélectionnez une affaire</h3>
-        <p>Choisissez une affaire dans la barre latérale ou créez-en une nouvelle.</p>
+      <div style="padding:80px 20px;text-align:center">
+        <div style="font-size:36px;margin-bottom:12px">📋</div>
+        <p style="color:var(--text-muted)">Chargement…</p>
       </div>
     </div>
   </div>
@@ -498,17 +526,24 @@ function getAllTypes() { return [...ITEM_TYPES, ...getCustomTypes()]; }
    STATE
 ═══════════════════════════════════════════════ */
 let state = {
-  affaires: [],
+  affaires: [],      // données brutes chargées depuis l'API
+  listData: [],      // données triées (pour la pagination côté client)
   clients: [],
   currentId: null,
   currentAffaire: null,
   currentItems: [],
   currentMoteurs: [],
   currentIntervs: [],
-  filter: 'all',
-  sidebarSearch: '',
+  view: 'dashboard', // 'dashboard' | 'list' | 'detail'
   activeTab: 'chapitres',
   draggingIndex: null,
+  // Vue liste
+  listSearch: '',
+  listFilter: 'all',
+  listPage: 1,
+  listPageSize: 25,
+  listSortCol: 'num_affaire',
+  listSortDir: 'desc',
 };
 
 /* ═══════════════════════════════════════════════
@@ -584,57 +619,193 @@ function escHtml(s) {
 }
 
 /* ═══════════════════════════════════════════════
-   SIDEBAR
+   NAV
 ═══════════════════════════════════════════════ */
-function setFilter(f, btn) {
-  state.filter = f;
-  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-  btn.classList.add('active');
-  renderSidebar();
+function renderNav() {
+  document.querySelectorAll('.nav-item').forEach(el =>
+    el.classList.toggle('active', el.dataset.view === state.view));
+  const c = document.getElementById('nav-affaires-count');
+  if (c && state.affaires.length) c.textContent = state.affaires.length.toLocaleString('fr-FR');
 }
-function filterSidebar(q) {
-  state.sidebarSearch = q.toLowerCase();
-  renderSidebar();
+
+/* ═══════════════════════════════════════════════
+   AFFAIRE LIST
+═══════════════════════════════════════════════ */
+async function showAffaireList() {
+  state.view = 'list';
+  state.currentId = null;
+  renderNav();
+  document.getElementById('topbar-title').textContent = 'Affaires';
+  document.getElementById('topbar-actions').innerHTML =
+    `<button class="topbar-btn primary" onclick="openCreateModal()">+ Nouvelle affaire</button>`;
+  document.getElementById('content').innerHTML =
+    '<div style="padding:60px;text-align:center"><div class="spinner spinner-dark"></div></div>';
+  try {
+    const params = new URLSearchParams();
+    if (state.listFilter !== 'all') params.set('statut', state.listFilter);
+    if (state.listSearch) params.set('search', state.listSearch);
+    state.affaires = await GET(`/affaires?${params}`);
+    state.listData = [...state.affaires];
+    sortListData();
+    renderNav();
+    renderAffaireTablePage();
+  } catch(e) {
+    document.getElementById('content').innerHTML =
+      `<div class="empty-state"><div class="icon">⚠️</div><h3>Erreur</h3><p>${escHtml(e.message)}</p></div>`;
+  }
 }
-function renderSidebar() {
-  const el = document.getElementById('affaire-list');
-  let list = state.affaires;
-  if (state.filter !== 'all') list = list.filter(a => a.statut === state.filter);
-  if (state.sidebarSearch) {
-    const q = state.sidebarSearch;
-    list = list.filter(a =>
-      (a.num_affaire||'').toLowerCase().includes(q) ||
-      (a.nom_projet||'').toLowerCase().includes(q) ||
-      (a.client_nom||'').toLowerCase().includes(q) ||
-      (a.navire_machine||'').toLowerCase().includes(q)
-    );
+
+function sortListData() {
+  const col = state.listSortCol;
+  const dir = state.listSortDir === 'asc' ? 1 : -1;
+  state.listData.sort((a, b) => {
+    const av = (a[col] || '').toString().toLowerCase();
+    const bv = (b[col] || '').toString().toLowerCase();
+    return av < bv ? -dir : av > bv ? dir : 0;
+  });
+}
+
+function renderAffaireTablePage() {
+  const data  = state.listData;
+  const total = data.length;
+  const page  = state.listPage;
+  const size  = state.listPageSize;
+  const start = (page - 1) * size;
+  const rows  = data.slice(start, start + size);
+
+  document.getElementById('content').innerHTML = `
+  <div class="list-toolbar">
+    <div class="list-search-wrap">
+      <span class="list-search-icon">🔍</span>
+      <input type="text" value="${escHtml(state.listSearch)}"
+        placeholder="N°, projet, client, navire, chargé d'affaire…"
+        oninput="debounceListSearch(this.value)" autofocus>
+    </div>
+    <div class="list-filters">
+      ${[['all','Tous',''],['En cours','En cours','#2563eb'],['En attente','En attente','#d97706'],['Clos','Clos','#059669'],['Annulé','Annulé','#9ca3af']].map(([f,l,c])=>
+        `<button class="list-filter-btn ${state.listFilter===f?'active':''}" onclick="setListFilter('${f}')">
+           ${c?`<span class="fdot" style="background:${c}"></span>`:''}${l}
+         </button>`).join('')}
+    </div>
+  </div>
+  <div class="affaire-table-wrap">
+    <table class="affaire-table">
+      <thead><tr>
+        ${thCol('num_affaire','N° Affaire')}
+        ${thCol('nom_projet','Projet')}
+        ${thCol('client_nom','Client')}
+        ${thCol('navire_machine','Navire / Machine')}
+        ${thCol('charge_affaire','Chargé')}
+        ${thCol('date_debut','Début')}
+        ${thCol('date_fin_prevue','Fin prévue')}
+        ${thCol('statut','Statut')}
+        <th>Avancement</th>
+        <th style="width:40px"></th>
+      </tr></thead>
+      <tbody>
+        ${rows.length ? rows.map(affaireRow).join('') :
+          `<tr><td colspan="10" style="text-align:center;padding:48px;color:var(--text-muted)">
+            Aucune affaire trouvée
+           </td></tr>`}
+      </tbody>
+    </table>
+    ${renderPagination(total, page, size)}
+  </div>`;
+}
+
+function thCol(col, label) {
+  const sorted = state.listSortCol === col;
+  const icon   = sorted ? (state.listSortDir === 'asc' ? '▲' : '▼') : '⇅';
+  return `<th class="sortable ${sorted?'sorted':''}" onclick="sortTable('${col}')">
+    ${label}<span class="sort-icon">${icon}</span></th>`;
+}
+
+function affaireRow(a) {
+  const pct = a._items ? progress(a._items) : null;
+  const prog = pct !== null
+    ? `<div class="prog-wrap"><div class="prog-bar"><div class="prog-fill ${pct===100?'full':''}" style="width:${pct}%"></div></div><span class="prog-label">${pct}%</span></div>`
+    : `<span style="font-size:11px;color:var(--text-light)">${a.nb_items} ch.</span>`;
+  return `<tr onclick="loadAffaire('${a.id}')">
+    <td class="td-num">${escHtml(a.num_affaire)}</td>
+    <td class="td-projet" title="${escHtml(a.nom_projet)}">${escHtml(a.nom_projet||'—')}</td>
+    <td class="td-muted" title="${escHtml(a.client_nom)}">${escHtml(a.client_nom||'—')}</td>
+    <td class="td-muted" title="${escHtml(a.navire_machine)}">${escHtml(a.navire_machine||'—')}</td>
+    <td class="td-muted">${escHtml(a.charge_affaire||'—')}</td>
+    <td class="td-date">${escHtml(a.date_debut||'—')}</td>
+    <td class="td-date">${escHtml(a.date_fin_prevue||'—')}</td>
+    <td>${statusBadge(a.statut)}</td>
+    <td>${prog}</td>
+    <td onclick="event.stopPropagation()">
+      <button class="btn-icon" title="Ouvrir" onclick="loadAffaire('${a.id}')">👁</button>
+    </td>
+  </tr>`;
+}
+
+function renderPagination(total, page, size) {
+  if (total <= size) return '';
+  const totalPages = Math.ceil(total / size);
+  const s = (page-1)*size + 1, e = Math.min(page*size, total);
+  const pages = [];
+  if (totalPages <= 7) {
+    for (let i=1; i<=totalPages; i++) pages.push(i);
+  } else {
+    pages.push(1);
+    if (page > 3) pages.push('…');
+    for (let i=Math.max(2,page-1); i<=Math.min(totalPages-1,page+1); i++) pages.push(i);
+    if (page < totalPages-2) pages.push('…');
+    pages.push(totalPages);
   }
-  if (!list.length) {
-    el.innerHTML = '<div class="sidebar-empty">Aucune affaire trouvée</div>';
-    return;
-  }
-  el.innerHTML = list.map(a => {
-    const pct = progress(a._items || []);
-    const active = a.id === state.currentId ? 'active' : '';
-    return `<div class="sidebar-item ${active}" onclick="loadAffaire('${a.id}')">
-      <div class="num">${escHtml(a.num_affaire)}</div>
-      <div class="name">${escHtml(a.nom_projet || a.navire_machine || '—')}</div>
-      <div class="meta">
-        <span class="client-tag">${escHtml(a.client_nom||'—')}</span>
-        <span class="s-badge ${slugStatus(a.statut)}">${escHtml(a.statut)}</span>
-      </div>
-      <div class="progress-mini"><div class="progress-mini-fill" style="width:${pct}%"></div></div>
-    </div>`;
-  }).join('');
+  return `<div class="pagination">
+    <div class="pagination-info">
+      <span>${s}–${e} sur <strong>${total}</strong> affaire${total>1?'s':''}</span>
+      <select class="page-size-sel" onchange="setPageSize(+this.value)">
+        ${[10,25,50,100].map(n=>`<option ${n===size?'selected':''}>${n}</option>`).join('')}
+      </select>
+      <span>/ page</span>
+    </div>
+    <div class="pagination-btns">
+      <button class="page-btn" ${page===1?'disabled':''} onclick="goPage(${page-1})">‹</button>
+      ${pages.map(p=>p==='…'
+        ? '<span style="padding:0 4px;color:var(--text-muted)">…</span>'
+        : `<button class="page-btn ${p===page?'active':''}" onclick="goPage(${p})">${p}</button>`
+      ).join('')}
+      <button class="page-btn" ${page===totalPages?'disabled':''} onclick="goPage(${page+1})">›</button>
+    </div>
+  </div>`;
+}
+
+function sortTable(col) {
+  state.listSortDir = state.listSortCol === col && state.listSortDir === 'asc' ? 'desc' : 'asc';
+  state.listSortCol = col;
+  state.listPage = 1;
+  sortListData();
+  renderAffaireTablePage();
+}
+function goPage(n) {
+  state.listPage = n;
+  renderAffaireTablePage();
+  document.getElementById('content').scrollTop = 0;
+}
+function setPageSize(n) { state.listPageSize = n; state.listPage = 1; renderAffaireTablePage(); }
+function setListFilter(f) { state.listFilter = f; state.listPage = 1; showAffaireList(); }
+let _searchTimer = null;
+function debounceListSearch(q) {
+  state.listSearch = q;
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(() => { state.listPage = 1; showAffaireList(); }, 350);
 }
 
 /* ═══════════════════════════════════════════════
    DASHBOARD
 ═══════════════════════════════════════════════ */
 function showDashboard() {
+  state.view = 'dashboard';
   state.currentId = null;
+  renderNav();
   document.getElementById('topbar-title').textContent = 'Tableau de bord';
-  document.getElementById('topbar-actions').innerHTML = '';
+  document.getElementById('topbar-actions').innerHTML = `
+    <button class="topbar-btn" onclick="showAffaireList()">📋 Toutes les affaires</button>
+    <button class="topbar-btn primary" onclick="openCreateModal()">+ Nouvelle affaire</button>`;
   const all = state.affaires;
   const byStatus = s => all.filter(a => a.statut === s).length;
   document.getElementById('content').innerHTML = `
@@ -696,8 +867,9 @@ function dashCard(a) {
    LOAD AFFAIRE
 ═══════════════════════════════════════════════ */
 async function loadAffaire(id) {
+  state.view = 'detail';
   state.currentId = id;
-  renderSidebar();
+  renderNav();
   document.getElementById('topbar-title').textContent = 'Chargement…';
   document.getElementById('content').innerHTML = '<div style="padding:40px;text-align:center"><div class="spinner spinner-dark"></div></div>';
   try {
@@ -735,9 +907,10 @@ function renderAffaireDetail() {
 
   document.getElementById('topbar-title').textContent = `${a.num_affaire} — ${a.nom_projet || a.navire_machine || '—'}`;
   document.getElementById('topbar-actions').innerHTML = `
-    <button class="topbar-btn" onclick="window.print()">🖨 Imprimer</button>
-    <button class="topbar-btn" onclick="openEditModal()">✏️ Modifier</button>
-    <button class="topbar-btn danger" onclick="deleteAffaire()">🗑 Supprimer</button>`;
+    <button class="topbar-btn no-print" onclick="showAffaireList()">← Affaires</button>
+    <button class="topbar-btn no-print" onclick="window.print()">🖨 Imprimer</button>
+    <button class="topbar-btn no-print" onclick="openEditModal()">✏️ Modifier</button>
+    <button class="topbar-btn danger no-print" onclick="deleteAffaire()">🗑 Supprimer</button>`;
 
   document.getElementById('content').innerHTML = `
   <!-- Header info -->
@@ -828,7 +1001,6 @@ async function quickStatus(val) {
     // Update in list
     const idx = state.affaires.findIndex(a => a.id === state.currentAffaire.id);
     if (idx >= 0) state.affaires[idx].statut = val;
-    renderSidebar();
     toast('Statut mis à jour', 'success');
   } catch(e) { toast(e.message,'error'); }
 }
@@ -1536,7 +1708,7 @@ async function saveAffaire(id) {
       state.currentId = created.id;
     }
     document.querySelector('.modal-overlay')?.remove();
-    renderSidebar();
+    renderNav();
     if(id) renderAffaireDetail();
     else await loadAffaire(state.currentId);
   } catch(e) {
@@ -1554,8 +1726,7 @@ async function deleteAffaire() {
     state.affaires = state.affaires.filter(a => a.id !== state.currentAffaire.id);
     state.currentAffaire = null;
     state.currentId = null;
-    renderSidebar();
-    showDashboard();
+    showAffaireList();
     toast('Affaire supprimée','success');
   } catch(e) { toast(e.message,'error'); }
 }
@@ -1570,15 +1741,11 @@ async function saveComments() {
 }
 
 /* ═══════════════════════════════════════════════
-   SIDEBAR PROGRESS UPDATE
+   PROGRESS (mise à jour locale des _items)
 ═══════════════════════════════════════════════ */
 function updateSidebarProgress() {
   const a = state.affaires.find(x => x.id === state.currentId);
-  if(a) a._items = state.currentItems;
-  renderSidebar();
-  // Re-select current
-  const el = document.querySelector(`.sidebar-item.active`);
-  // Already active, no re-click needed
+  if (a) a._items = state.currentItems;
 }
 
 /* ═══════════════════════════════════════════════
@@ -1586,18 +1753,20 @@ function updateSidebarProgress() {
 ═══════════════════════════════════════════════ */
 async function init() {
   try {
-    // Load affaires & clients in parallel
     const [affaires, clients] = await Promise.all([
       GET('/affaires'),
       GET('/clients').catch(() => []),
     ]);
     state.affaires = affaires;
-    state.clients = clients;
-    renderSidebar();
+    state.listData  = [...affaires];
+    state.clients   = clients;
+    document.getElementById('api-status').textContent = '● connecté';
+    document.getElementById('api-status').style.color = 'rgba(52,211,153,.7)';
+    renderNav();
     showDashboard();
   } catch(e) {
-    document.getElementById('affaire-list').innerHTML =
-      '<div class="sidebar-empty">⚠ Impossible de joindre le serveur<br><small style="font-size:10px;opacity:.6">localhost:8765</small></div>';
+    document.getElementById('api-status').textContent = '● hors ligne';
+    document.getElementById('api-status').style.color = 'rgba(252,165,165,.8)';
     document.getElementById('content').innerHTML = `
       <div class="empty-state" style="padding:80px 20px">
         <div class="icon">⚠️</div>
