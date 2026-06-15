@@ -73,10 +73,11 @@ class MoteurOut(BaseModel):
     client_utilisateur_email:    str = ""
     client_utilisateur_tel:      str = ""
     client_utilisateur_adresse:  str = ""
-    # Champ enrichi (ajoute par _to_out dans le router)
-    client_nom:         Optional[str] = ""
-    version:         int = 1
-    created_at:         Optional[datetime] = None
-    updated_at:         Optional[datetime] = None
+    # Champs enrichis (ajoutés par _to_out dans le router)
+    client_nom:           Optional[str] = ""
+    nb_sous_ensembles:    int = 0
+    version:              int = 1
+    created_at:           Optional[datetime] = None
+    updated_at:           Optional[datetime] = None
 
     model_config = {"from_attributes": True}

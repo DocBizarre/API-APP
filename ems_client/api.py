@@ -321,6 +321,24 @@ def get_moteurs_garantie_expirante(jours_max: int = 90) -> List[Dict]:
     return res
 
 
+# ─── Sous-ensembles ───────────────────────────────────────────────────────────
+
+def get_sous_ensembles(moteur_id: str) -> List[Dict]:
+    return _client.get(f"/moteurs/{moteur_id}/sous-ensembles")
+
+
+def create_sous_ensemble(moteur_id: str, data: Dict) -> Dict:
+    return _client.post(f"/moteurs/{moteur_id}/sous-ensembles", json=data)
+
+
+def update_sous_ensemble(moteur_id: str, se_id: str, data: Dict) -> Dict:
+    return _client.put(f"/moteurs/{moteur_id}/sous-ensembles/{se_id}", json=data)
+
+
+def delete_sous_ensemble(moteur_id: str, se_id: str) -> None:
+    _client.delete(f"/moteurs/{moteur_id}/sous-ensembles/{se_id}")
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 #   Techniciens
 # ═══════════════════════════════════════════════════════════════════════════

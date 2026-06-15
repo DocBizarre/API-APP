@@ -23,6 +23,7 @@ def _to_out(m: Moteur) -> dict:
             val = ""
         d[c.name] = val
     d["client_nom"] = m.client.nom if m.client else ""
+    d["nb_sous_ensembles"] = len(m.sous_ensembles)
     return d
 
 
@@ -32,7 +33,10 @@ def list_moteurs(
     serie_only: bool = Query(False, description="Recherche uniquement par N° série"),
     db: Session = Depends(get_db),
 ):
-    q = db.query(Moteur).options(joinedload(Moteur.client))
+    q = db.query(Moteur).options(
+        joinedload(Moteur.client),
+        joinedload(Moteur.sous_ensembles),
+    )
     if search:
         like = f"%{search}%"
         if serie_only:
