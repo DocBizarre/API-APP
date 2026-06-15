@@ -18,10 +18,14 @@ class MoteurCreate(BaseModel):
     typologie:          str = ""
     collection:         str = ""
     ref_constructeur:   str = ""
-    code_affaire:       str = ""
-    type_client:        str = ""
-    date_mise_service:  str = ""
-    duree_garantie:     str = ""
+    code_affaire:                str = ""
+    type_client:                 str = ""
+    date_mise_service:           str = ""
+    duree_garantie:              str = ""
+    client_utilisateur_nom:      str = ""
+    client_utilisateur_email:    str = ""
+    client_utilisateur_tel:      str = ""
+    client_utilisateur_adresse:  str = ""
 
 
 class MoteurUpdate(BaseModel):
@@ -37,10 +41,14 @@ class MoteurUpdate(BaseModel):
     typologie:          Optional[str] = None
     collection:         Optional[str] = None
     ref_constructeur:   Optional[str] = None
-    code_affaire:       Optional[str] = None
-    type_client:        Optional[str] = None
-    date_mise_service:  Optional[str] = None
-    duree_garantie:     Optional[str] = None
+    code_affaire:                Optional[str] = None
+    type_client:                 Optional[str] = None
+    date_mise_service:           Optional[str] = None
+    duree_garantie:              Optional[str] = None
+    client_utilisateur_nom:      Optional[str] = None
+    client_utilisateur_email:    Optional[str] = None
+    client_utilisateur_tel:      Optional[str] = None
+    client_utilisateur_adresse:  Optional[str] = None
 
 
 class MoteurOut(BaseModel):
@@ -57,10 +65,14 @@ class MoteurOut(BaseModel):
     typologie:          str
     collection:         str
     ref_constructeur:   str
-    code_affaire:       str
-    type_client:        str
-    date_mise_service:  str
-    duree_garantie:     str
+    code_affaire:                str
+    type_client:                 str
+    date_mise_service:           str
+    duree_garantie:              str
+    client_utilisateur_nom:      str = ""
+    client_utilisateur_email:    str = ""
+    client_utilisateur_tel:      str = ""
+    client_utilisateur_adresse:  str = ""
     # Champ enrichi (ajoute par _to_out dans le router)
     client_nom:         Optional[str] = ""
     version:         int = 1

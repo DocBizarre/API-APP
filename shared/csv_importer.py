@@ -16,8 +16,8 @@ DEFAULT_MAPPING = {
     # Client
     "nom_client":        ["Tiers", "Client", "Nom client", "Société"],
     "type_client":       ["Type Client", "Type client", "Catégorie client"],
-    # Moteur
-    "navire":            ["Machine / Engin", "Machine/Engin", "Machine", "Navire", "Engin"],
+    # Moteur — champs principaux
+    "navire":            ["Machine / Engin", "Machine/Engin", "Navire", "Engin", "Site"],
     "num_serie":         ["N° Série", "N° Serie", "Numéro de série", "Num série", "N°Série"],
     "num_moteur":        ["N° Moteur", "Numéro moteur"],
     "cylindree":         ["Cylindrée", "Cylindree", "Cyl."],
@@ -29,6 +29,10 @@ DEFAULT_MAPPING = {
     "marque":            ["Marque"],
     "collection":        ["Collection"],
     "code_affaire":      ["Code Affaire", "Code affaire", "N° Affaire"],
+    # Moteur — champs supplémentaires (ajoutables manuellement dans l'UI)
+    "machine":           ["Machine", "Type machine", "Modèle"],
+    "date_mise_service": ["Date mise en service", "Mise en service", "Date MES", "MES"],
+    "duree_garantie":    ["Durée garantie", "Garantie (mois)", "Garantie mois", "Garantie"],
 }
 
 
@@ -210,10 +214,12 @@ def import_rows(path, mapping, delimiter, encoding,
             "client_id":        client_id,
             "num_serie":        num_serie,
             "navire":           _cell(row, mapping.get("navire")),
-            "machine":          _cell(row, mapping.get("ref_constructeur")) or _cell(row, mapping.get("type_moteur")),
+            "machine":          (_cell(row, mapping.get("machine"))
+                                 or _cell(row, mapping.get("ref_constructeur"))
+                                 or _cell(row, mapping.get("type_moteur"))),
             "type_moteur":      _cell(row, mapping.get("type_moteur")),
-            "date_mise_service":"",
-            "duree_garantie":   "",
+            "date_mise_service":_cell(row, mapping.get("date_mise_service")),
+            "duree_garantie":   _cell(row, mapping.get("duree_garantie")),
             "cylindree":        _cell(row, mapping.get("cylindree")),
             "famille":          _cell(row, mapping.get("famille")),
             "marque":           _cell(row, mapping.get("marque")),

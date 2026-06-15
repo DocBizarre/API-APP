@@ -36,6 +36,7 @@ for parent in (_HERE, _HERE.parent):
  
 try:
     from ems_client import api as db
+    from shared.bon_generator import apply_icon
 except ImportError as e:
     _r = tk.Tk(); _r.withdraw()
     messagebox.showerror("Dépendance manquante",
@@ -128,16 +129,20 @@ def mk_tree(parent, cols, col_defs, height=18):
 #   PiecesApp — App principale
 # ═════════════════════════════════════════════════════════════════════════════
 class PiecesApp(tk.Tk):
- 
+
     def __init__(self):
         super().__init__()
+        self.withdraw()
+        apply_icon(self)
         self.title("EMS — Pièces détachées")
         self.geometry("1100x650")
         self.configure(bg=C["bg"])
         self._init_styles()
         self._build()
         self._refresh_count()
- 
+        self.update_idletasks()
+        self.deiconify()
+
     def _init_styles(self):
         s = ttk.Style(self)
         try:

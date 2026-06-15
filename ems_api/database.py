@@ -42,6 +42,10 @@ def init_db():
         ("interventions", "moteurs_supplementaires_json", "TEXT DEFAULT '[]'"),
         ("interventions", "marque",                       "TEXT DEFAULT ''"),
         ("interventions", "commentaire",                  "TEXT DEFAULT ''"),
+        ("moteurs", "client_utilisateur_nom",     "TEXT DEFAULT ''"),
+        ("moteurs", "client_utilisateur_email",   "TEXT DEFAULT ''"),
+        ("moteurs", "client_utilisateur_tel",     "TEXT DEFAULT ''"),
+        ("moteurs", "client_utilisateur_adresse", "TEXT DEFAULT ''"),
     ]
     insp = _inspect(engine)
     for table, col, col_def in _migrations:

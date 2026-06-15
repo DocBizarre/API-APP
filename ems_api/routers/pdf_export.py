@@ -4,13 +4,16 @@ Router PDF - Generation de bons d'intervention en PDF cote serveur.
 WeasyPrint est installe sur le serveur (avec GTK3). Les clients .exe n'ont
 donc pas besoin de l'installer eux-memes : ils appellent juste cet endpoint
 pour recuperer le PDF deja genere.
-"""
-import os
-import tempfile
-from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
-from fastapi.responses import FileResponse, Response
+MODIFICATIONS (perf/stabilite) :
+- /pdf/render : le rendu WeasyPrint passe par run_in_threadpool pour ne
+  plus bloquer l'event loop uvicorn (cause des "API indisponible").
+- Plus de fichiers temporaires : write_pdf() sans argument retourne
+  directement les bytes du PDF.
+"""
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
@@ -30,34 +33,29 @@ async def render_pdf_from_html(request: Request):
     Accepte le HTML complet en bytes bruts (Content-Type: text/html; charset=utf-8).
     Les photos sont embarquees en data-URI base64 dans le HTML.
     Retourne le PDF binaire genere par WeasyPrint.
+
+    IMPORTANT : l'appel WeasyPrint (CPU-bound, plusieurs secondes) est
+    delegue au threadpool via run_in_threadpool. Sans cela, un endpoint
+    `async def` qui appelle write_pdf() directement gele l'event loop :
+    plus AUCUNE requete n'est traitee pendant la generation.
     """
     try:
         from weasyprint import HTML
     except ImportError as e:
         raise HTTPException(500, f"WeasyPrint non installe sur le serveur : {e}")
 
+    html_bytes = await request.body()
+    if not html_bytes:
+        raise HTTPException(400, "Corps de requete vide")
     try:
-        html_bytes = await request.body()
-        if not html_bytes:
-            raise HTTPException(400, "Corps de requete vide")
         html_str = html_bytes.decode("utf-8")
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(400, f"Lecture du corps impossible : {e}")
 
-    tmp_path = None
     try:
-        fd, tmp = tempfile.mkstemp(suffix=".pdf")
-        tmp_path = Path(tmp)
-        os.close(fd)
-        HTML(string=html_str).write_pdf(str(tmp_path))
-        data = tmp_path.read_bytes()
+        data = await run_in_threadpool(lambda: HTML(string=html_str).write_pdf())
     except Exception as e:
         raise HTTPException(500, f"Echec generation PDF (WeasyPrint) : {e}")
-    finally:
-        if tmp_path and tmp_path.exists():
-            tmp_path.unlink(missing_ok=True)
 
     return Response(content=data, media_type="application/pdf")
 
@@ -70,8 +68,8 @@ def _to_dict(orm_obj):
 
 @router.get("/{inv_id}/pdf",
             summary="Genere et renvoie le PDF d'un bon d'intervention",
-            response_class=FileResponse)
-def generer_pdf_bon(inv_id: str, background: BackgroundTasks):
+            response_class=Response)
+def generer_pdf_bon(inv_id: str):
     """
     Genere le PDF du bon d'intervention via WeasyPrint cote serveur.
     Le client recoit le PDF binaire pret a sauvegarder.
@@ -79,6 +77,10 @@ def generer_pdf_bon(inv_id: str, background: BackgroundTasks):
     NOTE : on appelle directement _build_html + WeasyPrint pour eviter
     la boucle infinie qui se produirait si on utilisait generer_bon_pdf()
     (celle-ci rappelle l'API serveur pour obtenir le PDF).
+
+    Cet endpoint est un `def` synchrone : FastAPI l'execute deja dans le
+    threadpool, il ne bloque donc pas l'event loop. On a simplement
+    supprime le tempfile + BackgroundTasks au profit des bytes directs.
     """
     try:
         from weasyprint import HTML
@@ -106,23 +108,17 @@ def generer_pdf_bon(inv_id: str, background: BackgroundTasks):
         html_str = _build_html(inv_dict, client=client_dict, moteur=moteur_dict,
                                photos_annexe=None, for_pdf=True)
 
-        fd, tmp = tempfile.mkstemp(suffix=".pdf", prefix=f"ems_{inv.num_bon}_")
-        pdf_path = Path(tmp)
-        os.close(fd)
         try:
-            HTML(string=html_str).write_pdf(str(pdf_path))
+            pdf_bytes = HTML(string=html_str).write_pdf()
         except Exception as e:
-            pdf_path.unlink(missing_ok=True)
             raise HTTPException(500, f"Echec generation PDF (WeasyPrint) : {e}")
 
-        if not pdf_path.is_file():
-            raise HTTPException(500, "PDF non genere")
-
-        background.add_task(pdf_path.unlink, missing_ok=True)
-        return FileResponse(
-            path=str(pdf_path),
+        return Response(
+            content=pdf_bytes,
             media_type="application/pdf",
-            filename=f"{inv.num_bon}.pdf",
-            headers={"Cache-Control": "no-store"})
+            headers={
+                "Content-Disposition": f'attachment; filename="{inv.num_bon}.pdf"',
+                "Cache-Control": "no-store",
+            })
     finally:
         db.close()

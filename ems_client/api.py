@@ -73,7 +73,7 @@ class EMSClient:
 
     def __init__(self, base_url: Optional[str] = None,
                  api_key: Optional[str] = None,
-                 timeout: float = 60.0):
+                 timeout: float = 5.0):
         self.base_url = (base_url
                          or _read_ini_server_url()
                          or os.environ.get("EMS_API_URL",
@@ -198,6 +198,18 @@ def check_api(timeout: float = 5.0) -> Tuple[bool, str]:
         return False, f"Serveur {url} a répondu {r.status_code}"
     except Exception as e:
         return False, f"Serveur injoignable à {url} : {e}"
+
+
+def ping(timeout: float = 2.0) -> bool:
+    """Vérifie rapidement si le serveur est joignable. Retourne True/False."""
+    ok, _ = check_api(timeout=timeout)
+    return ok
+
+
+def push_bons(bons: List[Dict], device: str = "bureau") -> Dict:
+    """Envoie des bons modifiés vers le serveur (endpoint /sync/push/bons).
+    Chaque élément de `bons` doit avoir : data, base_version, force."""
+    return _client.post("/sync/push/bons", json={"device": device, "bons": bons})
 
 
 def get_technicien_by_nom(nom: str) -> Optional[Dict]:

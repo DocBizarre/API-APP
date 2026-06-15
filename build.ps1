@@ -51,7 +51,8 @@ function Build-App([string]$name, [string]$spec) {
         Write-Warning "Spec introuvable : $specPath"
         return $false
     }
-    & pyinstaller $specPath --distpath $DIST --workpath (Join-Path $ROOT "build") --noconfirm
+    $cmd = $PYINSTALLER_CMD -split " "
+    & $cmd[0] ($cmd[1..($cmd.Length-1)] + @($specPath, "--distpath", $DIST, "--workpath", (Join-Path $ROOT "build"), "--noconfirm", "--clean"))
     if ($LASTEXITCODE -ne 0) {
         Write-Host "ERREUR lors du build de $name (code $LASTEXITCODE)" -ForegroundColor Red
         return $false
@@ -72,8 +73,12 @@ function Deploy-Exe([string]$name) {
 }
 
 # ─── Vérifications préalables ─────────────────────────────────────────────────
-if (-not (Get-Command pyinstaller -ErrorAction SilentlyContinue)) {
-    Write-Host "ERREUR : pyinstaller non trouvé. Installer avec : pip install pyinstaller" -ForegroundColor Red
+$PYINSTALLER_CMD = if (Get-Command pyinstaller -ErrorAction SilentlyContinue) {
+    "pyinstaller"
+} elseif (Get-Command python -ErrorAction SilentlyContinue) {
+    "python -m PyInstaller"
+} else {
+    Write-Host "ERREUR : ni pyinstaller ni python trouvés dans le PATH." -ForegroundColor Red
     exit 1
 }
 

@@ -12,11 +12,16 @@ ou edition manuelle).
 """
 from __future__ import annotations
 import json
+import sys
 from pathlib import Path
 from typing import Dict
 
 
-CONFIG_PATH = Path(__file__).resolve().parent / "sync_config.json"
+if getattr(sys, "frozen", False):
+    # Exe PyInstaller : persiste à côté du .exe, pas dans _MEI temporaire
+    CONFIG_PATH = Path(sys.executable).parent / "sync_config.json"
+else:
+    CONFIG_PATH = Path(__file__).resolve().parent / "sync_config.json"
 
 DEFAULTS: Dict[str, str] = {
     "server_url": "http://192.168.1.50:8765",   # serveur atelier (a adapter)

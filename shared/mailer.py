@@ -265,8 +265,7 @@ TEMPLATE_CLIENT = """Bonjour{contact_line},
 Nous accusons reception de votre demande d'intervention.
 
 Reference du bon : {num_bon}
-Equipement : {machine}{navire_line}
-N de serie : {num_serie}
+{equipements_block}
 Type d'intervention : {type_intervention}
 Date prevue : {date_creation}
 
@@ -309,11 +308,7 @@ SIGNATAIRE
   Email : {email_signataire}
   Tel   : {tel_signataire}
 
-EQUIPEMENT
-  Navire/Site : {navire}
-  Machine     : {machine}
-  N de serie  : {num_serie}
-  Mise en service : {date_mise_service}
+{equipements_block}
 
 INTERVENTION
   Type        : {type_intervention}
@@ -337,10 +332,7 @@ Date d'intervention : {date_creation}
 Date de cloture     : {date_cloture}
 ================================================
 
-EQUIPEMENT
-  Navire / Site : {navire}
-  Machine       : {machine}
-  N de serie    : {num_serie}
+{equipements_block}
 
 INTERVENTION
   Type       : {type_intervention}
@@ -373,6 +365,121 @@ def _safe(d, key, default=""):
         return v if v is not None else default
     except (KeyError, IndexError):
         return default
+
+
+def _extra_moteurs(inv):
+    """Parse moteurs_supplementaires_json depuis l'intervention."""
+    import json as _json
+    try:
+        raw = _safe(inv, "moteurs_supplementaires_json") or "[]"
+        return _json.loads(raw)
+    except (ValueError, TypeError):
+        return []
+
+
+def _equipements_client(moteur, extras):
+    """Bloc équipement pour l'email client (format simple)."""
+    items = []
+    m = _safe(moteur, "machine"); n = _safe(moteur, "navire"); s = _safe(moteur, "num_serie")
+    if m or s:
+        items.append((m, n, s))
+    for em in extras:
+        m2 = _safe(em, "machine"); n2 = _safe(em, "navire"); s2 = _safe(em, "num_serie")
+        if m2 or s2:
+            items.append((m2, n2, s2))
+
+    if not items:
+        return "Equipement : -\nN de serie : -"
+    if len(items) == 1:
+        m, n, s = items[0]
+        navire_part = f" - {n}" if n else ""
+        return f"Equipement : {m or '-'}{navire_part}\nN de serie : {s or '-'}"
+
+    lines = ["Equipements :"]
+    for i, (m, n, s) in enumerate(items, 1):
+        navire_part = f" ({n})" if n else ""
+        serie_part  = f" - N° serie : {s}" if s else ""
+        lines.append(f"  {i}. {m or '-'}{navire_part}{serie_part}")
+    return "\n".join(lines)
+
+
+def _equipements_technicien(moteur, extras):
+    """Bloc EQUIPEMENT pour l'email technicien (format détaillé)."""
+    items = []
+    if moteur or extras:
+        items.append({
+            "machine": _safe(moteur, "machine"),
+            "navire":  _safe(moteur, "navire"),
+            "serie":   _safe(moteur, "num_serie"),
+            "svc":     _safe(moteur, "date_mise_service"),
+        })
+        for em in extras:
+            items.append({
+                "machine": _safe(em, "machine"),
+                "navire":  _safe(em, "navire"),
+                "serie":   _safe(em, "num_serie"),
+                "svc":     _safe(em, "date_mise_service"),
+            })
+
+    if not items:
+        return ("EQUIPEMENT\n"
+                "  Navire/Site     : -\n"
+                "  Machine         : -\n"
+                "  N de serie      : -\n"
+                "  Mise en service : -")
+    if len(items) == 1:
+        it = items[0]
+        return (f"EQUIPEMENT\n"
+                f"  Navire/Site     : {it['navire'] or '-'}\n"
+                f"  Machine         : {it['machine'] or '-'}\n"
+                f"  N de serie      : {it['serie'] or '-'}\n"
+                f"  Mise en service : {it['svc'] or '-'}")
+
+    lines = ["EQUIPEMENTS"]
+    for i, it in enumerate(items, 1):
+        lines.append(f"  --- Moteur {i} ---")
+        lines.append(f"  Navire/Site     : {it['navire'] or '-'}")
+        lines.append(f"  Machine         : {it['machine'] or '-'}")
+        lines.append(f"  N de serie      : {it['serie'] or '-'}")
+        lines.append(f"  Mise en service : {it['svc'] or '-'}")
+    return "\n".join(lines)
+
+
+def _equipements_cloture(moteur, extras):
+    """Bloc EQUIPEMENT pour l'email de clôture."""
+    items = []
+    if moteur or extras:
+        items.append({
+            "machine": _safe(moteur, "machine"),
+            "navire":  _safe(moteur, "navire"),
+            "serie":   _safe(moteur, "num_serie"),
+        })
+        for em in extras:
+            items.append({
+                "machine": _safe(em, "machine"),
+                "navire":  _safe(em, "navire"),
+                "serie":   _safe(em, "num_serie"),
+            })
+
+    if not items:
+        return ("EQUIPEMENT\n"
+                "  Navire / Site : -\n"
+                "  Machine       : -\n"
+                "  N de serie    : -")
+    if len(items) == 1:
+        it = items[0]
+        return (f"EQUIPEMENT\n"
+                f"  Navire / Site : {it['navire'] or '-'}\n"
+                f"  Machine       : {it['machine'] or '-'}\n"
+                f"  N de serie    : {it['serie'] or '-'}")
+
+    lines = ["EQUIPEMENTS"]
+    for i, it in enumerate(items, 1):
+        lines.append(f"  --- Moteur {i} ---")
+        lines.append(f"  Navire / Site : {it['navire'] or '-'}")
+        lines.append(f"  Machine       : {it['machine'] or '-'}")
+        lines.append(f"  N de serie    : {it['serie'] or '-'}")
+    return "\n".join(lines)
 
 
 def _join_emails(emails):
@@ -412,22 +519,20 @@ def email_client(inv, client, moteur, bon_path=""):
     # CC : email signataire si different du destinataire principal
     cc = email_signataire if email_signataire and email_signataire != email else ""
 
-    machine = _safe(moteur, "machine") or _safe(inv, "machine")
-    navire  = _safe(moteur, "navire")  or _safe(inv, "navire")
     num_bon = _safe(inv, "num_bon")
 
-    contact_line = f" {contact}" if contact else ""
-    navire_line  = f" - {navire}" if navire else ""
-    technicien   = _safe(inv, "technicien")
+    contact_line    = f" {contact}" if contact else ""
+    technicien      = _safe(inv, "technicien")
     technicien_line = f"Notre technicien {technicien} " if technicien else "Un technicien "
+
+    extras           = _extra_moteurs(inv)
+    equipements_block = _equipements_client(moteur, extras)
 
     subject = f"[EMS] Prise en charge de votre demande - {num_bon}"
     body = TEMPLATE_CLIENT.format(
         contact_line=contact_line,
         num_bon=num_bon,
-        machine=machine or "-",
-        navire_line=navire_line,
-        num_serie=_safe(moteur, "num_serie") or _safe(inv, "num_serie"),
+        equipements_block=equipements_block,
         type_intervention=_safe(inv, "type_intervention"),
         date_creation=_safe(inv, "date_creation"),
         technicien_line=technicien_line,
@@ -448,6 +553,10 @@ def email_technicien(inv, client, moteur, technicien_email="", bon_path=""):
     """
     to_str = _join_emails(technicien_email)
     num_bon = _safe(inv, "num_bon")
+
+    extras            = _extra_moteurs(inv)
+    equipements_block = _equipements_technicien(moteur, extras)
+
     subject = f"[EMS] Nouveau bon assigne - {num_bon} - {_safe(inv, 'type_intervention')}"
     body = TEMPLATE_TECHNICIEN.format(
         technicien=_safe(inv, "technicien"),
@@ -465,10 +574,7 @@ def email_technicien(inv, client, moteur, technicien_email="", bon_path=""):
         nom_signataire=_safe(inv, "nom_signataire") or "-",
         email_signataire=_safe(inv, "email_signataire") or "-",
         tel_signataire=_safe(inv, "telephone_signataire") or "-",
-        navire=_safe(moteur, "navire") or _safe(inv, "navire"),
-        machine=_safe(moteur, "machine") or _safe(inv, "machine"),
-        num_serie=_safe(moteur, "num_serie") or _safe(inv, "num_serie"),
-        date_mise_service=_safe(moteur, "date_mise_service"),
+        equipements_block=equipements_block,
         type_intervention=_safe(inv, "type_intervention"),
         description=_safe(inv, "description"),
         bon_path=bon_path or "(a generer)",
@@ -508,13 +614,12 @@ def email_cloture(inv, client, moteur, technicien_emails=None, bon_path=""):
     contact = nom_demandeur or nom_signataire or _safe(client, "contact") or _safe(client, "nom")
     contact_line = f" {contact}" if contact else ""
 
-    num_bon   = _safe(inv, "num_bon")
-    machine   = _safe(moteur, "machine") or _safe(inv, "machine")
-    navire    = _safe(moteur, "navire")  or _safe(inv, "navire")
-    num_serie = _safe(moteur, "num_serie") or _safe(inv, "num_serie")
+    num_bon = _safe(inv, "num_bon")
+    travaux = _safe(inv, "travaux") or "-"
+    preco   = _safe(inv, "preconisation_text") or "-"
 
-    travaux   = _safe(inv, "travaux") or "-"
-    preco     = _safe(inv, "preconisation_text") or "-"
+    extras            = _extra_moteurs(inv)
+    equipements_block = _equipements_cloture(moteur, extras)
 
     subject = f"[EMS] Intervention clôturée - {num_bon}"
     body = TEMPLATE_CLOTURE.format(
@@ -522,9 +627,7 @@ def email_cloture(inv, client, moteur, technicien_emails=None, bon_path=""):
         num_bon=num_bon,
         date_creation=_safe(inv, "date_creation"),
         date_cloture=_safe(inv, "date_cloture") or "—",
-        navire=navire or "-",
-        machine=machine or "-",
-        num_serie=num_serie or "-",
+        equipements_block=equipements_block,
         type_intervention=_safe(inv, "type_intervention") or "-",
         technicien=_safe(inv, "technicien") or "-",
         travaux=travaux,

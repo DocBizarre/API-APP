@@ -14,6 +14,7 @@ Auteur : Paul MARTINEAU — Emeraude Moteurs Systèmes
 
 import sys
 import os
+import subprocess
 import multiprocessing
 from pathlib import Path
 
@@ -27,7 +28,19 @@ except ImportError:
     APP_NAME = "EMS – Emeraude Moteurs Systèmes"
 
 
-_HERE = Path(__file__).resolve().parent
+_FROZEN = getattr(sys, "frozen", False)
+_HERE   = Path(sys.executable).parent if _FROZEN else Path(__file__).resolve().parent
+
+
+def _is_visible(path: Path) -> bool:
+    """Retourne True si le fichier existe ET n'est pas caché (attribut Windows)."""
+    if not path.is_file():
+        return False
+    try:
+        import stat as _stat
+        return not bool(path.stat().st_file_attributes & _stat.FILE_ATTRIBUTE_HIDDEN)
+    except (AttributeError, OSError):
+        return True
 
 
 def _demarrer_app(app_key, here_str):
@@ -85,48 +98,65 @@ def _demarrer_app(app_key, here_str):
 
 
 APPS = [
-    {"key": "affaire",      "titre": "Affaires",
+    {"key": "affaire",      "exe": "EMS_Affaire",      "titre": "Affaires",
      "desc": "Suivi des affaires clients, équipements et objectifs",
      "icone": "📋", "couleur": "#d97706", "dossier": "affaire_app"},
-    {"key": "BI",           "titre": "Business Intelligence",
+    {"key": "BI",           "exe": "EMS_BI",            "titre": "Business Intelligence",
      "desc": "Analyse d'affaire",
      "icone": "📈", "couleur": "#b8bb0e", "dossier": "BI_app"},
-    {"key": "bons",         "titre": "Bons d'intervention",
+    {"key": "bons",         "exe": "EMS_Bons",          "titre": "Bons d'intervention",
      "desc": "Création et suivi des bons d'intervention",
      "icone": "🔧", "couleur": "#0056b3", "dossier": "ems_project"},
-    {"key": "parc",         "titre": "Gestion de parc",
+    {"key": "parc",         "exe": "EMS_Parc",          "titre": "Gestion de parc",
      "desc": "Saisie des clients, moteurs et techniciens",
      "icone": "🗂", "couleur": "#00796b", "dossier": "ems_project"},
-    {"key": "pieces",         "titre": "Gestion des pièces",
-     "desc": "référencement des pièces",
+    {"key": "pieces",       "exe": "EMS_Pieces",        "titre": "Gestion des pièces",
+     "desc": "Référencement des pièces",
      "icone": "🧰", "couleur": "#9BB3B0", "dossier": "ems_project"},
-    {"key": "garanties",    "titre": "Garanties",
+    {"key": "garanties",    "exe": "EMS_Garanties",     "titre": "Garanties",
      "desc": "Dossiers des garanties appareils",
      "icone": "🛡", "couleur": "#aa14cf", "dossier": "garanties_app"},
-    {"key": "amelioration", "titre": "Amélioration continue",
-    "desc": "Tickets de demande d'amélioration des clients",
-    "icone": "💡", "couleur": "#1e7e3e", "dossier": "amelioration_app"},
+    {"key": "amelioration", "exe": "EMS_Amelioration",  "titre": "Amélioration continue",
+     "desc": "Tickets de demande d'amélioration des clients",
+     "icone": "💡", "couleur": "#1e7e3e", "dossier": "amelioration_app"},
 ]
 
 
 def _app_disponible(app):
+    if _FROZEN:
+        return _is_visible(_HERE / f"{app['exe']}.exe")
     return (_HERE / app["dossier"]).is_dir()
 
 
 def _lancer(app_key, fenetre=None):
-    """Démarre l'application dans un processus séparé via multiprocessing."""
-    try:
-        p = multiprocessing.Process(
-            target=_demarrer_app,
-            args=(app_key, str(_HERE)),
-            daemon=False,
-        )
-        p.start()
-    except Exception as e:
-        messagebox.showerror(
-            "Erreur de lancement",
-            f"Impossible de démarrer l'application :\n{e}")
+    """Lance l'application : subprocess (exe compilé) ou multiprocessing (dev)."""
+    app = next((a for a in APPS if a["key"] == app_key), None)
+    if app is None:
         return
+
+    if _FROZEN:
+        exe = _HERE / f"{app['exe']}.exe"
+        try:
+            subprocess.Popen([str(exe)], cwd=str(_HERE))
+        except Exception as e:
+            messagebox.showerror(
+                "Erreur de lancement",
+                f"Impossible de démarrer {app['exe']}.exe :\n{e}")
+            return
+    else:
+        try:
+            p = multiprocessing.Process(
+                target=_demarrer_app,
+                args=(app_key, str(_HERE)),
+                daemon=False,
+            )
+            p.start()
+        except Exception as e:
+            messagebox.showerror(
+                "Erreur de lancement",
+                f"Impossible de démarrer l'application :\n{e}")
+            return
+
     if fenetre is not None:
         fenetre.destroy()
 
@@ -299,6 +329,12 @@ class ParametresSyncDialog(tk.Toplevel):
 class Launcher(tk.Tk):
     def __init__(self):
         super().__init__()
+        self.withdraw()
+        try:
+            from shared.bon_generator import apply_icon
+            apply_icon(self)
+        except Exception:
+            pass
         self.title(f"{APP_NAME}  v{__version__}")
         self.geometry("700x560")
         self.minsize(600, 420)
@@ -356,9 +392,10 @@ class Launcher(tk.Tk):
         grid_frame.columnconfigure(0, weight=1, uniform="col")
         grid_frame.columnconfigure(1, weight=1, uniform="col")
 
-        for i, app in enumerate(APPS):
+        apps_dispo = [a for a in APPS if _app_disponible(a)]
+        for i, app in enumerate(apps_dispo):
             row, col = divmod(i, 2)
-            colspan = 2 if (i == len(APPS) - 1 and len(APPS) % 2 == 1) else 1
+            colspan = 2 if (i == len(apps_dispo) - 1 and len(apps_dispo) % 2 == 1) else 1
             self._carte(grid_frame, app, row, col, colspan)
 
         # ── Pied de page ──────────────────────────────────────────────────────
@@ -370,17 +407,18 @@ class Launcher(tk.Tk):
                  font=("Segoe UI", 7), bg=C["bg"], fg=C["muted"],
                  justify="center").pack(pady=(4, 6))
 
+        self.update_idletasks()
+        self.deiconify()
+
     def _ouvrir_params(self):
         ParametresSyncDialog(self)
 
     def _carte(self, parent, app, row, col, colspan=1):
-        dispo = _app_disponible(app)
-
         outer = tk.Frame(parent, bg=C["border"])
         outer.grid(row=row, column=col, columnspan=colspan,
                    padx=10, pady=6, sticky="nsew")
 
-        card = tk.Frame(outer, bg=C["card"], cursor="hand2" if dispo else "")
+        card = tk.Frame(outer, bg=C["card"], cursor="hand2")
         card.pack(fill="both", expand=True, padx=1, pady=1)
 
         # Barre colorée à gauche
@@ -404,20 +442,15 @@ class Launcher(tk.Tk):
                      anchor="w", pady=(3, 8))
 
         # Bouton
-        if dispo:
-            btn = tk.Button(
-                inner, text="Ouvrir  ▸", font=("Segoe UI", 9, "bold"),
-                bg=app["couleur"], fg="white", relief="flat", bd=0,
-                padx=12, pady=5, cursor="hand2",
-                activebackground=app["couleur"], activeforeground="white",
-                command=lambda k=app["key"]: _lancer(k, self))
-            btn.pack(anchor="w")
-            for w in (card, inner, header_row):
-                w.bind("<Button-1>", lambda _e, k=app["key"]: _lancer(k, self))
-        else:
-            tk.Label(inner, text="⚠ Dossier introuvable",
-                     font=("Segoe UI", 8, "italic"),
-                     bg=C["card"], fg=C["accent"]).pack(anchor="w")
+        btn = tk.Button(
+            inner, text="Ouvrir  ▸", font=("Segoe UI", 9, "bold"),
+            bg=app["couleur"], fg="white", relief="flat", bd=0,
+            padx=12, pady=5, cursor="hand2",
+            activebackground=app["couleur"], activeforeground="white",
+            command=lambda k=app["key"]: _lancer(k, self))
+        btn.pack(anchor="w")
+        for w in (card, inner, header_row):
+            w.bind("<Button-1>", lambda _e, k=app["key"]: _lancer(k, self))
 
 
 if __name__ == "__main__":

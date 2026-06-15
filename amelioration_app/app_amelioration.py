@@ -36,6 +36,7 @@ for p in (_ROOT, _HERE):
 try:
     from ems_client import api as db
     from shared import amelioration_generator as amgen
+    from shared.bon_generator import apply_icon
 except ImportError as e:
     import tkinter as _tk
     from tkinter import messagebox as _mb
@@ -695,7 +696,8 @@ class AmeliorationDialog(tk.Toplevel):
 class AmeliorationApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.state("zoomed")
+        self.withdraw()
+        apply_icon(self)
         self.title("EMS – Amélioration continue")
         self.geometry("1100x720")
         self.minsize(880, 540)
@@ -706,6 +708,9 @@ class AmeliorationApp(tk.Tk):
         self.frame = AmeliorationsFrame(self, self)
         self.frame.pack(fill="both", expand=True)
         self.frame.refresh()
+        self.update_idletasks()
+        self.deiconify()
+        self.state("zoomed")
 
     def _init_styles(self):
         s = ttk.Style(self)

@@ -21,9 +21,13 @@ class Moteur(Base):
     collection          = Column(String, default="")
     ref_constructeur    = Column(String, default="")
     code_affaire        = Column(String, default="")
-    type_client         = Column(String, default="")
-    date_mise_service   = Column(String, default="")   # JJ/MM/AAAA
-    duree_garantie      = Column(String, default="")   # ex. "24" (mois)
+    type_client                 = Column(String, default="")
+    date_mise_service           = Column(String, default="")   # JJ/MM/AAAA
+    duree_garantie              = Column(String, default="")   # ex. "24" (mois)
+    client_utilisateur_nom      = Column(String, default="")
+    client_utilisateur_email    = Column(String, default="")
+    client_utilisateur_tel      = Column(String, default="")
+    client_utilisateur_adresse  = Column(String, default="")
     version             = Column(Integer, default=1)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
     updated_at          = Column(DateTime(timezone=True), server_default=func.now(),

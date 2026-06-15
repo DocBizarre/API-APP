@@ -55,13 +55,19 @@ def _get_dossiers_root() -> Path:
 
 
 DOSSIERS_PATH = _get_dossiers_root()
-LOGO_PATH = Path(__file__).parent / "assets" / "logo_ems.png"
+LOGO_PATH     = Path(__file__).parent / "assets" / "logo_ems.png"
+LOGO_CGV_PATH = Path(__file__).parent / "assets" / "logo_cgv.png"
 
-# Logo embarque (fallback si assets/logo_ems.png absent)
+# Logos embarqués (fallback si les fichiers assets/ sont absents)
 try:
     from .logo_data import LOGO_EMS_B64
 except ImportError:
     LOGO_EMS_B64 = ""
+
+try:
+    from .logo_data import LOGO_CGV_B64
+except ImportError:
+    LOGO_CGV_B64 = ""
 
 # Les 4 types officiels qui apparaissent comme cases a cocher dans l'en-tete
 TYPES_HEADER = ["Entretien", "Depannage", "Diagnostic", "Garantie"]
@@ -99,6 +105,50 @@ def _logo_data_uri():
     if LOGO_EMS_B64:
         return "data:image/png;base64," + LOGO_EMS_B64
     return ""
+
+
+def _logo_cgv_data_uri():
+    """Retourne le logo CGV (avec logos partenaires) en data:URI.
+    Priorité : logo_cgv.png > logo_ems.png > LOGO_CGV_B64 > LOGO_EMS_B64."""
+    if LOGO_CGV_PATH.is_file():
+        try:
+            b = LOGO_CGV_PATH.read_bytes()
+            return "data:image/png;base64," + base64.b64encode(b).decode("ascii")
+        except OSError:
+            pass
+    if LOGO_CGV_B64:
+        return "data:image/png;base64," + LOGO_CGV_B64
+    if LOGO_PATH.is_file():
+        try:
+            b = LOGO_PATH.read_bytes()
+            return "data:image/png;base64," + base64.b64encode(b).decode("ascii")
+        except OSError:
+            pass
+    if LOGO_EMS_B64:
+        return "data:image/png;base64," + LOGO_EMS_B64
+    return ""
+
+
+def apply_icon(win) -> None:
+    """Applique favicon.ico comme icône de fenêtre (barre de titre + taskbar)."""
+    import sys as _sys
+    # Taskbar Windows : force l'icône de l'exe au lieu de l'icône Python
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            u"EmeraudeMoteursSystèmes.EMS")
+    except Exception:
+        pass
+    # Barre de titre
+    try:
+        if getattr(_sys, "frozen", False):
+            win.iconbitmap(_sys.executable)
+        else:
+            ico = Path(__file__).resolve().parent.parent / "favicon.ico"
+            if ico.is_file():
+                win.iconbitmap(str(ico))
+    except Exception:
+        pass
 
 
 def _check(cond):
@@ -178,6 +228,74 @@ def _bloc_annexe_photos(photos_paths):
             '<div class="photo-grid">' + "\n".join(cartes) + '</div></div>')
 
 
+def _bloc_cgv():
+    """Génère la page Conditions Générales de Vente + logo partenaires."""
+    logo_uri = _logo_cgv_data_uri()
+    logo_html = (f'<img src="{logo_uri}" alt="EMS – Emeraude Moteurs Systemes" '
+                 f'style="max-width:340px;max-height:190px;">'
+                 if logo_uri else "")
+    return f"""
+<div class="cgv-page">
+  <div class="cgv-title">CONDITIONS GÉNÉRALES DE VENTE – EMERAUDE MOTEURS SYSTEMES</div>
+  <div class="cgv-body">
+  <p class="cgv-p">Le fait pour nos clients de passer commande à EMERAUDE MOTEURS SYSTEMES implique, en l'absence de contrat particulier ou d'un accord écrit valant contrat entre nos clients et EMERAUDE MOTEURS SYSTEMES, l'acceptation de nos conditions générales de vente ci-dessous énoncées.</p>
+
+  <div class="cgv-section">A • OFFRES</div>
+  <div class="cgv-sub">1 • Matériels</div>
+  <p class="cgv-p cgv-indent">a) <em>Caractéristiques</em> : les caractéristiques des produits proposés à la vente par EMERAUDE MOTEURS SYSTEMES lui sont communiquées par ses fournisseurs au moyen de documents mis à disposition. EMERAUDE MOTEURS SYSTEMES n'ayant pas compétence de contrôle de ceux-ci, ne peut donc pas être tenue pour responsable en cas d'erreur ou d'information erronée qui se serait introduite dans les documents techniques ou commerciaux des fabricants ou de ses propres documents.</p>
+  <p class="cgv-p cgv-indent">b) <em>Spécifications</em> : de même, EMERAUDE MOTEURS SYSTEMES ne peut pas être tenu pour responsable des conséquences qui pourraient survenir dans le cas de changements dans les spécifications des produits ou matériels qu'elle commercialise.</p>
+  <div class="cgv-sub">2 • Prix</div>
+  <p class="cgv-p">Les prix donnés par EMERAUDE MOTEURS SYSTEMES dans ses offres ou ses tarifs peuvent avoir pour bases des éléments de calcul dont les valeurs sont du ressort des autorités politiques, administratives, ou monétaires, donnant alors le caractère de force majeure autorisant EMERAUDE MOTEURS SYSTEMES à réajuster éventuellement ses offres et ses tarifs.</p>
+  <div class="cgv-sub">3 • Délais</div>
+  <p class="cgv-p">Sauf pour les marchandises disponibles sur stock et dans la limite de validité spécifiée dans nos offres, les délais indiqués dans celles-ci ne valent que pour information, les délais réels étant ceux confirmés par les fournisseurs d'EMERAUDE MOTEURS SYSTEMES le jour de réception de nos commandes, auxquels s'ajoutent les délais des transporteurs et affréteurs.</p>
+
+  <div class="cgv-section">B • COMMANDES</div>
+  <p class="cgv-p">Pour des raisons d'efficacité et de rapidité dans l'exécution des commandes de nos clients, seules les commandes dont les délais atteignent ou dépassent 8 jours ouvrables seront confirmées par EMERAUDE MOTEURS SYSTEMES. Pour certains matériels devant faire l'objet d'une homologation technique après installation, EMERAUDE MOTEURS SYSTEMES se réserve le droit de ne pas accepter de commande de ces matériels sans garantie satisfaisante d'obtention de cette homologation. Pour toutes opérations commerciales, EMERAUDE MOTEURS SYSTEMES se réserve le droit de refuser de livrer, sauf contre paiement avant expédition ou garantie satisfaisante.</p>
+
+  <div class="cgv-section">C • LIVRAISONS</div>
+  <div class="cgv-sub">1 • Délais</div>
+  <p class="cgv-p">Sauf stipulation contraire de nos clients clairement exprimée au moment de la commande, nos livraisons sont faites au fur et à mesure des disponibilités des matériels. EMERAUDE MOTEURS SYSTEMES ne peut être tenue pour responsable des retards ou de la non-exécution de ses livraisons du fait du mauvais temps, de grèves ou autres conflits du travail, du fait du prince, ou du cas de force majeure.</p>
+  <div class="cgv-sub">2 • Risques</div>
+  <p class="cgv-p">Nos marchandises, même expédiées franco de port, voyagent aux risques et périls du destinataire qui devra faire toutes réserves auprès du transporteur, seul responsable en cas de retard, vol, perte, avarie, c'est-à-dire de la bonne exécution de la prestation.</p>
+  <div class="cgv-sub">3 • Emballages</div>
+  <p class="cgv-p">Sauf stipulation contraire, nos emballages ne sont pas consignés et ne doivent donc pas nous être retournés, ni ne peuvent faire l'objet d'avoir ou de remise. Dans le cas d'un emballage consigné, celui-ci doit nous être retourné franco de port dans les 15 jours qui suivent la livraison. Passé ce délai, il sera facturé au prix indiqué sur le bordereau de consignation accompagnant la facture du matériel.</p>
+  <div class="cgv-sub">4 • Réclamation</div>
+  <p class="cgv-p">Pour être recevable, toute réclamation devra nous être adressée dans les 48 heures à réception des marchandises. La transformation, la modification de quelque manière que ce soit, ou la revente de marchandises livrées vaut renonciation à tout recours à l'encontre d'EMERAUDE MOTEURS SYSTEMES pour quelque raison que ce soit.</p>
+
+  <div class="cgv-section">D • FACTURATION</div>
+  <p class="cgv-p">La livraison des marchandises objet des commandes de nos clients déclenche l'édition de nos factures, qui sont établies suivant nos Conditions Générales de Vente objet des présentes, et les accords conclus avec nos clients préalablement à la commande. Les conditions de règlement figurant sur nos factures sont donc réputées non négociables.</p>
+
+  <div class="cgv-section">E • PAIEMENT</div>
+  <div class="cgv-sub">1 • Modalités de paiement</div>
+  <p class="cgv-p">Nos marchandises sont payables à l'échéance figurant sur nos factures, entendue comme date de décaissement chez l'acheteur. Il convient donc que l'acheteur prenne de lui-même ses dispositions pour nous faire parvenir son règlement en temps et en heure pour respecter cette date. C'est entre autre le cas des traites émises par nos soins qui doivent nous être retournées dûment acceptées dans les 48 heures ouvrables, comme stipulé par l'article 135 du code du commerce.</p>
+  <div class="cgv-sub">2 • Paiement anticipé</div>
+  <p class="cgv-p">Le paiement anticipé de nos factures, après accord de notre part, donnera lieu à un escompte au taux de 0.5 % par période entière d'un mois. L'obtention et le montant de cet acompte ne seront effectifs qu'après constat de la date réelle de règlement. En cas d'escompte pour paiement comptant ou anticipé, celui-ci fera l'objet soit d'une note de crédit, soit d'un crédit sur le compte du client, les deux cas étant assujettis au régime normal de la T.V.A.</p>
+  <div class="cgv-sub">3 • Retard ou défaut de paiement</div>
+  <p class="cgv-p">Tout retard de paiement entraînera : l'exigibilité immédiate de toutes les sommes restant dû quel que soit le mode et la date de règlement prévu. Le paiement d'un intérêt de retard, par périodes d'un mois entier, égal à une fois et demie l'intérêt légal en vigueur sans pouvoir dépasser le taux de l'usure, auquel s'ajoutera une indemnité de gestion légale à 15 % des sommes dues plafonnées à 70 euros. Cet intérêt, calculé à dater du premier jour de retard, est mis en œuvre dès réception d'une mise en demeure envoyée par lettre recommandée avec accusé de réception, et exigible dès l'émission de la facture de cet intérêt. Dans le cas où les sommes dues sont versées après la date de règlement mentionnée sur la facture, une indemnité forfaitaire pour frais de recouvrement d'un montant de 40 euros sera due en plus des pénalités de retard.</p>
+  <div class="cgv-sub">4 • Compensation des effets de commerce</div>
+  <p class="cgv-p">Sauf convention écrite contraire signée par le responsable financier d'EMERAUDE MOTEURS SYSTEMES, le client accepte expressément que la compensation puisse être effectuée à tout moment pour les créances et les dettes réciproques échues et exigibles dès que nous lui en notifierons l'information.</p>
+
+  <div class="cgv-section">F • RÉSERVE DE PROPRIÉTÉ</div>
+  <div class="cgv-sub">1 • Transfert de propriété</div>
+  <p class="cgv-p">Conformément au texte de loi n° 80.335 du 12 mai 1980 relative à la clause de réserve de propriété, les marchandises livrées restent la propriété d'EMERAUDE MOTEURS SYSTEMES jusqu'au complet paiement de leur prix principal et accessoires, paiement qui fera foi du transfert de propriété de ces marchandises d'EMERAUDE MOTEURS SYSTEMES à son client. Par contre, les risques de ces marchandises passent à la charge du client dès leur livraison. L'acheteur peut cependant revendre ou transformer ces marchandises dans le cadre de ses activités normales. Cette autorisation de revente est automatiquement retirée en cas de cessation de paiement de l'acheteur.</p>
+  <div class="cgv-sub">2 • Saisie</div>
+  <p class="cgv-p">En cas de saisie opérée par des tiers sur des marchandises livrées et facturées par EMERAUDE MOTEURS SYSTEMES mais non encore payées, l'acheteur est tenu d'en informer immédiatement EMERAUDE MOTEURS SYSTEMES.</p>
+  <div class="cgv-sub">3 • Acomptes</div>
+  <p class="cgv-p">EMERAUDE MOTEURS SYSTEMES se réserve le droit de conserver tout acompte, avoir, trop perçus, ou autre somme qui viendrait à se trouver dans sa comptabilité au crédit de son client se trouvant en défaut de paiement, ces sommes seraient alors déduites du règlement final à l'exception des éventuels intérêts et pénalités de retard.</p>
+
+  <div class="cgv-section">G • GARANTIES</div>
+  <p class="cgv-p">Tout défaut de matière ou de vice de fabrication reconnue dans nos fournitures ne peut donner lieu qu'au remplacement pur et simple des pièces défectueuses par les services techniques correspondant au constructeur des matériels et aux frais de montage et démontage du moteur. La durée de cette garantie est de 12 mois à compter de la date d'achat. La garantie ne s'applique qu'au matériel distribué par EMERAUDE MOTEURS SYSTEMES. Tout retour de moteurs ou de pièces détachées doit être effectué en port payé par l'acheteur. La garantie est refusée par EMERAUDE MOTEURS SYSTEMES dans les cas suivants : lorsque les pièces d'origine auront été remplacées par des pièces ne provenant pas d'EMERAUDE MOTEURS SYSTEMES ; en cas de modification du matériel ; lorsque les avaries seront dues à une mauvaise utilisation du moteur, à un gasoil non conforme ou pollué, à un défaut de montage et/ou au non-respect des préconisations d'installations, à tout évènement extérieur (engagement d'hélice, projection d'eau de mer, travaux de soudure…), au non-respect des conditions d'entretien et de maintenance, à la négligence de l'utilisateur ; lorsque les réparations auront été effectuées en dehors du réseau EMERAUDE MOTEURS SYSTEMES. Toutefois, en cas de non-paiement total ou partiel de ses factures EMERAUDE MOTEURS SYSTEMES ne sera pas tenu à cette garantie, le contrat de vente n'étant pas complètement respecté et le transfert de propriété non effectif. En aucun cas EMERAUDE MOTEURS SYSTEMES ne peut-être leur responsable des pertes d'exploitations occasionnées par des pannes survenues sur le matériel en cours de garanties.</p>
+
+  <div class="cgv-section">H • ATTRIBUTION DE COMPÉTENCE</div>
+  <p class="cgv-p">Il est expressément spécifié que tout litige pouvant se révéler entre EMERAUDE MOTEURS SYSTEMES et un de ses clients au cours d'une opération relevant d'un des thèmes énoncés ci-dessus sera du ressort du seul Tribunal de Commerce de Saint-Malo.</p>
+  </div><!-- /cgv-body -->
+
+  <div class="cgv-logo-wrap">
+    {logo_html}
+  </div>
+</div>"""
+
+
 def _build_html(inv, client=None, moteur=None, photos_annexe=None,
                 for_pdf=False):
     """
@@ -212,16 +330,52 @@ def _build_html(inv, client=None, moteur=None, photos_annexe=None,
     tel_demandeur = _g(inv, "telephone_demandeur")
 
     # Equipement (moteur principal)
-    navire = _g(moteur, "navire") or _g(inv, "navire")
-    machine = _g(moteur, "machine") or _g(inv, "machine")
-    type_mot = _g(moteur, "type_moteur") or _g(inv, "type_moteur")
-    num_serie = _g(moteur, "num_serie") or _g(inv, "num_serie")
-    date_svc = _g(moteur, "date_mise_service") or _g(inv, "date_mise_service")
+    navire    = _g(moteur, "navire")           or _g(inv, "navire")
+    machine   = _g(moteur, "machine")          or _g(inv, "machine")
+    type_mot  = _g(moteur, "type_moteur")      or _g(inv, "type_moteur")
+    num_serie = _g(moteur, "num_serie")        or _g(inv, "num_serie")
+    date_svc  = _g(moteur, "date_mise_service") or _g(inv, "date_mise_service")
     nb_heures = _g(inv, "nb_heures_fct")
-    marque = _g(moteur, "marque") or _g(inv, "marque")
+    marque    = _g(moteur, "marque")           or _g(inv, "marque")
     ref_const = _g(moteur, "ref_constructeur") or _g(inv, "ref_constructeur")
-    tech_ref = ref_const or type_mot or machine
-    type_complet = f"{marque} {tech_ref}".strip() if marque else tech_ref
+
+    def _moteur_bloc(label, nav, mac, mar, ns, tmot, ref, nbh, svc):
+        """Génère le HTML d'un bloc moteur — template unique partagé."""
+        return f"""
+<table class="bloc-info">
+  <colgroup>
+    <col style="width:28%"><col style="width:22%">
+    <col style="width:28%"><col style="width:22%">
+  </colgroup>
+  <tr>
+    <td colspan="4" style="background:#eef2f7;font-weight:700;font-size:9.5px;
+        color:#002b5c;padding:3px 8px;letter-spacing:.3px;">{label}</td>
+  </tr>
+  <tr>
+    <td class="lbl">Navire / Site</td>
+    <td>{_esc(nav)}</td>
+    <td class="lbl">Type machine</td>
+    <td>{_esc(mac)}</td>
+  </tr>
+  <tr>
+    <td class="lbl">Marque moteur</td>
+    <td>{_esc(mar)}</td>
+    <td class="lbl">N&deg; de serie</td>
+    <td><strong>{_esc(ns)}</strong></td>
+  </tr>
+  <tr>
+    <td class="lbl">Type moteur</td>
+    <td>{_esc(tmot)}</td>
+    <td class="lbl">R&eacute;f. constructeur</td>
+    <td>{_esc(ref)}</td>
+  </tr>
+  <tr>
+    <td class="lbl">Nb heures de fonctionnement</td>
+    <td>{_esc(nbh)}</td>
+    <td class="lbl">Date mise en service</td>
+    <td>{_esc(svc)}</td>
+  </tr>
+</table>"""
 
     # Moteurs supplémentaires : parsing JSON avant utilisation
     try:
@@ -229,43 +383,17 @@ def _build_html(inv, client=None, moteur=None, photos_annexe=None,
     except (json.JSONDecodeError, TypeError):
         extra_moteurs = []
 
-    # Moteurs supplémentaires → bloc HTML inséré après le tableau principal
-    _extra_moteurs_html = ""
-    for _i, _em in enumerate(extra_moteurs, 2):
-        _ns   = _g(_em, "num_serie")
-        _nav  = _g(_em, "navire")
-        _mac  = _g(_em, "machine")
-        _mar  = _g(_em, "marque")
-        _ref  = _g(_em, "ref_constructeur") or _g(_em, "type_moteur")
-        _type = f"{_mar} {_ref}".strip() if _mar else _ref
-        _svc  = _g(_em, "date_mise_service")
-        if not _ns:
-            continue
-        _extra_moteurs_html += f"""
-<table class="bloc-info" style="margin-top:3px;">
-  <tr>
-    <td colspan="4" style="background:#eef2f7;font-weight:700;font-size:9.5px;
-        color:#002b5c;padding:3px 8px;letter-spacing:.3px;">
-      MOTEUR {_i}
-    </td>
-  </tr>
-  <tr>
-    <td class="lbl">N&deg; de serie</td>
-    <td><strong>{_esc(_ns)}</strong></td>
-    <td class="lbl">Navire / Site</td>
-    <td>{_esc(_nav)}</td>
-  </tr>
-  <tr>
-    <td class="lbl">Marque / Modele</td>
-    <td>{_esc(_type)}</td>
-    <td class="lbl">Mise en service</td>
-    <td>{_esc(_svc)}</td>
-  </tr>
-  <tr>
-    <td class="lbl">Type machine</td>
-    <td colspan="3">{_esc(_mac)}</td>
-  </tr>
-</table>"""
+    _extra_moteurs_html = "".join(
+        _moteur_bloc(
+            f"MOTEUR {_i}",
+            _g(_em, "navire"), _g(_em, "machine"), _g(_em, "marque"),
+            _g(_em, "num_serie"), _g(_em, "type_moteur"),
+            _g(_em, "ref_constructeur"), _g(_em, "nb_heures_fct"),
+            _g(_em, "date_mise_service"),
+        )
+        for _i, _em in enumerate(extra_moteurs, 2)
+        if _g(_em, "num_serie")
+    )
 
     # Options
     opt_diag = _g(inv, "outil_diagnostic", 0)
@@ -369,7 +497,7 @@ def _build_html(inv, client=None, moteur=None, photos_annexe=None,
             t_p  = _esc(tech.get("temps_preparation", ""))
             t_r  = _esc(tech.get("temps_rangement", ""))
             rows_html += (
-                f'<tr><td class="lbl">Trajet aller-retour</td>'
+                f'<tr><td class="lbl">Temps de trajet</td>'
                 f'<td class="val">{t_ar}</td>'
                 f'<td class="lbl">Frais de repas</td>'
                 f'<td class="val">{_check(tech.get("frais_repas", 0))}</td></tr>'
@@ -473,14 +601,7 @@ def _build_html(inv, client=None, moteur=None, photos_annexe=None,
     urg_cls = {"Critique": "crit", "Urgente": "urg",
                "Normale": "norm"}.get(urgence, "norm")
 
-    type_cases = ""
-    for t in TYPES_HEADER:
-        coche = "&#9746;" if t.lower() == (type_inv or "").lower() else "&#9744;"
-        type_cases += f'<div class="type-row"><span class="cb">{coche}</span> {t}</div>\n'
-
-    type_other = ""
-    if type_inv and type_inv not in TYPES_HEADER:
-        type_other = f'<div class="type-row"><span class="cb">&#9746;</span> {_esc(type_inv)}</div>'
+    type_inv_display = _esc(type_inv) if type_inv else "—"
 
     logo_uri = _logo_data_uri()
     logo_html = f'<img src="{logo_uri}" alt="EMS">' if logo_uri else '<div class="logo-fallback">EMS</div>'
@@ -562,6 +683,8 @@ td, th {{ border: 1px solid #b8c0c9; padding: 4px 6px; vertical-align: top; }}
 .header-right {{ padding: 4px 0 4px 8px; }}
 .header-right .titre {{ font-weight: bold; font-size: 11px; margin-bottom: 4px;
                          color: #002b5c; }}
+.type-selected {{ font-size: 13px; font-weight: 700; color: #002b5c;
+    padding: 6px 0 2px 0; }}
 .type-row {{ font-size: 10.5px; padding: 1px 0; color: #1a2332;
              white-space: nowrap; }}
 .type-row .cb {{ font-family: "Segoe UI Symbol", Arial, sans-serif;
@@ -700,6 +823,36 @@ tr, .sign-box {{ page-break-inside: avoid; break-inside: avoid; }}
 .photo-legend {{ font-size: 9px; color: #6b7785; margin-top: 4px;
                  word-break: break-all; }}
 
+/* === PAGE CGV === */
+.cgv-page {{
+  page-break-before: always; break-before: page;
+  font-size: 7.8px; line-height: 1.38; color: #1a2332;
+}}
+.cgv-title {{
+  font-size: 9px; font-weight: 700; color: #002b5c;
+  text-align: center; margin-bottom: 6px; padding-bottom: 4px;
+  border-bottom: 2px solid #002b5c; letter-spacing: 0.3px;
+}}
+.cgv-body {{
+  column-count: 2; column-gap: 12px;
+  column-rule: 1px solid #d0d4d9;
+}}
+.cgv-section {{
+  font-size: 8px; font-weight: 700; color: #002b5c;
+  margin: 6px 0 1px; text-transform: uppercase; letter-spacing: 0.2px;
+  break-before: avoid; page-break-before: avoid;
+}}
+.cgv-sub {{
+  font-size: 7.8px; font-weight: 600; color: #1a2332;
+  margin: 3px 0 1px;
+}}
+.cgv-p {{ margin: 0 0 3px; text-align: justify; }}
+.cgv-indent {{ padding-left: 10px; }}
+.cgv-logo-wrap {{
+  margin-top: 10px; text-align: center;
+  padding-top: 8px; border-top: 1px solid #b8c0c9;
+}}
+
 /* Bouton imprimer (HTML web uniquement) */
 .print-btn {{ position: fixed; top: 14px; right: 14px;
               background: #002b5c; color: #fff; border: 2px solid #fff;
@@ -767,8 +920,7 @@ tr, .sign-box {{ page-break-inside: avoid; break-inside: avoid; }}
   </div>
   <div class="header-right">
     <div class="titre">Type d'intervention :</div>
-    {type_cases}
-    {type_other}
+    <div class="type-selected">{type_inv_display}</div>
   </div>
 </div>
 </div>
@@ -824,26 +976,7 @@ tr, .sign-box {{ page-break-inside: avoid; break-inside: avoid; }}
 
 <!-- ═══ SECTION 3 : EQUIPEMENT ═══ -->
 <div class="section-header section-header-green">EQUIPEMENT</div>
-<table class="bloc-info">
-  <tr>
-    <td class="lbl">Navire / Site</td>
-    <td>{_esc(navire)}</td>
-    <td class="lbl">Type machine</td>
-    <td>{_esc(machine)}</td>
-  </tr>
-  <tr>
-    <td class="lbl">Marque / Modele moteur</td>
-    <td>{_esc(type_complet)}</td>
-    <td class="lbl">N&deg; de serie</td>
-    <td><strong>{_esc(num_serie)}</strong></td>
-  </tr>
-  <tr>
-    <td class="lbl">Nb heures de fonctionnement</td>
-    <td>{_esc(nb_heures)}</td>
-    <td class="lbl">Date mise en service</td>
-    <td>{_esc(date_svc)}</td>
-  </tr>
-</table>
+{_moteur_bloc("MOTEUR 1", navire, machine, marque, num_serie, type_mot, ref_const, nb_heures, date_svc)}
 {_extra_moteurs_html}
 <!-- Classifications -->
 <div class="classif">
@@ -863,7 +996,7 @@ tr, .sign-box {{ page-break-inside: avoid; break-inside: avoid; }}
   <span class="opt"><strong>Memoriser les donnees :</strong>
     <span class="cb">{_check(mem_avant)}</span> avant
     <span class="cb">{_check(mem_apres)}</span> apres</span>
-  <span class="opt"><strong>PHOTOS :</strong>
+  <span class="opt"><strong>Photos :</strong>
     <span class="cb">{_check(ph_avant)}</span> avant
     <span class="cb">{_check(ph_apres)}</span> apres</span>
 </div>
@@ -947,6 +1080,7 @@ tr, .sign-box {{ page-break-inside: avoid; break-inside: avoid; }}
 </div>
 </div>
 {_bloc_annexe_photos(photos_annexe)}
+{_bloc_cgv()}
 </body>
 </html>"""
     return html

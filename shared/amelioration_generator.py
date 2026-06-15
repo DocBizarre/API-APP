@@ -9,10 +9,29 @@ from datetime import datetime
 from .bon_generator import _esc, _logo_data_uri, ouvrir_fichier
 
 import sys as _sys
-if getattr(_sys, "frozen", False):
-    AMELIO_DIR = Path(_sys.executable).parent / "ameliorations"
-else:
-    AMELIO_DIR = Path(__file__).parent / "ameliorations"
+
+def _get_amelio_root() -> Path:
+    from configparser import ConfigParser
+    base = (Path(_sys.executable).parent if getattr(_sys, "frozen", False)
+            else Path(__file__).resolve().parent.parent)
+    for cfg in (base / "config.ini",
+                Path(__file__).resolve().parent.parent / "config.ini"):
+        if cfg.is_file():
+            cp = ConfigParser()
+            cp.read(cfg, encoding="utf-8")
+            v = cp.get("files", "ameliorations_root", fallback="").strip()
+            if v:
+                p = Path(v); p.mkdir(parents=True, exist_ok=True); return p
+            v = cp.get("files", "dossiers_root", fallback="").strip()
+            if v:
+                p = Path(v).parent / "ameliorations"
+                p.mkdir(parents=True, exist_ok=True); return p
+            break
+    p = base / "ameliorations"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+AMELIO_DIR = _get_amelio_root()
 
 _PRIO_CLS = {"Basse": "p-basse", "Moyenne": "p-moy",
              "Haute": "p-haute", "Critique": "p-crit"}

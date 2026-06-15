@@ -128,6 +128,10 @@ class InterventionOut(BaseModel):
     navire:                 str = ""
     num_serie:              str = ""
     marque:                 str = ""
+    machine:                str = ""
+    type_moteur:            str = ""
+    date_mise_service:      str = ""
+    ref_constructeur:       str = ""
     type_intervention:      str
     urgence:                str
     statut:                 str

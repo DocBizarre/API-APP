@@ -25,11 +25,29 @@ from typing import Dict
 
 # ─── Configuration ───────────────────────────────────────────────────────────
 import sys as _sys
-_HERE = Path(__file__).resolve().parent
-if getattr(_sys, "frozen", False):
-    _DOSSIERS_BASE = Path(_sys.executable).parent / "garanties"
-else:
-    _DOSSIERS_BASE = _HERE / "dossiers"
+
+def _get_garanties_root() -> Path:
+    from configparser import ConfigParser
+    base = (Path(_sys.executable).parent if getattr(_sys, "frozen", False)
+            else Path(__file__).resolve().parent.parent)
+    for cfg in (base / "config.ini",
+                Path(__file__).resolve().parent.parent / "config.ini"):
+        if cfg.is_file():
+            cp = ConfigParser()
+            cp.read(cfg, encoding="utf-8")
+            v = cp.get("files", "garanties_root", fallback="").strip()
+            if v:
+                p = Path(v); p.mkdir(parents=True, exist_ok=True); return p
+            v = cp.get("files", "dossiers_root", fallback="").strip()
+            if v:
+                p = Path(v).parent / "garanties"
+                p.mkdir(parents=True, exist_ok=True); return p
+            break
+    p = base / "garanties"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+_DOSSIERS_BASE = _get_garanties_root()
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────

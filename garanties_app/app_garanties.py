@@ -42,6 +42,7 @@ for p in (_ROOT, _HERE):
 try:
     from ems_client import api as db
     from shared import garantie_generator as gargen
+    from shared.bon_generator import apply_icon
 except ImportError as e:
     import tkinter as _tk
     from tkinter import messagebox as _mb
@@ -409,6 +410,8 @@ class SearchableCombobox(tk.Frame):
 class GarantiesApp(tk.Tk):
     def __init__(self):
         super().__init__()
+        self.withdraw()
+        apply_icon(self)
         self.title("EMS – Gestion des Garanties")
         self.geometry("1180x760")
         self.minsize(900, 560)
@@ -417,10 +420,12 @@ class GarantiesApp(tk.Tk):
         db.init_db()  # garantit que les tables existent (base partagée)
         self._build()
         self.refresh()
+        self.update_idletasks()
+        self.deiconify()
+        self.state("zoomed")
 
     def _init_styles(self):
         s = ttk.Style(self)
-        self.state("zoomed")
         try:
             s.theme_use("clam")
         except tk.TclError:

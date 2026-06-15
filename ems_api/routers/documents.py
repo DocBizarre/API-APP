@@ -34,17 +34,14 @@ def _intervention_to_dict(inv: Intervention) -> dict:
             "client_tel":     inv.client.telephone,
             "client_adresse": inv.client.adresse,
         })
-    if inv.moteur:
-        d.update({
-            "moteur_num_serie":    inv.moteur.num_serie,
-            "moteur_marque":       inv.moteur.marque,
-            "moteur_ref":          inv.moteur.ref_constructeur,
-            "moteur_navire":       inv.moteur.navire,
-            "moteur_machine":      inv.moteur.machine,
-            "moteur_date_service": inv.moteur.date_mise_service,
-            "moteur_garantie_mois": inv.moteur.duree_garantie,
-        })
     return d
+
+
+def _moteur_to_dict(inv: Intervention) -> dict | None:
+    """Retourne un dict complet du moteur lié à l'intervention, ou None."""
+    if not inv.moteur:
+        return None
+    return {c.name: getattr(inv.moteur, c.name) for c in inv.moteur.__table__.columns}
 
 
 # ─── HTML ────────────────────────────────────────────────────────────────────
@@ -60,7 +57,7 @@ def bon_html(inv_id: str, db: Session = Depends(get_db)):
         raise HTTPException(501,
                             f"Générateur indisponible : {e}. "
                             f"Vérifiez que shared/ est accessible.")
-    return generer_bon_html(_intervention_to_dict(inv))
+    return generer_bon_html(_intervention_to_dict(inv), moteur=_moteur_to_dict(inv))
 
 
 @router.get("/interventions/{inv_id}/document.pdf")
@@ -80,7 +77,7 @@ def bon_pdf(inv_id: str, db: Session = Depends(get_db)):
                             "Playwright n'est pas installé sur le serveur. "
                             "Installer : pip install playwright "
                             "&& playwright install chromium")
-    html = generer_bon_html(_intervention_to_dict(inv))
+    html = generer_bon_html(_intervention_to_dict(inv), moteur=_moteur_to_dict(inv))
     import tempfile
     with tempfile.NamedTemporaryFile(suffix=".html", delete=False,
                                       mode="w", encoding="utf-8") as f:

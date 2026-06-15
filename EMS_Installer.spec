@@ -1,17 +1,18 @@
-
 # -*- mode: python ; coding: utf-8 -*-
-import os
 
 a = Analysis(
-    ['pieces_app\\app_pieces.py'],
-    pathex=[SPECPATH],
+    ['ems_installer.py'],
+    pathex=[],
     binaries=[],
-    datas=[('config.ini', '.')],
-    hiddenimports=['ems_client.api', 'ems_client.sync_config'],
+    datas=[],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        'numpy', 'PIL', 'weasyprint', 'psutil', 'win32com',
+        'setuptools', 'pkg_resources',
+    ],
     noarchive=False,
     optimize=0,
 )
@@ -23,7 +24,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='EMS_Pieces',
+    name='EMS_Installer',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

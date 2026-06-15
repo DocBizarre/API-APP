@@ -1,10 +1,19 @@
-"""Endpoints REST pour les Interventions (+ signatures + notifications)."""
+"""Endpoints REST pour les Interventions (+ signatures + notifications).
+
+MODIFICATIONS (perf) :
+- selectinload(client, moteur) sur tous les endpoints de liste : supprime
+  le N+1 (avant : 2 requetes SQL supplementaires PAR intervention a cause
+  des acces lazy inv.client / inv.moteur dans _to_out).
+- Fuseau Europe/Paris via zoneinfo (gere automatiquement heure d'ete/hiver,
+  l'ancien timezone(timedelta(hours=1)) etait faux 6 mois par an).
+  Sous Windows : `pip install tzdata` (a ajouter au requirements.txt).
+"""
 from typing import List, Optional
 from uuid import uuid4
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import or_
 
 from ..database import get_db
@@ -15,11 +24,24 @@ from ..schemas.intervention import (
 from ..services.numerotation import next_num_bon
 
 
-# Heure Paris (sans dépendance externe)
-PARIS = timezone(timedelta(hours=1))
+# Heure Paris — zoneinfo gere l'heure d'ete/hiver. Necessite le paquet
+# `tzdata` sous Windows. Fallback UTC+1 fixe si tzdata absent.
+try:
+    from zoneinfo import ZoneInfo
+    PARIS = ZoneInfo("Europe/Paris")
+except Exception:
+    from datetime import timezone, timedelta
+    PARIS = timezone(timedelta(hours=1))
 
 
 router = APIRouter(prefix="/interventions", tags=["interventions"])
+
+
+# Chargement anticipe des relations utilisees par _to_out : evite le N+1.
+_EAGER = (
+    selectinload(Intervention.client),
+    selectinload(Intervention.moteur),
+)
 
 
 def _to_out(inv: Intervention) -> dict:
@@ -44,6 +66,10 @@ def _to_out(inv: Intervention) -> dict:
     d["navire"] = inv.moteur.navire if inv.moteur else ""
     d["num_serie"] = inv.moteur.num_serie if inv.moteur else ""
     d["marque"] = inv.moteur.marque if inv.moteur else ""
+    d["machine"] = inv.moteur.machine if inv.moteur else ""
+    d["type_moteur"] = inv.moteur.type_moteur if inv.moteur else ""
+    d["date_mise_service"] = inv.moteur.date_mise_service if inv.moteur else ""
+    d["ref_constructeur"] = inv.moteur.ref_constructeur if inv.moteur else ""
     return d
 
 
@@ -54,7 +80,7 @@ def list_interventions(
     search: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    q = db.query(Intervention)
+    q = db.query(Intervention).options(*_EAGER)
     if statut and statut != "Tous":
         q = q.filter(Intervention.statut == statut)
     if urgence and urgence != "Toutes":
@@ -62,10 +88,42 @@ def list_interventions(
     if search:
         like = f"%{search}%"
         q = q.outerjoin(Client).outerjoin(Moteur).filter(
-            or_(Intervention.num_bon.ilike(like),
+            or_(
+                # Intervention – identifiants
+                Intervention.num_bon.ilike(like),
+                Intervention.num_commande_client.ilike(like),
+                Intervention.type_intervention.ilike(like),
+                Intervention.date_creation.ilike(like),
+                # Intervention – personnes
                 Intervention.technicien.ilike(like),
+                Intervention.nom_signataire.ilike(like),
+                Intervention.email_signataire.ilike(like),
+                Intervention.telephone_signataire.ilike(like),
+                Intervention.nom_demandeur.ilike(like),
+                Intervention.email_demandeur.ilike(like),
+                Intervention.telephone_demandeur.ilike(like),
+                # Intervention – localisation & textes
+                Intervention.lieu_intervention.ilike(like),
+                Intervention.demande_client.ilike(like),
+                Intervention.constat.ilike(like),
+                Intervention.travaux.ilike(like),
+                Intervention.informations.ilike(like),
+                Intervention.preconisation_text.ilike(like),
+                Intervention.commentaire.ilike(like),
+                Intervention.marque.ilike(like),
+                Intervention.description.ilike(like),
+                # Client
                 Client.nom.ilike(like),
-                Moteur.num_serie.ilike(like))
+                Client.contact.ilike(like),
+                Client.adresse.ilike(like),
+                # Moteur
+                Moteur.num_serie.ilike(like),
+                Moteur.navire.ilike(like),
+                Moteur.machine.ilike(like),
+                Moteur.type_moteur.ilike(like),
+                Moteur.marque.ilike(like),
+                Moteur.ref_constructeur.ilike(like),
+            )
         )
     q = q.order_by(Intervention.created_at.desc())
     return [_to_out(i) for i in q.all()]
@@ -76,6 +134,7 @@ def list_urgentes(limit: int = Query(10, ge=1, le=100),
                   db: Session = Depends(get_db)):
     """Interventions urgentes/critiques en cours."""
     q = (db.query(Intervention)
+         .options(*_EAGER)
          .filter(Intervention.urgence.in_(("Urgente", "Critique")))
          .filter(Intervention.statut == "En cours")
          .order_by(Intervention.created_at.desc())
@@ -88,6 +147,7 @@ def list_non_notifies(limit: int = Query(50, ge=1, le=500),
                        db: Session = Depends(get_db)):
     """Interventions en cours dont client OU technicien n'est pas notifié."""
     q = (db.query(Intervention)
+         .options(*_EAGER)
          .filter(Intervention.statut == "En cours")
          .filter((Intervention.client_notifie == 0) |
                  (Intervention.tech_notifie == 0))
@@ -99,7 +159,11 @@ def list_non_notifies(limit: int = Query(50, ge=1, le=500),
 @router.get("/by-moteur/{moteur_id}", response_model=List[InterventionOut])
 def list_for_moteur(moteur_id: str, db: Session = Depends(get_db)):
     q = (db.query(Intervention)
-         .filter(Intervention.moteur_id == moteur_id)
+         .options(*_EAGER)
+         .filter(or_(
+             Intervention.moteur_id == moteur_id,
+             Intervention.moteurs_supplementaires_json.like(f'%"id": "{moteur_id}"%'),
+         ))
          .order_by(Intervention.created_at.desc()))
     return [_to_out(i) for i in q.all()]
 

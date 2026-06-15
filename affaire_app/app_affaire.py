@@ -23,6 +23,7 @@ for p in (_ROOT, _HERE):
 
 try:
     from ems_client import api as db
+    from shared.bon_generator import apply_icon
 except ImportError as e:
     import tkinter as _tk
     from tkinter import messagebox as _mb
@@ -968,6 +969,8 @@ class SearchableCombobox(tk.Frame):
 class AffaireApp(tk.Tk):
     def __init__(self):
         super().__init__()
+        self.withdraw()
+        apply_icon(self)
         self.title("EMS – Affaires")
         self.geometry("1050x680")
         self.configure(bg=C["bg"])
@@ -975,6 +978,8 @@ class AffaireApp(tk.Tk):
         self._build_toolbar()
         self._build_list()
         self._load()
+        self.update_idletasks()
+        self.deiconify()
 
     def _build_header(self):
         head = tk.Frame(self, bg=C["header"], height=60)
