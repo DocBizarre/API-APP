@@ -1,0 +1,1407 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EMS — Suivi d'Affaires</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary: #1e3a5f;
+  --primary-light: #2a5298;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --success: #059669;
+  --success-bg: #d1fae5;
+  --warning: #d97706;
+  --warning-bg: #fef3c7;
+  --danger: #dc2626;
+  --danger-bg: #fee2e2;
+  --info: #0891b2;
+  --info-bg: #cffafe;
+  --gray: #6b7280;
+  --gray-bg: #f3f4f6;
+  --surface: #f8fafc;
+  --card: #ffffff;
+  --border: #e2e8f0;
+  --border-focus: #93c5fd;
+  --text: #111827;
+  --text-muted: #6b7280;
+  --text-light: #9ca3af;
+  --sidebar-w: 260px;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-md: 0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.06);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,.1), 0 4px 6px rgba(0,0,0,.05);
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:'Inter',sans-serif;font-size:14px;color:var(--text);background:var(--surface)}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,textarea,select{font-family:inherit;font-size:14px}
+a{color:inherit;text-decoration:none}
+
+/* ── Layout ── */
+#app{display:flex;height:100vh;overflow:hidden}
+
+/* ── Sidebar ── */
+#sidebar{
+  width:var(--sidebar-w);flex-shrink:0;
+  background:var(--primary);color:#fff;
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+#sidebar-header{padding:20px 16px 16px;border-bottom:1px solid rgba(255,255,255,.1)}
+#sidebar-header .logo{font-size:18px;font-weight:700;letter-spacing:-.3px}
+#sidebar-header .logo span{color:#60a5fa}
+#sidebar-header .subtitle{font-size:11px;color:rgba(255,255,255,.5);margin-top:2px;text-transform:uppercase;letter-spacing:.5px}
+
+#sidebar-search{padding:12px 12px 8px}
+#sidebar-search input{
+  width:100%;padding:7px 10px;border:none;border-radius:6px;
+  background:rgba(255,255,255,.12);color:#fff;font-size:13px;
+  outline:none;transition:background .2s
+}
+#sidebar-search input::placeholder{color:rgba(255,255,255,.4)}
+#sidebar-search input:focus{background:rgba(255,255,255,.2)}
+
+#sidebar-filters{padding:4px 8px 4px}
+.filter-chip{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:4px 10px;border-radius:20px;font-size:11px;font-weight:500;
+  border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.7);
+  background:transparent;margin:2px;cursor:pointer;transition:all .15s
+}
+.filter-chip.active,.filter-chip:hover{background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.3)}
+.filter-chip .dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+
+#affaire-list{flex:1;overflow-y:auto;padding:8px}
+#affaire-list::-webkit-scrollbar{width:4px}
+#affaire-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:2px}
+
+.sidebar-item{
+  padding:10px 10px;border-radius:6px;cursor:pointer;
+  transition:background .15s;margin-bottom:2px;
+}
+.sidebar-item:hover{background:rgba(255,255,255,.08)}
+.sidebar-item.active{background:rgba(255,255,255,.15)}
+.sidebar-item .num{font-size:11px;font-weight:600;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.3px}
+.sidebar-item .name{font-size:13px;font-weight:500;color:#fff;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sidebar-item .meta{display:flex;align-items:center;gap:6px;margin-top:4px}
+.sidebar-item .client-tag{font-size:11px;color:rgba(255,255,255,.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.s-badge{font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;flex-shrink:0}
+.s-badge.en-cours{background:#2563eb;color:#fff}
+.s-badge.en-attente{background:#d97706;color:#fff}
+.s-badge.clos{background:#059669;color:#fff}
+.s-badge.annule{background:#6b7280;color:#fff}
+
+.sidebar-item .progress-mini{height:2px;background:rgba(255,255,255,.15);border-radius:2px;margin-top:6px}
+.sidebar-item .progress-mini-fill{height:100%;border-radius:2px;background:#60a5fa;transition:width .3s}
+
+#sidebar-footer{padding:12px;border-top:1px solid rgba(255,255,255,.1)}
+#btn-new-affaire{
+  width:100%;padding:9px;border:none;border-radius:6px;
+  background:#2563eb;color:#fff;font-weight:600;font-size:13px;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  transition:background .15s
+}
+#btn-new-affaire:hover{background:#1d4ed8}
+.sidebar-empty{padding:24px 12px;text-align:center;color:rgba(255,255,255,.35);font-size:13px}
+
+/* ── Main ── */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── Top bar ── */
+#topbar{
+  background:var(--card);border-bottom:1px solid var(--border);
+  padding:0 24px;height:56px;display:flex;align-items:center;gap:12px;
+  flex-shrink:0;
+}
+#topbar h1{font-size:16px;font-weight:600;flex:1}
+.topbar-btn{
+  padding:7px 14px;border-radius:6px;border:1px solid var(--border);
+  background:var(--card);color:var(--text);font-weight:500;
+  display:inline-flex;align-items:center;gap:6px;transition:all .15s
+}
+.topbar-btn:hover{background:var(--surface);border-color:#cbd5e1}
+.topbar-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.topbar-btn.primary:hover{background:var(--accent-hover)}
+.topbar-btn.danger{color:var(--danger);border-color:#fca5a5}
+.topbar-btn.danger:hover{background:var(--danger-bg)}
+
+/* ── Content area ── */
+#content{flex:1;overflow-y:auto;padding:24px}
+#content::-webkit-scrollbar{width:6px}
+#content::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+
+/* ── Dashboard ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-bottom:24px}
+.kpi-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:16px;display:flex;flex-direction:column;gap:6px;box-shadow:var(--shadow)
+}
+.kpi-card .kpi-label{font-size:12px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px}
+.kpi-card .kpi-value{font-size:28px;font-weight:700;line-height:1}
+.kpi-card .kpi-sub{font-size:12px;color:var(--text-muted)}
+.kpi-card.blue .kpi-value{color:var(--accent)}
+.kpi-card.orange .kpi-value{color:var(--warning)}
+.kpi-card.green .kpi-value{color:var(--success)}
+.kpi-card.gray .kpi-value{color:var(--gray)}
+
+.section-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.section-title .count{font-size:12px;font-weight:500;color:var(--text-muted);background:var(--gray-bg);padding:1px 8px;border-radius:10px}
+
+/* Affaire detail panels */
+.detail-grid{display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start}
+@media(max-width:900px){.detail-grid{grid-template-columns:1fr}}
+
+.panel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.panel-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;background:#fafbfc}
+.panel-header .panel-title{font-size:13px;font-weight:600;flex:1}
+.panel-body{padding:16px}
+
+/* Info grid */
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.info-field label{display:block;font-size:11px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px}
+.info-field .val{font-size:14px;color:var(--text);word-break:break-word}
+.info-field .val.empty{color:var(--text-light);font-style:italic}
+.info-field.full{grid-column:1/-1}
+
+/* Editable field */
+.field-edit{position:relative}
+.field-edit input,.field-edit select,.field-edit textarea{
+  width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+  background:#fff;color:var(--text);outline:none;transition:border-color .15s
+}
+.field-edit input:focus,.field-edit select:focus,.field-edit textarea:focus{border-color:var(--border-focus);box-shadow:0 0 0 3px rgba(147,197,253,.3)}
+.field-edit textarea{resize:vertical;min-height:80px}
+
+/* Status badge */
+.status-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;
+}
+.status-badge::before{content:'';width:6px;height:6px;border-radius:50%;display:inline-block}
+.status-badge.en-cours{background:#dbeafe;color:#1d4ed8}.status-badge.en-cours::before{background:#2563eb}
+.status-badge.en-attente{background:#fef3c7;color:#92400e}.status-badge.en-attente::before{background:#d97706}
+.status-badge.clos{background:#d1fae5;color:#065f46}.status-badge.clos::before{background:#059669}
+.status-badge.annule{background:#f3f4f6;color:#4b5563}.status-badge.annule::before{background:#9ca3af}
+.status-badge.a-faire{background:#f3f4f6;color:#4b5563}.status-badge.a-faire::before{background:#9ca3af}
+.status-badge.termine{background:#d1fae5;color:#065f46}.status-badge.termine::before{background:#059669}
+.status-badge.nc{background:#fee2e2;color:#991b1b}.status-badge.nc::before{background:#dc2626}
+
+/* Progress bar */
+.progress-bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.progress-bar-fill{height:100%;background:var(--accent);border-radius:3px;transition:width .4s ease}
+.progress-bar-fill.full{background:var(--success)}
+
+/* ── Chapters (AffaireItems) ── */
+.chapters-list{display:flex;flex-direction:column;gap:8px}
+.chapter-card{
+  border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--card);overflow:hidden;transition:box-shadow .15s
+}
+.chapter-card:hover{box-shadow:var(--shadow-md)}
+.chapter-card.drag-over{border-color:var(--accent);box-shadow:0 0 0 2px rgba(37,99,235,.2)}
+
+.chapter-header{
+  padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;
+  user-select:none;background:#fafbfc;border-bottom:1px solid transparent;
+}
+.chapter-card.open .chapter-header{border-bottom-color:var(--border)}
+.chapter-drag{color:var(--text-light);font-size:16px;cursor:grab;flex-shrink:0}
+.chapter-drag:active{cursor:grabbing}
+.chapter-type-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;background:var(--info-bg);color:var(--info);flex-shrink:0}
+.chapter-label{font-size:13px;font-weight:500;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chapter-actions{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.chapter-toggle{color:var(--text-muted);font-size:12px;transition:transform .2s;margin-left:4px}
+.chapter-card.open .chapter-toggle{transform:rotate(180deg)}
+
+.chapter-body{padding:14px;display:none;animation:fadeIn .15s ease}
+.chapter-card.open .chapter-body{display:block}
+
+.chapter-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chapter-form-grid .full{grid-column:1/-1}
+.form-group{display:flex;flex-direction:column;gap:4px}
+.form-group label{font-size:11px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px}
+.form-group input,.form-group select,.form-group textarea{
+  padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+  outline:none;transition:border-color .15s;background:#fff;color:var(--text)
+}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{
+  border-color:var(--border-focus);box-shadow:0 0 0 3px rgba(147,197,253,.3)
+}
+.form-group textarea{resize:vertical;min-height:60px}
+
+/* Details JSON editor */
+.details-editor{margin-top:10px;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.details-editor-header{padding:8px 12px;background:#f8fafc;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.details-editor-header span{font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px}
+.details-row{display:flex;gap:8px;padding:6px 8px;border-bottom:1px solid #f1f5f9;align-items:center}
+.details-row:last-child{border-bottom:none}
+.details-row input{flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;outline:none}
+.details-row input:focus{border-color:var(--border-focus)}
+.details-key{background:#f8fafc}
+.btn-rm-detail{padding:3px 7px;border:none;background:none;color:var(--text-light);border-radius:4px;font-size:14px;line-height:1;transition:all .15s}
+.btn-rm-detail:hover{background:var(--danger-bg);color:var(--danger)}
+
+/* Moteurs panel */
+.moteur-card{
+  display:flex;align-items:flex-start;gap:10px;padding:10px 12px;
+  border:1px solid var(--border);border-radius:6px;background:#fafbfc;
+  margin-bottom:6px;transition:box-shadow .15s
+}
+.moteur-card:hover{box-shadow:var(--shadow)}
+.moteur-icon{width:36px;height:36px;background:var(--info-bg);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px}
+.moteur-info{flex:1;min-width:0}
+.moteur-info .m-serie{font-size:13px;font-weight:600;color:var(--text)}
+.moteur-info .m-details{font-size:12px;color:var(--text-muted);margin-top:1px}
+.moteur-info .m-meta{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.m-tag{font-size:11px;padding:1px 6px;border-radius:4px;background:var(--gray-bg);color:var(--gray)}
+
+.moteur-search-result{
+  padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;
+  transition:background .1s;display:flex;align-items:center;gap:8px
+}
+.moteur-search-result:hover{background:#f0f4ff}
+.moteur-search-result:last-child{border-bottom:none}
+
+/* Interventions list */
+.interv-item{
+  padding:10px 12px;border:1px solid var(--border);border-radius:6px;
+  margin-bottom:6px;display:flex;gap:10px;align-items:flex-start
+}
+.interv-item .bon{font-size:12px;font-weight:700;color:var(--accent);flex-shrink:0;width:70px}
+.interv-item .interv-main{flex:1;min-width:0}
+.interv-item .interv-title{font-size:13px;font-weight:500}
+.interv-item .interv-meta{font-size:12px;color:var(--text-muted);margin-top:2px}
+
+/* Btn variants */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:6px;font-weight:500;border:none;transition:all .15s;font-size:13px}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent-hover)}
+.btn-secondary{background:var(--gray-bg);color:var(--text);border:1px solid var(--border)}.btn-secondary:hover{background:#e9ecef}
+.btn-danger{background:var(--danger-bg);color:var(--danger);border:1px solid #fca5a5}.btn-danger:hover{background:#fecaca}
+.btn-ghost{background:transparent;color:var(--text-muted);border:none;padding:5px 8px}.btn-ghost:hover{background:var(--gray-bg);color:var(--text)}
+.btn-sm{padding:4px 10px;font-size:12px}
+.btn-xs{padding:2px 8px;font-size:11px}
+.btn-icon{padding:5px;border-radius:5px;background:transparent;border:none;color:var(--text-muted);line-height:1;transition:all .15s}
+.btn-icon:hover{background:var(--gray-bg);color:var(--text)}
+.btn-icon.red:hover{background:var(--danger-bg);color:var(--danger)}
+
+/* ── Modal ── */
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.45);
+  display:flex;align-items:center;justify-content:center;z-index:100;
+  animation:fadeIn .15s ease
+}
+.modal{
+  background:var(--card);border-radius:10px;box-shadow:var(--shadow-lg);
+  width:90%;max-width:600px;max-height:90vh;display:flex;flex-direction:column;
+  animation:slideUp .2s ease
+}
+.modal-lg{max-width:700px}
+.modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
+.modal-header h2{font-size:16px;font-weight:600;flex:1}
+.modal-close{padding:4px;border:none;background:none;color:var(--text-muted);border-radius:4px;font-size:18px;line-height:1;cursor:pointer}
+.modal-close:hover{background:var(--gray-bg);color:var(--text)}
+.modal-body{padding:20px;overflow-y:auto}
+.modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:#fafbfc}
+
+/* Form */
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.form-row.single{grid-template-columns:1fr}
+.form-row.triple{grid-template-columns:1fr 1fr 1fr}
+label.form-label{display:block;font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+.form-control{
+  width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;
+  background:#fff;color:var(--text);outline:none;transition:border-color .15s
+}
+.form-control:focus{border-color:var(--border-focus);box-shadow:0 0 0 3px rgba(147,197,253,.3)}
+textarea.form-control{resize:vertical;min-height:72px}
+select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
+
+/* Search input with dropdown */
+.search-dropdown{position:relative}
+.search-results{
+  position:absolute;top:100%;left:0;right:0;z-index:50;
+  background:#fff;border:1px solid var(--border);border-radius:6px;
+  box-shadow:var(--shadow-lg);max-height:200px;overflow-y:auto;margin-top:2px;display:none
+}
+.search-dropdown.open .search-results{display:block}
+
+/* ── Toast ── */
+#toast-container{position:fixed;bottom:24px;right:24px;z-index:200;display:flex;flex-direction:column;gap:8px}
+.toast{
+  padding:12px 16px;border-radius:8px;color:#fff;font-size:13px;font-weight:500;
+  box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:10px;
+  animation:slideUp .2s ease;min-width:240px
+}
+.toast.success{background:#059669}
+.toast.error{background:#dc2626}
+.toast.info{background:#2563eb}
+.toast.warning{background:#d97706}
+
+/* ── Empty states ── */
+.empty-state{text-align:center;padding:40px 20px}
+.empty-state .icon{font-size:40px;margin-bottom:12px}
+.empty-state h3{font-size:15px;font-weight:600;margin-bottom:6px}
+.empty-state p{font-size:13px;color:var(--text-muted)}
+
+/* ── Spinner ── */
+.spinner{width:20px;height:20px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;display:inline-block}
+.spinner-dark{border-color:rgba(0,0,0,.1);border-top-color:var(--accent)}
+
+/* ── Divider ── */
+.divider{height:1px;background:var(--border);margin:16px 0}
+
+/* ── Confirm overlay ── */
+.confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:200}
+.confirm-box{background:#fff;border-radius:10px;padding:24px;max-width:380px;width:90%;box-shadow:var(--shadow-lg);text-align:center}
+.confirm-box h3{font-size:15px;font-weight:600;margin-bottom:8px}
+.confirm-box p{font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.5}
+.confirm-box .actions{display:flex;gap:8px;justify-content:center}
+
+/* Tabs */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:16px}
+.tab{padding:8px 14px;font-size:13px;font-weight:500;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;transition:all .15s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* Animations */
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Print */
+@media print{
+  #sidebar,#topbar{display:none}
+  #content{padding:0}
+  .no-print{display:none!important}
+  .panel{box-shadow:none;border-color:#ccc}
+  .chapter-body{display:block!important}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Sidebar -->
+  <nav id="sidebar">
+    <div id="sidebar-header">
+      <div class="logo">EMS <span>Affaires</span></div>
+      <div class="subtitle">Suivi d'affaires</div>
+    </div>
+    <div id="sidebar-search">
+      <input type="text" id="sidebar-search-input" placeholder="🔍  Rechercher…" oninput="filterSidebar(this.value)">
+    </div>
+    <div id="sidebar-filters">
+      <button class="filter-chip active" onclick="setFilter('all',this)">Tout</button>
+      <button class="filter-chip" onclick="setFilter('En cours',this)"><span class="dot" style="background:#2563eb"></span>En cours</button>
+      <button class="filter-chip" onclick="setFilter('En attente',this)"><span class="dot" style="background:#d97706"></span>Attente</button>
+      <button class="filter-chip" onclick="setFilter('Clos',this)"><span class="dot" style="background:#059669"></span>Clos</button>
+    </div>
+    <div id="affaire-list"><div class="sidebar-empty">Chargement…</div></div>
+    <div id="sidebar-footer">
+      <button id="btn-new-affaire" onclick="openCreateModal()">+ Nouvelle affaire</button>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <div id="main">
+    <div id="topbar">
+      <h1 id="topbar-title">Tableau de bord</h1>
+      <div id="topbar-actions"></div>
+    </div>
+    <div id="content">
+      <div class="empty-state" style="padding:80px 20px">
+        <div class="icon">📋</div>
+        <h3>Sélectionnez une affaire</h3>
+        <p>Choisissez une affaire dans la barre latérale ou créez-en une nouvelle.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<script>
+/* ═══════════════════════════════════════════════
+   CONFIG
+═══════════════════════════════════════════════ */
+const API_BASE = 'http://localhost:8765';
+
+const ITEM_TYPES = [
+  'Moteur principal','Moteur auxiliaire','Inverseur / Réducteur',
+  'Partie électrique','Pompe','Compresseur','Échangeur',
+  'Pièces à commander','Fournitures','Travaux planifiés',
+  'Contrôle / Mesures','Rapport / Documentation','Note interne','Autre'
+];
+const ITEM_STATUTS = ['À faire','En cours','Terminé','NC'];
+const AFFAIRE_STATUTS = ['En cours','En attente','Clos','Annulé'];
+
+/* ═══════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════ */
+let state = {
+  affaires: [],
+  clients: [],
+  currentId: null,
+  currentAffaire: null,
+  currentItems: [],
+  currentMoteurs: [],
+  currentIntervs: [],
+  filter: 'all',
+  sidebarSearch: '',
+  activeTab: 'chapitres',
+  draggingIndex: null,
+};
+
+/* ═══════════════════════════════════════════════
+   API
+═══════════════════════════════════════════════ */
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(API_BASE + path, opts);
+  if (r.status === 204) return null;
+  if (!r.ok) {
+    const err = await r.text();
+    throw new Error(err || r.statusText);
+  }
+  return r.json();
+}
+const GET = (p) => api('GET', p);
+const POST = (p, b) => api('POST', p, b);
+const PUT = (p, b) => api('PUT', p, b);
+const DEL = (p) => api('DELETE', p);
+
+/* ═══════════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════════ */
+function toast(msg, type = 'success', dur = 3000) {
+  const icons = { success:'✓', error:'✕', info:'ℹ', warning:'⚠' };
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span>${icons[type]||'•'}</span><span>${msg}</span>`;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), dur);
+}
+
+/* ═══════════════════════════════════════════════
+   CONFIRM
+═══════════════════════════════════════════════ */
+function confirm(title, msg) {
+  return new Promise(res => {
+    const el = document.createElement('div');
+    el.className = 'confirm-overlay';
+    el.innerHTML = `
+      <div class="confirm-box">
+        <h3>${title}</h3><p>${msg}</p>
+        <div class="actions">
+          <button class="btn btn-secondary" id="c-no">Annuler</button>
+          <button class="btn btn-danger" id="c-yes">Confirmer</button>
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+    el.querySelector('#c-yes').onclick = () => { el.remove(); res(true); };
+    el.querySelector('#c-no').onclick = () => { el.remove(); res(false); };
+    el.onclick = (e) => { if (e.target === el) { el.remove(); res(false); } };
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════ */
+function slugStatus(s) {
+  const m = { 'En cours':'en-cours','En attente':'en-attente','Clos':'clos','Annulé':'annule',
+              'À faire':'a-faire','Terminé':'termine','NC':'nc' };
+  return m[s] || 'a-faire';
+}
+function statusBadge(s) {
+  return `<span class="status-badge ${slugStatus(s)}">${s}</span>`;
+}
+function progress(items) {
+  if (!items.length) return 0;
+  return Math.round(items.filter(i => i.statut === 'Terminé').length / items.length * 100);
+}
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ═══════════════════════════════════════════════
+   SIDEBAR
+═══════════════════════════════════════════════ */
+function setFilter(f, btn) {
+  state.filter = f;
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  renderSidebar();
+}
+function filterSidebar(q) {
+  state.sidebarSearch = q.toLowerCase();
+  renderSidebar();
+}
+function renderSidebar() {
+  const el = document.getElementById('affaire-list');
+  let list = state.affaires;
+  if (state.filter !== 'all') list = list.filter(a => a.statut === state.filter);
+  if (state.sidebarSearch) {
+    const q = state.sidebarSearch;
+    list = list.filter(a =>
+      (a.num_affaire||'').toLowerCase().includes(q) ||
+      (a.nom_projet||'').toLowerCase().includes(q) ||
+      (a.client_nom||'').toLowerCase().includes(q) ||
+      (a.navire_machine||'').toLowerCase().includes(q)
+    );
+  }
+  if (!list.length) {
+    el.innerHTML = '<div class="sidebar-empty">Aucune affaire trouvée</div>';
+    return;
+  }
+  el.innerHTML = list.map(a => {
+    const pct = progress(a._items || []);
+    const active = a.id === state.currentId ? 'active' : '';
+    return `<div class="sidebar-item ${active}" onclick="loadAffaire('${a.id}')">
+      <div class="num">${escHtml(a.num_affaire)}</div>
+      <div class="name">${escHtml(a.nom_projet || a.navire_machine || '—')}</div>
+      <div class="meta">
+        <span class="client-tag">${escHtml(a.client_nom||'—')}</span>
+        <span class="s-badge ${slugStatus(a.statut)}">${escHtml(a.statut)}</span>
+      </div>
+      <div class="progress-mini"><div class="progress-mini-fill" style="width:${pct}%"></div></div>
+    </div>`;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════
+   DASHBOARD
+═══════════════════════════════════════════════ */
+function showDashboard() {
+  state.currentId = null;
+  document.getElementById('topbar-title').textContent = 'Tableau de bord';
+  document.getElementById('topbar-actions').innerHTML = '';
+  const all = state.affaires;
+  const byStatus = s => all.filter(a => a.statut === s).length;
+  document.getElementById('content').innerHTML = `
+    <div class="kpi-grid">
+      <div class="kpi-card blue">
+        <div class="kpi-label">En cours</div>
+        <div class="kpi-value">${byStatus('En cours')}</div>
+        <div class="kpi-sub">affaires actives</div>
+      </div>
+      <div class="kpi-card orange">
+        <div class="kpi-label">En attente</div>
+        <div class="kpi-value">${byStatus('En attente')}</div>
+        <div class="kpi-sub">en suspens</div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-label">Clôturées</div>
+        <div class="kpi-value">${byStatus('Clos')}</div>
+        <div class="kpi-sub">terminées</div>
+      </div>
+      <div class="kpi-card gray">
+        <div class="kpi-label">Total</div>
+        <div class="kpi-value">${all.length}</div>
+        <div class="kpi-sub">toutes affaires</div>
+      </div>
+    </div>
+    <div class="section-title">Affaires en cours <span class="count">${byStatus('En cours')}</span></div>
+    <div id="dash-list"></div>`;
+  const enCours = all.filter(a => a.statut === 'En cours');
+  if (!enCours.length) {
+    document.getElementById('dash-list').innerHTML = '<div class="empty-state"><div class="icon">🎉</div><h3>Aucune affaire en cours</h3></div>';
+  } else {
+    document.getElementById('dash-list').innerHTML = enCours.map(a => dashCard(a)).join('');
+  }
+}
+function dashCard(a) {
+  const pct = progress(a._items || []);
+  return `<div class="panel" style="margin-bottom:10px;cursor:pointer" onclick="loadAffaire('${a.id}')">
+    <div class="panel-body" style="padding:12px 16px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;color:var(--text-muted);font-weight:500">${escHtml(a.num_affaire)}</div>
+          <div style="font-size:14px;font-weight:600;margin-top:1px">${escHtml(a.nom_projet||a.navire_machine||'—')}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${escHtml(a.client_nom||'')} ${a.navire_machine?'· '+escHtml(a.navire_machine):''}</div>
+        </div>
+        ${statusBadge(a.statut)}
+        ${a.nb_items ? `<span style="font-size:12px;color:var(--text-muted)">${a.nb_items} chapitres</span>` : ''}
+      </div>
+      ${a.nb_items ? `<div style="margin-top:10px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:4px">
+          <span>Avancement</span><span>${pct}%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-bar-fill ${pct===100?'full':''}" style="width:${pct}%"></div></div>
+      </div>` : ''}
+    </div>
+  </div>`;
+}
+
+/* ═══════════════════════════════════════════════
+   LOAD AFFAIRE
+═══════════════════════════════════════════════ */
+async function loadAffaire(id) {
+  state.currentId = id;
+  renderSidebar();
+  document.getElementById('topbar-title').textContent = 'Chargement…';
+  document.getElementById('content').innerHTML = '<div style="padding:40px;text-align:center"><div class="spinner spinner-dark"></div></div>';
+  try {
+    const [aff, items] = await Promise.all([
+      GET(`/affaires/${id}`),
+      GET(`/affaires/${id}/items`),
+    ]);
+    state.currentAffaire = aff;
+    state.currentItems = items;
+    // Filter moteurs linked to this affaire via code_affaire field
+    const allMoteurs = await GET(`/moteurs?search=${encodeURIComponent(aff.num_affaire)}`);
+    state.currentMoteurs = allMoteurs.filter(m => m.code_affaire === aff.num_affaire);
+    // Load interventions for each linked moteur (search by serial number)
+    state.currentIntervs = [];
+    for (const m of state.currentMoteurs) {
+      if (!m.num_serie) continue;
+      const intrvs = await GET(`/interventions?search=${encodeURIComponent(m.num_serie)}`).catch(() => []);
+      state.currentIntervs.push(...intrvs);
+    }
+    renderAffaireDetail();
+  } catch(e) {
+    toast('Erreur chargement affaire: ' + e.message, 'error');
+    document.getElementById('content').innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><h3>Erreur de chargement</h3><p>'+escHtml(e.message)+'</p></div>';
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   AFFAIRE DETAIL
+═══════════════════════════════════════════════ */
+function renderAffaireDetail() {
+  const a = state.currentAffaire;
+  const items = state.currentItems;
+  const pct = progress(items);
+  const doneCount = items.filter(i => i.statut === 'Terminé').length;
+
+  document.getElementById('topbar-title').textContent = `${a.num_affaire} — ${a.nom_projet || a.navire_machine || '—'}`;
+  document.getElementById('topbar-actions').innerHTML = `
+    <button class="topbar-btn" onclick="window.print()">🖨 Imprimer</button>
+    <button class="topbar-btn" onclick="openEditModal()">✏️ Modifier</button>
+    <button class="topbar-btn danger" onclick="deleteAffaire()">🗑 Supprimer</button>`;
+
+  document.getElementById('content').innerHTML = `
+  <!-- Header info -->
+  <div class="panel" style="margin-bottom:16px">
+    <div class="panel-header">
+      <span style="font-size:18px">📁</span>
+      <div class="panel-title">${escHtml(a.num_affaire)} — ${escHtml(a.nom_projet || '—')}</div>
+      ${statusBadge(a.statut)}
+      <div class="no-print" style="display:flex;gap:6px;margin-left:4px">
+        <select id="status-quick" class="form-control" style="width:auto;font-size:12px;padding:3px 8px" onchange="quickStatus(this.value)">
+          ${AFFAIRE_STATUTS.map(s=>`<option ${s===a.statut?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="info-grid">
+        <div class="info-field"><label>Client</label><div class="val ${!a.client_nom?'empty':''}">${escHtml(a.client_nom||'—')}</div></div>
+        <div class="info-field"><label>Navire / Machine</label><div class="val ${!a.navire_machine?'empty':''}">${escHtml(a.navire_machine||'—')}</div></div>
+        <div class="info-field"><label>Référence interne</label><div class="val ${!a.ref_interne?'empty':''}">${escHtml(a.ref_interne||'—')}</div></div>
+        <div class="info-field"><label>Chargé d'affaire</label><div class="val ${!a.charge_affaire?'empty':''}">${escHtml(a.charge_affaire||'—')}</div></div>
+        <div class="info-field"><label>Date début</label><div class="val ${!a.date_debut?'empty':''}">${escHtml(a.date_debut||'—')}</div></div>
+        <div class="info-field"><label>Date fin prévue</label><div class="val ${!a.date_fin_prevue?'empty':''}">${escHtml(a.date_fin_prevue||'—')}</div></div>
+        ${a.date_cloture?`<div class="info-field"><label>Date clôture</label><div class="val">${escHtml(a.date_cloture)}</div></div>`:''}
+        ${a.dossier_path?`<div class="info-field full"><label>Dossier</label><div class="val" style="font-size:12px;font-family:monospace;color:var(--text-muted)">${escHtml(a.dossier_path)}</div></div>`:''}
+        ${a.description?`<div class="info-field full"><label>Description</label><div class="val" style="white-space:pre-wrap">${escHtml(a.description)}</div></div>`:''}
+      </div>
+      ${items.length ? `
+      <div style="margin-top:14px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-bottom:6px">
+          <span>Avancement global — ${doneCount}/${items.length} chapitres terminés</span>
+          <span style="font-weight:600">${pct}%</span>
+        </div>
+        <div class="progress-bar" style="height:8px"><div class="progress-bar-fill ${pct===100?'full':''}" style="width:${pct}%"></div></div>
+      </div>` : ''}
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="detail-grid">
+    <div id="left-col">
+      <div class="tabs no-print">
+        <div class="tab ${state.activeTab==='chapitres'?'active':''}" onclick="switchTab('chapitres')">Chapitres <span style="font-size:11px;background:var(--gray-bg);padding:1px 7px;border-radius:10px;margin-left:4px">${items.length}</span></div>
+        <div class="tab ${state.activeTab==='moteurs'?'active':''}" onclick="switchTab('moteurs')">Moteurs liés <span style="font-size:11px;background:var(--gray-bg);padding:1px 7px;border-radius:10px;margin-left:4px">${state.currentMoteurs.length}</span></div>
+        <div class="tab ${state.activeTab==='interventions'?'active':''}" onclick="switchTab('interventions')">Interventions <span style="font-size:11px;background:var(--gray-bg);padding:1px 7px;border-radius:10px;margin-left:4px">${state.currentIntervs.length}</span></div>
+      </div>
+      <div id="tab-content"></div>
+    </div>
+    <div id="right-col">
+      <div class="panel" style="margin-bottom:12px">
+        <div class="panel-header"><span class="panel-title">📝 Commentaires</span></div>
+        <div class="panel-body">
+          <textarea id="comments-box" rows="5" class="form-control" placeholder="Notes et commentaires…" style="font-size:13px">${escHtml(a.commentaires||'')}</textarea>
+          <button class="btn btn-primary btn-sm no-print" style="margin-top:8px" onclick="saveComments()">Enregistrer</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">📊 Récapitulatif</span></div>
+        <div class="panel-body">
+          ${renderRecap(items)}
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  switchTab(state.activeTab);
+}
+
+function renderRecap(items) {
+  if (!items.length) return '<p style="color:var(--text-muted);font-size:13px">Aucun chapitre.</p>';
+  const byStatus = {};
+  items.forEach(i => { byStatus[i.statut] = (byStatus[i.statut]||0)+1; });
+  return Object.entries(byStatus).map(([s,c]) =>
+    `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      ${statusBadge(s)}
+      <span style="font-weight:600">${c}</span>
+    </div>`
+  ).join('') + `<div class="divider"></div>
+  <div style="display:flex;justify-content:space-between;font-size:13px">
+    <span style="color:var(--text-muted)">Total chapitres</span>
+    <strong>${items.length}</strong>
+  </div>`;
+}
+
+async function quickStatus(val) {
+  try {
+    await PUT(`/affaires/${state.currentAffaire.id}`, { statut: val });
+    state.currentAffaire.statut = val;
+    // Update in list
+    const idx = state.affaires.findIndex(a => a.id === state.currentAffaire.id);
+    if (idx >= 0) state.affaires[idx].statut = val;
+    renderSidebar();
+    toast('Statut mis à jour', 'success');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+/* ═══════════════════════════════════════════════
+   TABS
+═══════════════════════════════════════════════ */
+function switchTab(tab) {
+  state.activeTab = tab;
+  document.querySelectorAll('.tab').forEach(t => {
+    t.classList.toggle('active', t.textContent.toLowerCase().startsWith(tab));
+  });
+  const el = document.getElementById('tab-content');
+  if (!el) return;
+  if (tab === 'chapitres') el.innerHTML = renderChapters();
+  else if (tab === 'moteurs') el.innerHTML = renderMoteursTab();
+  else if (tab === 'interventions') el.innerHTML = renderIntervTab();
+}
+
+/* ═══════════════════════════════════════════════
+   CHAPTERS
+═══════════════════════════════════════════════ */
+function renderChapters() {
+  const items = state.currentItems;
+  return `
+    <div class="no-print" style="display:flex;justify-content:flex-end;margin-bottom:10px">
+      <button class="btn btn-primary btn-sm" onclick="openAddChapter()">+ Ajouter un chapitre</button>
+    </div>
+    <div class="chapters-list" id="chapters-list">
+      ${items.length ? items.map((it,i) => chapterCard(it,i)).join('') :
+        '<div class="empty-state"><div class="icon">📌</div><h3>Aucun chapitre</h3><p>Ajoutez des chapitres pour structurer cette affaire.</p></div>'}
+    </div>`;
+}
+
+function chapterCard(it, idx) {
+  let details = {};
+  try { details = JSON.parse(it.details_json || '{}'); } catch(e) {}
+  const hasDetails = Object.keys(details).length > 0;
+  return `
+  <div class="chapter-card" id="ch-${it.id}" draggable="true"
+    ondragstart="dragStart(event,${idx})" ondragover="dragOver(event,${idx})" ondrop="dragDrop(event,${idx})" ondragleave="dragLeave(event)">
+    <div class="chapter-header" onclick="toggleChapter('${it.id}')">
+      <span class="chapter-drag no-print" title="Glisser pour réordonner">⠿</span>
+      <span class="chapter-type-badge">${escHtml(it.type_item||'—')}</span>
+      <span class="chapter-label">${escHtml(it.libelle||it.objectif||'—')}</span>
+      ${it.num_serie?`<span class="m-tag" style="font-size:11px">SN: ${escHtml(it.num_serie)}</span>`:''}
+      ${statusBadge(it.statut)}
+      <div class="chapter-actions no-print" onclick="event.stopPropagation()">
+        <button class="btn-icon" onclick="openEditChapter('${it.id}')" title="Modifier">✏️</button>
+        <button class="btn-icon red" onclick="deleteChapter('${it.id}')" title="Supprimer">🗑</button>
+      </div>
+      <span class="chapter-toggle">▾</span>
+    </div>
+    <div class="chapter-body">
+      <div class="chapter-form-grid">
+        ${it.marque?`<div class="form-group"><label>Marque</label><div style="font-size:13px">${escHtml(it.marque)}</div></div>`:''}
+        ${it.reference?`<div class="form-group"><label>Référence</label><div style="font-size:13px;font-family:monospace">${escHtml(it.reference)}</div></div>`:''}
+        ${it.num_serie?`<div class="form-group"><label>N° Série</label><div style="font-size:13px;font-family:monospace">${escHtml(it.num_serie)}</div></div>`:''}
+        ${it.objectif?`<div class="form-group full"><label>Objectif</label><div style="font-size:13px;white-space:pre-wrap">${escHtml(it.objectif)}</div></div>`:''}
+        ${it.suivi?`<div class="form-group full"><label>Suivi / Notes</label><div style="font-size:13px;white-space:pre-wrap;color:var(--text-muted)">${escHtml(it.suivi)}</div></div>`:''}
+        ${hasDetails ? `<div class="form-group full"><label>Informations complémentaires</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px">
+            ${Object.entries(details).map(([k,v])=>`
+              <div style="background:#f8fafc;border:1px solid var(--border);border-radius:5px;padding:6px 8px">
+                <div style="font-size:10px;color:var(--text-muted);font-weight:600;text-transform:uppercase">${escHtml(k)}</div>
+                <div style="font-size:13px;margin-top:1px">${escHtml(v)}</div>
+              </div>`).join('')}
+          </div>
+        </div>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function toggleChapter(id) {
+  document.getElementById('ch-'+id)?.classList.toggle('open');
+}
+
+/* ── Drag & Drop chapters ── */
+function dragStart(e, idx) {
+  state.draggingIndex = idx;
+  e.dataTransfer.effectAllowed = 'move';
+}
+function dragOver(e, idx) {
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over');
+}
+function dragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+async function dragDrop(e, idx) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  const from = state.draggingIndex;
+  if (from === null || from === idx) return;
+  const items = [...state.currentItems];
+  const [moved] = items.splice(from, 1);
+  items.splice(idx, 0, moved);
+  state.currentItems = items;
+  state.draggingIndex = null;
+  // Update ordre for each item
+  try {
+    await Promise.all(items.map((it,i) =>
+      PUT(`/affaires/${state.currentAffaire.id}/items/${it.id}`, { ordre: i })
+    ));
+    switchTab('chapitres');
+  } catch(e) { toast('Erreur réorganisation','error'); }
+}
+
+/* ─── Add/Edit Chapter Modal ─── */
+let editingChapterId = null;
+function openAddChapter() {
+  editingChapterId = null;
+  openChapterModal({});
+}
+function openEditChapter(id) {
+  editingChapterId = id;
+  const it = state.currentItems.find(x => x.id === id) || {};
+  openChapterModal(it);
+}
+function openChapterModal(it) {
+  let details = {};
+  try { details = JSON.parse(it.details_json||'{}'); } catch(e) {}
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h2>${editingChapterId ? '✏️ Modifier le chapitre' : '+ Nouveau chapitre'}</h2>
+      <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div>
+          <label class="form-label">Type de chapitre *</label>
+          <select class="form-control" id="ch-type">
+            ${ITEM_TYPES.map(t=>`<option ${t===(it.type_item||'Moteur principal')?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Statut</label>
+          <select class="form-control" id="ch-statut">
+            ${ITEM_STATUTS.map(s=>`<option ${s===(it.statut||'À faire')?'selected':''}>${s}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-row single">
+        <div>
+          <label class="form-label">Libellé / Désignation</label>
+          <input class="form-control" id="ch-libelle" value="${escHtml(it.libelle||'')}" placeholder="Désignation de l'équipement ou de la tâche">
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label class="form-label">Marque</label>
+          <input class="form-control" id="ch-marque" value="${escHtml(it.marque||'')}" placeholder="Ex: Volvo Penta">
+        </div>
+        <div>
+          <label class="form-label">Référence</label>
+          <input class="form-control" id="ch-ref" value="${escHtml(it.reference||'')}" placeholder="Référence constructeur">
+        </div>
+      </div>
+      <div class="form-row single">
+        <div>
+          <label class="form-label">Numéro de série</label>
+          <input class="form-control" id="ch-serie" value="${escHtml(it.num_serie||'')}" placeholder="N° de série">
+        </div>
+      </div>
+      <div class="form-row single">
+        <div>
+          <label class="form-label">Objectif / Travaux à réaliser</label>
+          <textarea class="form-control" id="ch-objectif" rows="3" placeholder="Décrivez l'objectif ou les travaux à réaliser…">${escHtml(it.objectif||'')}</textarea>
+        </div>
+      </div>
+      <div class="form-row single">
+        <div>
+          <label class="form-label">Suivi / Notes de progression</label>
+          <textarea class="form-control" id="ch-suivi" rows="3" placeholder="Notes de suivi, étapes réalisées…">${escHtml(it.suivi||'')}</textarea>
+        </div>
+      </div>
+      <!-- Details JSON editor -->
+      <div class="details-editor">
+        <div class="details-editor-header">
+          <span>Champs complémentaires</span>
+          <button class="btn btn-ghost btn-xs" onclick="addDetailRow()">+ Ajouter un champ</button>
+        </div>
+        <div id="details-rows">
+          ${Object.entries(details).map(([k,v]) => detailRowHtml(k,v)).join('') || '<div style="padding:8px 12px;font-size:12px;color:var(--text-muted)">Aucun champ complémentaire</div>'}
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveChapter()">💾 Enregistrer</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = e => { if(e.target===overlay) overlay.remove(); };
+}
+function detailRowHtml(k='', v='') {
+  return `<div class="details-row">
+    <input class="details-key" placeholder="Clé (ex: Puissance)" value="${escHtml(k)}">
+    <input placeholder="Valeur (ex: 250 kW)" value="${escHtml(v)}">
+    <button class="btn-rm-detail" onclick="this.parentElement.remove()">✕</button>
+  </div>`;
+}
+function addDetailRow() {
+  const container = document.getElementById('details-rows');
+  // Remove "Aucun champ" placeholder if present
+  const placeholder = container.querySelector('div[style]');
+  if(placeholder) placeholder.remove();
+  container.insertAdjacentHTML('beforeend', detailRowHtml());
+}
+async function saveChapter() {
+  const type_item = document.getElementById('ch-type').value;
+  const statut = document.getElementById('ch-statut').value;
+  const libelle = document.getElementById('ch-libelle').value.trim();
+  const marque = document.getElementById('ch-marque').value.trim();
+  const reference = document.getElementById('ch-ref').value.trim();
+  const num_serie = document.getElementById('ch-serie').value.trim();
+  const objectif = document.getElementById('ch-objectif').value.trim();
+  const suivi = document.getElementById('ch-suivi').value.trim();
+  // Build details JSON
+  const details = {};
+  document.querySelectorAll('#details-rows .details-row').forEach(row => {
+    const [keyInput, valInput] = row.querySelectorAll('input');
+    const k = keyInput.value.trim();
+    const v = valInput.value.trim();
+    if(k) details[k] = v;
+  });
+  const body = { type_item, statut, libelle, marque, reference, num_serie, objectif, suivi,
+                 details_json: JSON.stringify(details), ordre: editingChapterId ? undefined :
+                 state.currentItems.length };
+  try {
+    let saved;
+    if (editingChapterId) {
+      saved = await PUT(`/affaires/${state.currentAffaire.id}/items/${editingChapterId}`, body);
+      const idx = state.currentItems.findIndex(x => x.id === editingChapterId);
+      if(idx >= 0) state.currentItems[idx] = saved;
+    } else {
+      saved = await POST(`/affaires/${state.currentAffaire.id}/items`, body);
+      state.currentItems.push(saved);
+    }
+    document.querySelector('.modal-overlay')?.remove();
+    switchTab('chapitres');
+    updateSidebarProgress();
+    toast(editingChapterId ? 'Chapitre mis à jour' : 'Chapitre ajouté', 'success');
+  } catch(e) { toast(e.message,'error'); }
+}
+async function deleteChapter(id) {
+  const ok = await confirm('Supprimer ce chapitre ?','Cette action est irréversible.');
+  if(!ok) return;
+  try {
+    await DEL(`/affaires/${state.currentAffaire.id}/items/${id}`);
+    state.currentItems = state.currentItems.filter(x => x.id !== id);
+    switchTab('chapitres');
+    updateSidebarProgress();
+    toast('Chapitre supprimé','success');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+/* ═══════════════════════════════════════════════
+   MOTEURS TAB
+═══════════════════════════════════════════════ */
+function renderMoteursTab() {
+  const mots = state.currentMoteurs;
+  return `
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">🔧 Moteurs liés à cette affaire</span>
+      <button class="btn btn-primary btn-sm no-print" onclick="openLinkMoteur()">+ Lier un moteur</button>
+    </div>
+    <div class="panel-body">
+      ${mots.length ? mots.map(m => moteurCard(m)).join('') :
+        '<div class="empty-state"><div class="icon">🔧</div><h3>Aucun moteur lié</h3><p>Liez des moteurs de votre parc à cette affaire.</p></div>'}
+    </div>
+  </div>`;
+}
+function moteurCard(m) {
+  return `<div class="moteur-card">
+    <div class="moteur-icon">🔧</div>
+    <div class="moteur-info">
+      <div class="m-serie">${escHtml(m.num_serie)}</div>
+      <div class="m-details">${escHtml(m.marque)} ${m.type_moteur?'— '+escHtml(m.type_moteur):''}</div>
+      <div class="m-meta">
+        ${m.navire?`<span class="m-tag">⚓ ${escHtml(m.navire)}</span>`:''}
+        ${m.machine?`<span class="m-tag">⚙ ${escHtml(m.machine)}</span>`:''}
+        ${m.client_nom?`<span class="m-tag">👤 ${escHtml(m.client_nom)}</span>`:''}
+        ${m.ref_constructeur?`<span class="m-tag">Réf: ${escHtml(m.ref_constructeur)}</span>`:''}
+      </div>
+    </div>
+    <button class="btn-icon red no-print" onclick="unlinkMoteur('${m.id}')" title="Délier ce moteur">✕</button>
+  </div>`;
+}
+
+let moteurSearchResults = [];
+function openLinkMoteur() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+  <div class="modal">
+    <div class="modal-header">
+      <h2>🔧 Lier un moteur</h2>
+      <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row single">
+        <div>
+          <label class="form-label">Rechercher un moteur</label>
+          <div class="search-dropdown" id="moteur-dd">
+            <input class="form-control" id="moteur-search-input" placeholder="N° série, marque, navire, client…" oninput="searchMoteurs(this.value)">
+            <div class="search-results" id="moteur-search-results"></div>
+          </div>
+        </div>
+      </div>
+      <div id="selected-moteur-preview" style="margin-top:8px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Annuler</button>
+      <button class="btn btn-primary" id="btn-confirm-link" disabled onclick="confirmLinkMoteur()">🔗 Lier</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = e => { if(e.target===overlay) overlay.remove(); };
+  moteurSearchResults = [];
+  window._selectedMoteur = null;
+}
+async function searchMoteurs(q) {
+  if(q.length < 2) {
+    document.getElementById('moteur-search-results').innerHTML = '';
+    document.getElementById('moteur-dd').classList.remove('open');
+    return;
+  }
+  try {
+    const res = await GET(`/moteurs?search=${encodeURIComponent(q)}`);
+    moteurSearchResults = res;
+    const el = document.getElementById('moteur-search-results');
+    if(!res.length) {
+      el.innerHTML = '<div style="padding:12px;text-align:center;color:var(--text-muted);font-size:13px">Aucun moteur trouvé</div>';
+    } else {
+      el.innerHTML = res.map(m => `
+        <div class="moteur-search-result" onclick="selectMoteur('${m.id}')">
+          <span style="font-size:18px">🔧</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600">${escHtml(m.num_serie)}</div>
+            <div style="font-size:12px;color:var(--text-muted)">${escHtml(m.marque)} ${m.client_nom?'— '+escHtml(m.client_nom):''}</div>
+          </div>
+          ${m.code_affaire?`<span style="font-size:11px;color:var(--warning);font-weight:500">Déjà lié: ${escHtml(m.code_affaire)}</span>`:''}
+        </div>`).join('');
+    }
+    document.getElementById('moteur-dd').classList.add('open');
+  } catch(e) {}
+}
+function selectMoteur(id) {
+  const m = moteurSearchResults.find(x => x.id === id);
+  if(!m) return;
+  window._selectedMoteur = m;
+  document.getElementById('moteur-dd').classList.remove('open');
+  document.getElementById('moteur-search-input').value = `${m.num_serie} — ${m.marque}`;
+  document.getElementById('selected-moteur-preview').innerHTML = moteurCard(m);
+  document.getElementById('btn-confirm-link').disabled = false;
+}
+async function confirmLinkMoteur() {
+  const m = window._selectedMoteur;
+  if(!m) return;
+  try {
+    await PUT(`/moteurs/${m.id}`, { code_affaire: state.currentAffaire.num_affaire });
+    m.code_affaire = state.currentAffaire.num_affaire;
+    state.currentMoteurs.push(m);
+    document.querySelector('.modal-overlay')?.remove();
+    switchTab('moteurs');
+    toast('Moteur lié avec succès','success');
+  } catch(e) { toast(e.message,'error'); }
+}
+async function unlinkMoteur(id) {
+  const ok = await confirm('Délier ce moteur ?','Le moteur ne sera plus associé à cette affaire.');
+  if(!ok) return;
+  try {
+    await PUT(`/moteurs/${id}`, { code_affaire: '' });
+    state.currentMoteurs = state.currentMoteurs.filter(m => m.id !== id);
+    switchTab('moteurs');
+    toast('Moteur délié','success');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+/* ═══════════════════════════════════════════════
+   INTERVENTIONS TAB
+═══════════════════════════════════════════════ */
+function renderIntervTab() {
+  const intrvs = state.currentIntervs;
+  if(!intrvs.length) return `
+    <div class="panel">
+      <div class="panel-body">
+        <div class="empty-state"><div class="icon">🔨</div><h3>Aucune intervention</h3><p>Les interventions sur les moteurs liés apparaîtront ici.</p></div>
+      </div>
+    </div>`;
+  return `
+  <div class="panel">
+    <div class="panel-header"><span class="panel-title">🔨 Interventions liées</span></div>
+    <div class="panel-body">
+      ${intrvs.map(iv => `
+        <div class="interv-item">
+          <div class="bon">${escHtml(iv.num_bon||'—')}</div>
+          <div class="interv-main">
+            <div class="interv-title">${escHtml(iv.type_intervention||iv.description||'Intervention')}</div>
+            <div class="interv-meta">${escHtml(iv.date_creation||'')} ${iv.technicien?'· '+escHtml(iv.technicien):''} ${iv.statut?'· '+escHtml(iv.statut):''}</div>
+          </div>
+          ${iv.statut ? statusBadge(iv.statut) : ''}
+        </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+/* ═══════════════════════════════════════════════
+   CREATE / EDIT AFFAIRE MODAL
+═══════════════════════════════════════════════ */
+function openCreateModal() {
+  openAffaireModal(null);
+}
+function openEditModal() {
+  openAffaireModal(state.currentAffaire);
+}
+async function openAffaireModal(a) {
+  // Load clients if not loaded
+  if(!state.clients.length) {
+    state.clients = await GET('/clients').catch(()=>[]);
+  }
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h2>${a ? '✏️ Modifier l\'affaire' : '+ Nouvelle affaire'}</h2>
+      <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div>
+          <label class="form-label">N° Affaire</label>
+          <input class="form-control" id="af-num" value="${escHtml(a?.num_affaire||'')}" placeholder="Auto-généré si vide">
+        </div>
+        <div>
+          <label class="form-label">Statut</label>
+          <select class="form-control" id="af-statut">
+            ${AFFAIRE_STATUTS.map(s=>`<option ${s===(a?.statut||'En cours')?'selected':''}>${s}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-row single">
+        <div>
+          <label class="form-label">Nom du projet *</label>
+          <input class="form-control" id="af-nom" value="${escHtml(a?.nom_projet||'')}" placeholder="Nom descriptif du projet">
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label class="form-label">Client</label>
+          <select class="form-control" id="af-client">
+            <option value="">— Aucun —</option>
+            ${state.clients.map(c=>`<option value="${c.id}" ${c.id===(a?.client_id||'')?'selected':''}>${escHtml(c.nom)}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Navire / Machine</label>
+          <input class="form-control" id="af-navire" value="${escHtml(a?.navire_machine||'')}" placeholder="Ex: MV Atlantic Star — MP">
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label class="form-label">Référence interne</label>
+          <input class="form-control" id="af-ref" value="${escHtml(a?.ref_interne||'')}" placeholder="Votre référence interne">
+        </div>
+        <div>
+          <label class="form-label">Chargé d'affaire</label>
+          <input class="form-control" id="af-charge" value="${escHtml(a?.charge_affaire||'')}" placeholder="Nom du chargé d'affaire">
+        </div>
+      </div>
+      <div class="form-row triple">
+        <div>
+          <label class="form-label">Date début</label>
+          <input class="form-control" id="af-debut" type="text" value="${escHtml(a?.date_debut||'')}" placeholder="JJ/MM/AAAA" onfocus="formatDateInput(this)" onblur="normDateInput(this)">
+        </div>
+        <div>
+          <label class="form-label">Date fin prévue</label>
+          <input class="form-control" id="af-fin" type="text" value="${escHtml(a?.date_fin_prevue||'')}" placeholder="JJ/MM/AAAA" onfocus="formatDateInput(this)" onblur="normDateInput(this)">
+        </div>
+        <div>
+          <label class="form-label">Date clôture</label>
+          <input class="form-control" id="af-cloture" type="text" value="${escHtml(a?.date_cloture||'')}" placeholder="JJ/MM/AAAA">
+        </div>
+      </div>
+      <div class="form-row single">
+        <div>
+          <label class="form-label">Description</label>
+          <textarea class="form-control" id="af-desc" rows="3" placeholder="Description générale de l'affaire…">${escHtml(a?.description||'')}</textarea>
+        </div>
+      </div>
+      <div class="form-row single">
+        <div>
+          <label class="form-label">Commentaires</label>
+          <textarea class="form-control" id="af-comm" rows="2" placeholder="Notes internes…">${escHtml(a?.commentaires||'')}</textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      ${a ? `<button class="btn btn-danger" style="margin-right:auto" onclick="deleteAffaire()">🗑 Supprimer</button>` : ''}
+      <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveAffaire(${a?`'${a.id}'`:'null'})">💾 Enregistrer</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = e => { if(e.target===overlay) overlay.remove(); };
+}
+
+// Date helper: auto-convert YYYY-MM-DD → JJ/MM/AAAA on focus/blur
+function formatDateInput(el) {
+  const v = el.value;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    const [y,m,d] = v.split('-');
+    el.value = `${d}/${m}/${y}`;
+  }
+}
+function normDateInput(el) { /* already JJ/MM/AAAA */ }
+
+async function saveAffaire(id) {
+  const body = {
+    num_affaire: document.getElementById('af-num').value.trim() || undefined,
+    nom_projet: document.getElementById('af-nom').value.trim(),
+    client_id: document.getElementById('af-client').value || undefined,
+    navire_machine: document.getElementById('af-navire').value.trim(),
+    ref_interne: document.getElementById('af-ref').value.trim(),
+    charge_affaire: document.getElementById('af-charge').value.trim(),
+    date_debut: document.getElementById('af-debut').value.trim(),
+    date_fin_prevue: document.getElementById('af-fin').value.trim(),
+    date_cloture: document.getElementById('af-cloture').value.trim(),
+    statut: document.getElementById('af-statut').value,
+    description: document.getElementById('af-desc').value.trim(),
+    commentaires: document.getElementById('af-comm').value.trim(),
+  };
+  if(!body.nom_projet) { toast('Le nom du projet est requis','warning'); return; }
+  const btn = document.querySelector('.modal-footer .btn-primary');
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    if(id) {
+      const updated = await PUT(`/affaires/${id}`, body);
+      state.currentAffaire = updated;
+      const idx = state.affaires.findIndex(a => a.id === id);
+      if(idx>=0) state.affaires[idx] = {...state.affaires[idx], ...updated};
+      toast('Affaire mise à jour','success');
+    } else {
+      const created = await POST('/affaires', body);
+      state.affaires.unshift(created);
+      toast('Affaire créée','success');
+      state.currentId = created.id;
+    }
+    document.querySelector('.modal-overlay')?.remove();
+    renderSidebar();
+    if(id) renderAffaireDetail();
+    else await loadAffaire(state.currentId);
+  } catch(e) {
+    toast(e.message,'error');
+    btn.disabled = false; btn.textContent = '💾 Enregistrer';
+  }
+}
+
+async function deleteAffaire() {
+  document.querySelector('.modal-overlay')?.remove();
+  const ok = await confirm('Supprimer cette affaire ?','Tous les chapitres associés seront supprimés. Cette action est irréversible.');
+  if(!ok) return;
+  try {
+    await DEL(`/affaires/${state.currentAffaire.id}`);
+    state.affaires = state.affaires.filter(a => a.id !== state.currentAffaire.id);
+    state.currentAffaire = null;
+    state.currentId = null;
+    renderSidebar();
+    showDashboard();
+    toast('Affaire supprimée','success');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function saveComments() {
+  const val = document.getElementById('comments-box')?.value || '';
+  try {
+    await PUT(`/affaires/${state.currentAffaire.id}`, { commentaires: val });
+    state.currentAffaire.commentaires = val;
+    toast('Commentaires enregistrés','success');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+/* ═══════════════════════════════════════════════
+   SIDEBAR PROGRESS UPDATE
+═══════════════════════════════════════════════ */
+function updateSidebarProgress() {
+  const a = state.affaires.find(x => x.id === state.currentId);
+  if(a) a._items = state.currentItems;
+  renderSidebar();
+  // Re-select current
+  const el = document.querySelector(`.sidebar-item.active`);
+  // Already active, no re-click needed
+}
+
+/* ═══════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════ */
+async function init() {
+  try {
+    // Load affaires & clients in parallel
+    const [affaires, clients] = await Promise.all([
+      GET('/affaires'),
+      GET('/clients').catch(() => []),
+    ]);
+    state.affaires = affaires;
+    state.clients = clients;
+    renderSidebar();
+    showDashboard();
+  } catch(e) {
+    document.getElementById('affaire-list').innerHTML =
+      '<div class="sidebar-empty">⚠ Impossible de joindre le serveur<br><small style="font-size:10px;opacity:.6">localhost:8765</small></div>';
+    document.getElementById('content').innerHTML = `
+      <div class="empty-state" style="padding:80px 20px">
+        <div class="icon">⚠️</div>
+        <h3>Serveur inaccessible</h3>
+        <p>Vérifiez que le serveur EMS est démarré sur <strong>localhost:8765</strong>.</p>
+        <button class="btn btn-primary" style="margin-top:16px" onclick="init()">🔄 Réessayer</button>
+      </div>`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>

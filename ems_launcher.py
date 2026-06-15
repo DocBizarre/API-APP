@@ -16,6 +16,7 @@ import sys
 import os
 import subprocess
 import multiprocessing
+import webbrowser
 from pathlib import Path
 
 import tkinter as tk
@@ -98,6 +99,9 @@ def _demarrer_app(app_key, here_str):
 
 
 APPS = [
+    {"key": "suivi_web",    "exe": "suivi_affaires",   "titre": "Suivi d'Affaires Web",
+     "desc": "Interface web de suivi des affaires — chapitres, moteurs liés, interventions",
+     "icone": "🌐", "couleur": "#2563eb", "dossier": ""},
     {"key": "affaire",      "exe": "EMS_Affaire",      "titre": "Affaires",
      "desc": "Suivi des affaires clients, équipements et objectifs",
      "icone": "📋", "couleur": "#d97706", "dossier": "affaire_app"},
@@ -123,9 +127,11 @@ APPS = [
 
 
 def _app_disponible(app):
+    if app["key"] == "suivi_web":
+        return (_HERE / "suivi_affaires.html").is_file()
     if _FROZEN:
         return _is_visible(_HERE / f"{app['exe']}.exe")
-    return (_HERE / app["dossier"]).is_dir()
+    return app["dossier"] and (_HERE / app["dossier"]).is_dir()
 
 
 def _lancer(app_key, fenetre=None):
@@ -133,6 +139,11 @@ def _lancer(app_key, fenetre=None):
     app = next((a for a in APPS if a["key"] == app_key), None)
     if app is None:
         return
+
+    if app_key == "suivi_web":
+        html_path = _HERE / "suivi_affaires.html"
+        webbrowser.open(html_path.as_uri())
+        return  # ne ferme pas le launcher, la page s'ouvre à côté
 
     if _FROZEN:
         exe = _HERE / f"{app['exe']}.exe"
