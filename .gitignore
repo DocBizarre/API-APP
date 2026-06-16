@@ -2,18 +2,24 @@
 build/
 dist/
 
+# Distribution : exécutables compilés + config locale (IP réelle) +
+# dossiers générés à l'exécution (bons PDF/HTML, photos clients)
+EMS_Distribution/
+
 # Python cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# Database (ne pas versionner les données)
+# Données runtime (DB, logs)
 ems_api/data/ems.db
+ems_api/data/ems.log
 ems_project/data/ems.db
+*.log
 
 # Config locale (contient IP du serveur)
-# config.ini est versionné intentionnellement (template)
+# config.ini (racine) est versionné intentionnellement (template)
 
 # Environnement virtuel
 venv/
