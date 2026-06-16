@@ -322,21 +322,13 @@ def get_moteurs_garantie_expirante(jours_max: int = 90) -> List[Dict]:
 
 
 # ─── Sous-ensembles ───────────────────────────────────────────────────────────
+# Un sous-ensemble est un Moteur comme un autre (mêmes champs), rattaché à
+# son moteur principal via parent_moteur_id. Pas d'endpoints dédiés : on
+# réutilise les fonctions moteurs (get_moteurs avec parent_id, upsert_moteur,
+# delete_moteur).
 
 def get_sous_ensembles(moteur_id: str) -> List[Dict]:
-    return _client.get(f"/moteurs/{moteur_id}/sous-ensembles")
-
-
-def create_sous_ensemble(moteur_id: str, data: Dict) -> Dict:
-    return _client.post(f"/moteurs/{moteur_id}/sous-ensembles", json=data)
-
-
-def update_sous_ensemble(moteur_id: str, se_id: str, data: Dict) -> Dict:
-    return _client.put(f"/moteurs/{moteur_id}/sous-ensembles/{se_id}", json=data)
-
-
-def delete_sous_ensemble(moteur_id: str, se_id: str) -> None:
-    _client.delete(f"/moteurs/{moteur_id}/sous-ensembles/{se_id}")
+    return _client.get("/moteurs", parent_id=moteur_id)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

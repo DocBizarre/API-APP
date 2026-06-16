@@ -42,7 +42,7 @@ from .routers import (
        clients, moteurs, techniciens,
        interventions, garanties, ameliorations, documents,
        types_intervention, statuts_garantie, stats_config, pieces, sync, admin,
-       pdf_export, marques, affaires, sous_ensembles
+       pdf_export, marques, affaires
    )
 
 
@@ -127,7 +127,6 @@ app.include_router(admin.router, dependencies=deps)
 app.include_router(pdf_export.router, dependencies=deps)
 app.include_router(pdf_export.router_render, dependencies=deps)
 app.include_router(affaires.router, dependencies=deps)
-app.include_router(sous_ensembles.router, dependencies=deps)
 
 if __name__ == "__main__":
     import uvicorn

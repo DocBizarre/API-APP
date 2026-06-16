@@ -8,6 +8,7 @@ from pydantic import BaseModel
 class MoteurCreate(BaseModel):
     client_id:          str
     num_serie:          str
+    parent_moteur_id:   Optional[str] = None
     navire:             str = ""
     machine:            str = ""
     type_moteur:        str = ""
@@ -31,6 +32,7 @@ class MoteurCreate(BaseModel):
 class MoteurUpdate(BaseModel):
     client_id:          Optional[str] = None
     num_serie:          Optional[str] = None
+    parent_moteur_id:   Optional[str] = None
     navire:             Optional[str] = None
     machine:            Optional[str] = None
     type_moteur:        Optional[str] = None
@@ -54,6 +56,7 @@ class MoteurUpdate(BaseModel):
 class MoteurOut(BaseModel):
     id:                 str
     client_id:          Optional[str] = None
+    parent_moteur_id:   Optional[str] = None
     num_serie:          str
     navire:             str
     machine:            str

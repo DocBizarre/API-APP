@@ -9,6 +9,8 @@ class Moteur(Base):
 
     id                  = Column(String, primary_key=True, index=True)
     client_id           = Column(String, ForeignKey("clients.id"), index=True)
+    parent_moteur_id    = Column(String, ForeignKey("moteurs.id", ondelete="CASCADE"),
+                                  nullable=True, index=True)
     num_serie           = Column(String, nullable=False, unique=True, index=True)
     navire              = Column(String, default="")
     machine             = Column(String, default="")
@@ -37,6 +39,10 @@ class Moteur(Base):
     interventions   = relationship("Intervention", back_populates="moteur")
     garanties       = relationship("Garantie", back_populates="moteur",
                                     cascade="all, delete-orphan")
-    sous_ensembles  = relationship("SousEnsemble", back_populates="moteur",
+    # Sous-ensembles : un sous-ensemble EST un Moteur, rattaché à son moteur
+    # principal via parent_moteur_id (auto-référencement sur la même table).
+    sous_ensembles  = relationship("Moteur", back_populates="moteur_parent",
                                     cascade="all, delete-orphan",
-                                    order_by="SousEnsemble.libelle")
+                                    order_by="Moteur.num_serie")
+    moteur_parent   = relationship("Moteur", back_populates="sous_ensembles",
+                                    remote_side=[id])

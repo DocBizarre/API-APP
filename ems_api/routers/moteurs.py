@@ -31,12 +31,21 @@ def _to_out(m: Moteur) -> dict:
 def list_moteurs(
     search: Optional[str] = Query(None),
     serie_only: bool = Query(False, description="Recherche uniquement par N° série"),
+    parent_id: Optional[str] = Query(
+        None, description="Si renseigné, retourne uniquement les sous-ensembles de ce moteur"),
     db: Session = Depends(get_db),
 ):
     q = db.query(Moteur).options(
         joinedload(Moteur.client),
         joinedload(Moteur.sous_ensembles),
     )
+    if parent_id:
+        return [_to_out(m) for m in
+                q.filter(Moteur.parent_moteur_id == parent_id)
+                 .order_by(Moteur.num_serie).all()]
+    # Recherche principale : uniquement les moteurs racine, les
+    # sous-ensembles se déroulent via la flèche dans la liste.
+    q = q.filter(Moteur.parent_moteur_id.is_(None))
     if search:
         like = f"%{search}%"
         if serie_only:

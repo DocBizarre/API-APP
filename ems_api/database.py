@@ -34,7 +34,6 @@ def init_db():
     from .models import amelioration, technicien  # noqa
     from .models import configurations  # noqa
     from .models import affaire  # noqa
-    from .models import sous_ensemble  # noqa
     Base.metadata.create_all(bind=engine)
 
     # Migrations : ajout de colonnes manquantes sur tables existantes
@@ -47,6 +46,7 @@ def init_db():
         ("moteurs", "client_utilisateur_email",   "TEXT DEFAULT ''"),
         ("moteurs", "client_utilisateur_tel",     "TEXT DEFAULT ''"),
         ("moteurs", "client_utilisateur_adresse", "TEXT DEFAULT ''"),
+        ("moteurs", "parent_moteur_id",           "TEXT"),
     ]
     insp = _inspect(engine)
     for table, col, col_def in _migrations:
@@ -58,6 +58,17 @@ def init_db():
                     conn.commit()
         except Exception:
             pass
+
+    # Ancienne table sous_ensembles (modèle dédié) : les sous-ensembles sont
+    # désormais des Moteur rattachés via parent_moteur_id. Nettoyage de la
+    # table devenue obsolète si elle existe encore (ancien essai local).
+    try:
+        if "sous_ensembles" in insp.get_table_names():
+            with engine.connect() as conn:
+                conn.execute(text("DROP TABLE sous_ensembles"))
+                conn.commit()
+    except Exception:
+        pass
 
     # Seed marques par défaut si la table est vide
     from .models.configurations import MarqueMoteur
