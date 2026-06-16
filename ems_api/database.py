@@ -34,6 +34,7 @@ def init_db():
     from .models import amelioration, technicien  # noqa
     from .models import configurations  # noqa
     from .models import affaire  # noqa
+    from .models import sous_ensemble  # noqa
     Base.metadata.create_all(bind=engine)
 
     # Migrations : ajout de colonnes manquantes sur tables existantes

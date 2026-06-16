@@ -8,8 +8,9 @@ from .technicien import Technicien
 from .configurations import TypeIntervention, StatutGarantie, Config
 from .piece import Piece
 from .affaire import Affaire, AffaireItem
+from .sous_ensemble import SousEnsemble
 
 __all__ = ["Client", "Moteur", "Intervention",
            "Garantie", "Amelioration", "Technicien",
            "TypeIntervention", "StatutGarantie", "Config",
-           "Piece", "Affaire", "AffaireItem"]
+           "Piece", "Affaire", "AffaireItem", "SousEnsemble"]

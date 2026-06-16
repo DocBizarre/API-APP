@@ -33,7 +33,10 @@ class Moteur(Base):
     updated_at          = Column(DateTime(timezone=True), server_default=func.now(),
                                   onupdate=func.now())
 
-    client         = relationship("Client", back_populates="moteurs")
-    interventions  = relationship("Intervention", back_populates="moteur")
-    garanties      = relationship("Garantie", back_populates="moteur",
-                                   cascade="all, delete-orphan")
+    client          = relationship("Client", back_populates="moteurs")
+    interventions   = relationship("Intervention", back_populates="moteur")
+    garanties       = relationship("Garantie", back_populates="moteur",
+                                    cascade="all, delete-orphan")
+    sous_ensembles  = relationship("SousEnsemble", back_populates="moteur",
+                                    cascade="all, delete-orphan",
+                                    order_by="SousEnsemble.libelle")
