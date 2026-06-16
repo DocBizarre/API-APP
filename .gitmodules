@@ -1,0 +1,4 @@
+[submodule "ems_project"]
+	path = ems_project
+	url = https://github.com/DocBizarre/AppEMSparc.git
+	branch = main
