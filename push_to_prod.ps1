@@ -135,7 +135,7 @@ if (-not (Test-Path $dstManifest)) {
         Copy-Item $srcManifest $dstManifest -Force
         Write-Ok "updates.json déployé (première installation)"
     } else {
-        Write-WarnMsg "updates.json introuvable dans le dossier dev — à créer manuellement sur le serveur"
+        Write-WarnMsg "updates.json introuvable dans le dossier dev - a creer manuellement sur le serveur"
     }
 } else {
     Write-Ok "updates.json déjà présent sur le serveur (non écrasé)"
