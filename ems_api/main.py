@@ -21,6 +21,7 @@ L'API expose des endpoints REST classiques :
 ═══════════════════════════════════════════════════════════════════════════════
 """
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI, Depends, HTTPException, status, Header
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
@@ -130,6 +131,12 @@ app.include_router(affaires.router, dependencies=deps)
 app.include_router(contacts.router, dependencies=deps)
 # /updates sans authentification : tous les clients du réseau doivent y accéder
 app.include_router(updates.router)
+
+# /static : packages de mise à jour (zip) téléchargeables par les clients
+_STATIC_DIR = Path(__file__).parent / "static"
+_STATIC_DIR.mkdir(exist_ok=True)
+from fastapi.staticfiles import StaticFiles
+app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
     import uvicorn
