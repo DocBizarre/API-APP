@@ -42,6 +42,7 @@ for p in (_ROOT, _HERE):
 try:
     from ems_client import api as db
     from shared import garantie_generator as gargen
+    from shared import mailer
     from shared.bon_generator import apply_icon
 except ImportError as e:
     import tkinter as _tk
@@ -125,15 +126,23 @@ def row_get(row, key, default=""):
         return default
 
 
-def mk_header(parent, title, subtitle=""):
-    bar = tk.Frame(parent, bg=C["header"], height=64)
+def mk_header(parent, title, subtitle="", logo=None):
+    bar = tk.Frame(parent, bg=C["header"], height=76)
     bar.pack(fill="x")
     bar.pack_propagate(False)
-    tk.Frame(bar, bg=C["accent"], width=4).pack(side="left", fill="y")
+    tk.Frame(bar, bg=C["accent"], width=5).pack(side="left", fill="y")
+    if logo:
+        logo_wrap = tk.Frame(bar, bg=C["header"], padx=2)
+        logo_wrap.pack(side="left", fill="y")
+        lbl = tk.Label(logo_wrap, image=logo, bg=C["header"],
+                       relief="flat", padx=0, pady=0, borderwidth=0)
+        lbl.image = logo
+        lbl.pack(anchor="center", padx=12, pady=10)
+        tk.Frame(bar, bg="#a040a0", width=1).pack(side="left", fill="y", pady=14)
     inner = tk.Frame(bar, bg=C["header"])
-    inner.pack(side="left", fill="both", expand=True, padx=20)
+    inner.pack(side="left", fill="both", expand=True, padx=18, pady=8)
     tk.Label(inner, text=title, font=F["title"],
-             bg=C["header"], fg="white").pack(side="top", anchor="w", pady=(10, 0))
+             bg=C["header"], fg="white").pack(side="top", anchor="w", pady=(4, 0))
     if subtitle:
         tk.Label(inner, text=subtitle, font=F["subtitle"],
                  bg=C["header"], fg="#f0c8c8").pack(side="top", anchor="w")
@@ -412,9 +421,10 @@ class GarantiesApp(tk.Tk):
         super().__init__()
         self.withdraw()
         apply_icon(self)
+        self._logo = self._init_logo()
         self.title("EMS – Gestion des Garanties")
         self.geometry("1180x760")
-        self.minsize(900, 560)
+        self.minsize(960, 480)
         self.configure(bg=C["bg"])
         self._init_styles()
         db.init_db()  # garantit que les tables existent (base partagée)
@@ -423,6 +433,31 @@ class GarantiesApp(tk.Tk):
         self.update_idletasks()
         self.deiconify()
         self.state("zoomed")
+
+    def _init_logo(self):
+        ico_path = _ROOT / "favicon.ico"
+        try:
+            from PIL import Image, ImageTk
+            src = ico_path if ico_path.is_file() else None
+            if src is None:
+                raise FileNotFoundError
+            img = Image.open(src).convert("RGBA").resize((50, 50), Image.LANCZOS)
+            # Composite sur fond violet du header : les pixels transparents
+            # prennent la couleur du header, le logo garde ses propres couleurs.
+            bg = Image.new("RGBA", img.size, C["header"])
+            bg.alpha_composite(img)
+            return ImageTk.PhotoImage(bg.convert("RGB"))
+        except Exception:
+            pass
+        # Fallback : logo PNG base64
+        try:
+            from shared.logo_data import LOGO_EMS_B64
+            photo = tk.PhotoImage(data=LOGO_EMS_B64, format='png')
+            h = photo.height()
+            factor = max(1, round(h / 50))
+            return photo.subsample(factor, factor) if factor > 1 else photo
+        except Exception:
+            return None
 
     def _init_styles(self):
         s = ttk.Style(self)
@@ -446,7 +481,7 @@ class GarantiesApp(tk.Tk):
 
     def _build(self):
         mk_header(self, "Gestion des Garanties",
-                  f"   {_BASE_INFO}")
+                  f"   {_BASE_INFO}", logo=self._logo)
 
         # Bandeau de statistiques
         self.stats_bar = tk.Frame(self, bg=C["bg"])
@@ -489,6 +524,17 @@ class GarantiesApp(tk.Tk):
                lambda: StatutsDialog(self, on_save=self._reload_statuts),
                color=C["btn2"]).pack(side="right", padx=(0, 6))
 
+        # Boutons d'action packés AVANT le tableau pour rester visibles
+        af = tk.Frame(self, bg=C["bg"])
+        af.pack(side="bottom", fill="x", padx=20, pady=10)
+        mk_btn(af, "✏️ Modifier", self._modifier).pack(side="left", padx=3)
+        mk_btn(af, "📄 Générer fiche", self._fiche).pack(side="left", padx=3)
+        mk_btn(af, "📁 Dossier", self._dossier).pack(side="left", padx=3)
+        mk_btn(af, "🗑️ Supprimer", self._supprimer,
+               color=C["danger"]).pack(side="left", padx=3)
+        mk_btn(af, "🔄 Rafraîchir", self.refresh,
+               color=C["btn3"]).pack(side="right", padx=3)
+
         # Tableau
         cols = ("ems", "constr", "client", "moteur", "attr",
                 "statut", "ouv", "maj")
@@ -504,17 +550,12 @@ class GarantiesApp(tk.Tk):
         ]
         tf, self.tree = mk_tree(self, cols, col_defs, height=18)
         tf.pack(fill="both", expand=True, padx=20, pady=4)
+        self.tree.tag_configure("st_blue",  background="#ecf0fb")
+        self.tree.tag_configure("st_green", background="#edf7ef")
+        self.tree.tag_configure("st_red",   background="#fdecea")
+        self.tree.tag_configure("st_amber", background="#fef9e7")
+        self.tree.tag_configure("st_grey",  background="#f2f2f2")
         self.tree.bind("<Double-1>", lambda e: self._modifier())
-
-        af = tk.Frame(self, bg=C["bg"])
-        af.pack(fill="x", padx=20, pady=10)
-        mk_btn(af, "✏️ Modifier", self._modifier).pack(side="left", padx=3)
-        mk_btn(af, "📄 Générer fiche", self._fiche).pack(side="left", padx=3)
-        mk_btn(af, "📁 Dossier", self._dossier).pack(side="left", padx=3)
-        mk_btn(af, "🗑️ Supprimer", self._supprimer,
-               color=C["danger"]).pack(side="left", padx=3)
-        mk_btn(af, "🔄 Rafraîchir", self.refresh,
-               color=C["btn3"]).pack(side="right", padx=3)
 
         self._cache = []
 
@@ -534,17 +575,15 @@ class GarantiesApp(tk.Tk):
         for attr, n in s["par_attribution"].items():
             cards.append((attr, n, C["nav_sel"]))
         for label, n, col in cards:
-            outer = tk.Frame(self.stats_bar, bg=C["border"])
-            outer.pack(side="left", padx=5)
-            card = tk.Frame(outer, bg=C["surface"])
-            card.pack(padx=1, pady=1)
-            tk.Frame(card, bg=col, width=3).pack(side="left", fill="y")
-            ct = tk.Frame(card, bg=C["surface"])
-            ct.pack(side="left", padx=14, pady=6)
+            card = tk.Frame(self.stats_bar, bg=C["surface"])
+            card.pack(side="left", padx=5)
+            tk.Frame(card, bg=col, height=3).pack(fill="x")
+            ct = tk.Frame(card, bg=C["surface"], padx=20, pady=7)
+            ct.pack()
             tk.Label(ct, text=str(n), font=F["stat_value"],
-                     bg=C["surface"], fg=col).pack(anchor="w")
+                     bg=C["surface"], fg=col).pack(anchor="center")
             tk.Label(ct, text=label, font=F["stat_label"],
-                     bg=C["surface"], fg=C["text_muted"]).pack(anchor="w")
+                     bg=C["surface"], fg=C["text_muted"]).pack(anchor="center")
 
     def refresh(self):
         self._render_stats()
@@ -552,19 +591,32 @@ class GarantiesApp(tk.Tk):
                                   search=self.search_var.get(),
                                   attribution=self.attr_var.get())
         self._cache = list(items)
-        rows = []
-        for g in self._cache:
+        self.tree.delete(*self.tree.get_children())
+        for i, g in enumerate(self._cache):
             moteur = g["num_serie"] or ""
             if g["marque"]:
                 moteur = f"{g['num_serie']} ({g['marque']})"
-            rows.append((
+            row = (
                 g["num_ems"], g["num_constructeur"] or "—",
                 g["client_nom"] or "", moteur,
                 g["attribution"], g["statut"],
                 g["date_ouverture"] or "—",
                 db.fmt_paris_short(g["updated_at"]),
-            ))
-        fill_tree(self.tree, rows)
+            )
+            statut = g["statut"] or ""
+            if "Refus" in statut:
+                tag = "st_red"
+            elif statut in ("Acceptée", "Clôturée", "Cloturée"):
+                tag = "st_green"
+            elif statut == "Suivi EMS":
+                tag = "st_blue"
+            elif "Envoy" in statut:
+                tag = "st_amber"
+            elif "Clôtur" in statut or "Clotur" in statut:
+                tag = "st_grey"
+            else:
+                tag = "even" if i % 2 == 0 else "odd"
+            self.tree.insert("", "end", iid=str(i), values=row, tags=(tag,))
 
     def _sel(self):
         s = self.tree.selection()
@@ -629,19 +681,59 @@ class GarantieDialog(tk.Toplevel):
         self.is_edit = garantie_id is not None
         self.title("Modifier la garantie" if self.is_edit
                    else "Nouvelle garantie moteur")
-        self.geometry("700x760")
+        self.geometry("860x840")
+        self.minsize(860, 620)
         self.configure(bg=C["bg"])
         self.grab_set()
 
         self._moteurs = list(db.get_moteurs())
         self._clients = list(db.get_clients())
+        self._techniciens = list(db.get_techniciens())
+        self._contacts = list(db.get_contacts())
         self._moteur_by_ns = {m["num_serie"]: m for m in self._moteurs}
         self._client_by_id = {c["id"]: c for c in self._clients}
+        self._tech_by_nom = {t["nom"]: t for t in self._techniciens}
+        self._contact_by_nom = {c["nom"]: c for c in self._contacts}
 
         mk_header(self, "Garantie moteur",
                   "   Dossier de garantie constructeur / interne")
 
-        body = tk.Frame(self, bg=C["bg"])
+        # Boutons packés en bas EN PREMIER pour qu'ils restent visibles
+        # lors du redimensionnement (body expand=True prend le reste)
+        bf = tk.Frame(self, bg=C["bg"])
+        bf.pack(side="bottom", pady=12)
+        mk_btn(bf, "💾 Enregistrer",
+               lambda: self._save(False)).pack(side="left", padx=6)
+        mk_btn(bf, "📄 Enregistrer + Fiche",
+               lambda: self._save(True)).pack(side="left", padx=6)
+        mk_btn(bf, "📧 Prévenir client",
+               self._mail_client_garantie, color=C["btn2"]).pack(side="left", padx=6)
+        mk_btn(bf, "📧 Prévenir responsable",
+               self._mail_tech_garantie, color=C["btn2"]).pack(side="left", padx=6)
+        mk_btn(bf, "Annuler", self.destroy,
+               color=C["btn3"]).pack(side="left", padx=6)
+
+        _canvas = tk.Canvas(self, bg=C["bg"], highlightthickness=0)
+        _vsb = ttk.Scrollbar(self, orient="vertical", command=_canvas.yview)
+        _canvas.configure(yscrollcommand=_vsb.set)
+        _vsb.pack(side="right", fill="y")
+        _canvas.pack(fill="both", expand=True)
+        body = tk.Frame(_canvas, bg=C["bg"])
+        _win = _canvas.create_window((0, 0), window=body, anchor="nw")
+        body.bind("<Configure>",
+                  lambda e: _canvas.configure(scrollregion=_canvas.bbox("all")))
+        _canvas.bind("<Configure>",
+                     lambda e: _canvas.itemconfig(_win, width=e.width))
+
+        def _on_wheel(ev):
+            try: _canvas.yview_scroll(int(-1 * (ev.delta / 120)), "units")
+            except tk.TclError: pass
+        self.bind("<MouseWheel>", _on_wheel)
+        for _cls in ("TFrame", "Frame", "TLabel", "Label",
+                     "TCheckbutton", "Checkbutton", "TButton", "Button"):
+            self.bind_class(_cls, "<MouseWheel>", _on_wheel, add="+")
+
+        body = tk.Frame(body, bg=C["bg"])
         body.pack(fill="both", expand=True, padx=24, pady=12)
 
         tk.Label(body, text="Moteur (N° série) *", bg=C["bg"],
@@ -700,6 +792,57 @@ class GarantieDialog(tk.Toplevel):
                      values=db.get_statuts_garantie(), width=30,
                      state="readonly").pack(fill="x", pady=(2, 0))
 
+        tk.Label(body, text="Responsable garantie", bg=C["bg"],
+                 font=F["body_bold"], anchor="w").pack(anchor="w")
+        self.responsable_var = tk.StringVar()
+        self.responsable_combo = SearchableCombobox(
+            body, textvariable=self.responsable_var,
+            values=[t["nom"] for t in self._techniciens], width=44)
+        self.responsable_combo.pack(fill="x", pady=(2, 10))
+
+        # Demandeur
+        tk.Label(body, text="Demandeur", bg=C["bg"],
+                 font=F["body_bold"], anchor="w").pack(anchor="w")
+        _contact_noms = [c["nom"] for c in self._contacts]
+        self.demandeur_var = tk.StringVar()
+        self.demandeur_combo = SearchableCombobox(
+            body, textvariable=self.demandeur_var,
+            values=_contact_noms, width=44, allow_free_text=True)
+        self.demandeur_combo.pack(fill="x", pady=(2, 4))
+        self.demandeur_combo.bind("<<ComboboxSelected>>", self._on_demandeur_selected)
+        dem_row = tk.Frame(body, bg=C["bg"])
+        dem_row.pack(fill="x", pady=(0, 10))
+        self.email_demand_var = tk.StringVar()
+        self.tel_demand_var = tk.StringVar()
+        for lbl, var in [("Email", self.email_demand_var), ("Tél.", self.tel_demand_var)]:
+            f = tk.Frame(dem_row, bg=C["bg"])
+            f.pack(side="left", padx=(0, 16))
+            tk.Label(f, text=lbl, bg=C["bg"], font=F["body"]).pack(anchor="w")
+            ttk.Entry(f, textvariable=var, width=24).pack()
+
+        # Intervention liée (optionnel)
+        tk.Label(body, text="Intervention liée (optionnel)", bg=C["bg"],
+                 font=F["body_bold"], anchor="w").pack(anchor="w")
+        self._interventions = list(db.get_interventions(statut="Tous"))
+        self._inv_labels = {}
+        _inv_list = []
+        for inv in self._interventions:
+            lab = (f"{inv.get('num_bon','')} — "
+                   f"{inv.get('num_serie','') or inv.get('navire','')} — "
+                   f"{inv.get('type_intervention','')} — "
+                   f"{inv.get('client_nom','')}").strip(" —")
+            self._inv_labels[lab] = inv
+            _inv_list.append(lab)
+        self.inv_lie_var = tk.StringVar()
+        self.inv_lie_combo = SearchableCombobox(
+            body, textvariable=self.inv_lie_var,
+            values=_inv_list, width=44)
+        self.inv_lie_combo.pack(fill="x", pady=(2, 4))
+        self.inv_lie_combo.bind("<<ComboboxSelected>>", self._on_inv_lie_selected)
+        tk.Label(body, text="💡 Tapez un n° de bon, un n° de série ou un client pour filtrer",
+                 bg=C["bg"], fg=C["text_muted"],
+                 font=("Segoe UI", 8, "italic")).pack(anchor="w", pady=(0, 10))
+
         row3 = tk.Frame(body, bg=C["bg"])
         row3.pack(fill="x", pady=(0, 10))
         do = tk.Frame(row3, bg=C["bg"])
@@ -735,17 +878,87 @@ class GarantieDialog(tk.Toplevel):
                                  padx=6, pady=4)
         self.txt_comm.pack(fill="x", pady=(2, 4))
 
-        bf = tk.Frame(self, bg=C["bg"])
-        bf.pack(side="bottom", pady=12)
-        mk_btn(bf, "💾 Enregistrer",
-               lambda: self._save(False)).pack(side="left", padx=6)
-        mk_btn(bf, "📄 Enregistrer + Fiche",
-               lambda: self._save(True)).pack(side="left", padx=6)
-        mk_btn(bf, "Annuler", self.destroy,
-               color=C["btn3"]).pack(side="left", padx=6)
-
         if self.is_edit:
             self.after(50, self._load)
+
+    def _mail_client_garantie(self):
+        if not self.is_edit:
+            messagebox.showinfo("Sauvegarde requise",
+                "Enregistrez d'abord le dossier avant de notifier le client.")
+            return
+        g = db.get_garantie(garantie_id=self.garantie_id)
+        client = db.get_client(g["client_id"]) if g.get("client_id") else None
+        moteur = db.get_moteur(g["moteur_id"]) if g.get("moteur_id") else None
+        email = row_get(client, "email") if client else ""
+        if not email:
+            messagebox.showwarning("Email manquant",
+                "Aucun email renseigné pour ce client.")
+            return
+        num_ems = row_get(g, "num_ems")
+        fiche_path = ""
+        _d = gargen._get_garanties_root() / num_ems
+        p = _d / "fiche_garantie.html"
+        if p.exists():
+            fiche_path = str(p)
+        _, pj_auto = mailer.email_garantie_client(g, client or {}, moteur or {},
+                                                   fiche_path)
+        if not pj_auto and fiche_path:
+            messagebox.showinfo("Pièce jointe",
+                f"Joignez la fiche manuellement depuis :\n{_d}")
+        db.mark_notifie_garantie(self.garantie_id, "client")
+
+    def _mail_tech_garantie(self):
+        if not self.is_edit:
+            messagebox.showinfo("Sauvegarde requise",
+                "Enregistrez d'abord le dossier avant de notifier le responsable.")
+            return
+        g = db.get_garantie(garantie_id=self.garantie_id)
+        responsable = row_get(g, "responsable")
+        if not responsable:
+            messagebox.showwarning("Responsable manquant",
+                "Aucun responsable désigné pour ce dossier.")
+            return
+        t = db.get_technicien_by_nom(responsable)
+        tech_email = row_get(t, "email") if t else ""
+        if not tech_email:
+            messagebox.showwarning("Email manquant",
+                f"Aucun email renseigné pour {responsable}.")
+            return
+        client = db.get_client(g["client_id"]) if g.get("client_id") else None
+        moteur = db.get_moteur(g["moteur_id"]) if g.get("moteur_id") else None
+        num_ems = row_get(g, "num_ems")
+        fiche_path = ""
+        _d = gargen._get_garanties_root() / num_ems
+        p = _d / "fiche_garantie.html"
+        if p.exists():
+            fiche_path = str(p)
+        _, pj_auto = mailer.email_garantie_technicien(g, client or {}, moteur or {},
+                                                       tech_email, fiche_path)
+        if not pj_auto and fiche_path:
+            messagebox.showinfo("Pièce jointe",
+                f"Joignez la fiche manuellement depuis :\n{_d}")
+        db.mark_notifie_garantie(self.garantie_id, "tech")
+
+    def _on_demandeur_selected(self, *_):
+        c = self._contact_by_nom.get(self.demandeur_var.get())
+        if c:
+            if not self.email_demand_var.get():
+                self.email_demand_var.set(c.get("email", ""))
+            if not self.tel_demand_var.get():
+                self.tel_demand_var.set(c.get("telephone", ""))
+
+    def _on_inv_lie_selected(self, *_):
+        inv = self._inv_labels.get(self.inv_lie_var.get())
+        if not inv:
+            return
+        if not self.demandeur_var.get():
+            nom = row_get(inv, "nom_demandeur")
+            if nom:
+                self.demandeur_combo.set(nom)
+                if not self.email_demand_var.get():
+                    self.email_demand_var.set(row_get(inv, "email_demandeur"))
+                if not self.tel_demand_var.get():
+                    self.tel_demand_var.set(row_get(inv, "telephone_demandeur"))
 
     def _on_moteur(self, _e=None):
         m = self._moteur_by_ns.get(self.moteur_var.get())
@@ -797,6 +1010,29 @@ class GarantieDialog(tk.Toplevel):
                                    db.GARANTIE_ATTRIBUTION_DEFAULT))
         self.statut_var.set(row_get(g, "statut",
                                      db.GARANTIE_STATUT_DEFAULT))
+        self.responsable_combo.set(row_get(g, "responsable"))
+        # Demandeur : depuis la garantie, sinon depuis l'intervention liée
+        nom_dem = row_get(g, "nom_demandeur")
+        if not nom_dem:
+            inv_id_dem = row_get(g, "intervention_id")
+            if inv_id_dem:
+                inv = db.get_intervention(inv_id=inv_id_dem)
+                if inv:
+                    nom_dem = row_get(inv, "nom_demandeur")
+                    if not self.email_demand_var.get():
+                        self.email_demand_var.set(row_get(inv, "email_demandeur"))
+                    if not self.tel_demand_var.get():
+                        self.tel_demand_var.set(row_get(inv, "telephone_demandeur"))
+        self.demandeur_combo.set(nom_dem)
+        self.email_demand_var.set(row_get(g, "email_demandeur") or self.email_demand_var.get())
+        self.tel_demand_var.set(row_get(g, "telephone_demandeur") or self.tel_demand_var.get())
+        # Intervention liée
+        inv_id = row_get(g, "intervention_id")
+        if inv_id:
+            for lab, inv in self._inv_labels.items():
+                if inv.get("id") == inv_id:
+                    self.inv_lie_combo.set(lab)
+                    break
         self.d_ouv_var.set(row_get(g, "date_ouverture"))
         self.d_clo_var.set(row_get(g, "date_cloture"))
         self.montant_var.set(row_get(g, "montant"))
@@ -833,6 +1069,12 @@ class GarantieDialog(tk.Toplevel):
             "client_id": m["client_id"],
             "attribution": self.attr_var.get(),
             "statut": self.statut_var.get(),
+            "responsable": self.responsable_var.get().strip(),
+            "nom_demandeur": self.demandeur_var.get().strip(),
+            "email_demandeur": self.email_demand_var.get().strip(),
+            "telephone_demandeur": self.tel_demand_var.get().strip(),
+            "intervention_id": (self._inv_labels[self.inv_lie_var.get()]["id"]
+                                if self.inv_lie_var.get() in self._inv_labels else None),
             "date_ouverture": self.d_ouv_var.get().strip(),
             "date_cloture": self.d_clo_var.get().strip(),
             "montant": self.montant_var.get().strip(),
