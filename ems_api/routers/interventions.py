@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import or_
 
 from ..database import get_db
-from ..models import Intervention, Client, Moteur
+from ..models import Intervention, Client, Moteur, Contact
 from ..schemas.intervention import (
     InterventionCreate, InterventionUpdate, InterventionOut, SignatureIn,
 )
@@ -35,6 +35,36 @@ except Exception:
 
 
 router = APIRouter(prefix="/interventions", tags=["interventions"])
+
+
+def _upsert_contact(db: Session, nom: str, email: str, telephone: str):
+    """Mémorise ou met à jour un contact dans la table contacts (fail-safe).
+    Utilise un savepoint pour ne pas annuler la transaction parente en cas d'erreur."""
+    nom = (nom or "").strip()
+    if not nom:
+        return
+    try:
+        with db.begin_nested():
+            existing = db.query(Contact).filter(Contact.nom == nom).first()
+            if existing:
+                existing.usage_count = (existing.usage_count or 0) + 1
+                if email and not existing.email:
+                    existing.email = email
+                if telephone and not existing.telephone:
+                    existing.telephone = telephone
+            else:
+                db.add(Contact(
+                    id=str(uuid4()),
+                    nom=nom,
+                    email=(email or "").strip(),
+                    telephone=(telephone or "").strip(),
+                    usage_count=1,
+                ))
+    except Exception:
+        import logging as _log
+        _log.getLogger(__name__).warning(
+            "Impossible d'upsert le contact %r (table absente ou erreur schema).", nom
+        )
 
 
 # Chargement anticipe des relations utilisees par _to_out : evite le N+1.
@@ -142,6 +172,30 @@ def list_urgentes(limit: int = Query(10, ge=1, le=100),
     return [_to_out(i) for i in q.all()]
 
 
+@router.get("/a-programmer", response_model=List[InterventionOut])
+def list_a_programmer(limit: int = Query(10, ge=1, le=100),
+                       db: Session = Depends(get_db)):
+    """Interventions au statut 'Date à programmer'."""
+    q = (db.query(Intervention)
+         .options(*_EAGER)
+         .filter(Intervention.statut == "Date à programmer")
+         .order_by(Intervention.created_at.desc())
+         .limit(limit))
+    return [_to_out(i) for i in q.all()]
+
+
+@router.get("/a-facturer", response_model=List[InterventionOut])
+def list_a_facturer(limit: int = Query(10, ge=1, le=100),
+                    db: Session = Depends(get_db)):
+    """Interventions au statut 'À facturer'."""
+    q = (db.query(Intervention)
+         .options(*_EAGER)
+         .filter(Intervention.statut == "À facturer")
+         .order_by(Intervention.created_at.desc())
+         .limit(limit))
+    return [_to_out(i) for i in q.all()]
+
+
 @router.get("/non-notifies", response_model=List[InterventionOut])
 def list_non_notifies(limit: int = Query(50, ge=1, le=500),
                        db: Session = Depends(get_db)):
@@ -194,6 +248,12 @@ def create_intervention(data: InterventionCreate, db: Session = Depends(get_db))
         payload["num_bon"] = next_num_bon(db, settings.DEVICE_PREFIX)
     inv = Intervention(id=str(uuid4()), **payload)
     db.add(inv)
+    _upsert_contact(db, payload.get("nom_signataire", ""),
+                    payload.get("email_signataire", ""),
+                    payload.get("telephone_signataire", ""))
+    _upsert_contact(db, payload.get("nom_demandeur", ""),
+                    payload.get("email_demandeur", ""),
+                    payload.get("telephone_demandeur", ""))
     db.commit()
     db.refresh(inv)
     return _to_out(inv)
@@ -205,10 +265,17 @@ def update_intervention(inv_id: str, data: InterventionUpdate,
     inv = db.query(Intervention).filter(Intervention.id == inv_id).first()
     if not inv:
         raise HTTPException(404, f"Intervention {inv_id} introuvable")
-    for field, value in data.model_dump(exclude_unset=True).items():
+    updated = data.model_dump(exclude_unset=True)
+    for field, value in updated.items():
         setattr(inv, field, value)
     # Incrémenter la version pour la détection de conflit lors de la synchro
     inv.version = (inv.version or 0) + 1
+    _upsert_contact(db, updated.get("nom_signataire", inv.nom_signataire),
+                    updated.get("email_signataire", inv.email_signataire),
+                    updated.get("telephone_signataire", inv.telephone_signataire))
+    _upsert_contact(db, updated.get("nom_demandeur", inv.nom_demandeur),
+                    updated.get("email_demandeur", inv.email_demandeur),
+                    updated.get("telephone_demandeur", inv.telephone_demandeur))
     db.commit()
     db.refresh(inv)
     return _to_out(inv)

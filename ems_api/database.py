@@ -33,7 +33,7 @@ def init_db():
     from .models import client, moteur, intervention, garantie  # noqa
     from .models import amelioration, technicien  # noqa
     from .models import configurations  # noqa
-    from .models import affaire  # noqa
+    from .models import affaire, contact  # noqa
     Base.metadata.create_all(bind=engine)
 
     # Migrations : ajout de colonnes manquantes sur tables existantes
@@ -42,11 +42,38 @@ def init_db():
         ("interventions", "moteurs_supplementaires_json", "TEXT DEFAULT '[]'"),
         ("interventions", "marque",                       "TEXT DEFAULT ''"),
         ("interventions", "commentaire",                  "TEXT DEFAULT ''"),
+        ("interventions", "nom_signataire",               "TEXT DEFAULT ''"),
+        ("interventions", "email_signataire",             "TEXT DEFAULT ''"),
+        ("interventions", "telephone_signataire",         "TEXT DEFAULT ''"),
+        ("interventions", "nom_demandeur",                "TEXT DEFAULT ''"),
+        ("interventions", "email_demandeur",              "TEXT DEFAULT ''"),
+        ("interventions", "telephone_demandeur",          "TEXT DEFAULT ''"),
         ("moteurs", "client_utilisateur_nom",     "TEXT DEFAULT ''"),
         ("moteurs", "client_utilisateur_email",   "TEXT DEFAULT ''"),
         ("moteurs", "client_utilisateur_tel",     "TEXT DEFAULT ''"),
         ("moteurs", "client_utilisateur_adresse", "TEXT DEFAULT ''"),
         ("moteurs", "parent_moteur_id",           "TEXT"),
+        ("affaires", "prix_ht",                 "TEXT DEFAULT ''"),
+        ("affaires", "exonere_tva",             "INTEGER DEFAULT 0"),
+        ("affaires", "date_achat",              "TEXT DEFAULT ''"),
+        ("affaires", "fournisseur",             "TEXT DEFAULT ''"),
+        ("affaires", "etablissement_financier",   "TEXT DEFAULT ''"),
+        ("affaires", "echeances_facturation",     "TEXT DEFAULT '[]'"),
+        ("affaires", "num_commande_client",       "TEXT DEFAULT ''"),
+        ("affaires", "whiteboard",               "TEXT DEFAULT ''"),
+        ("affaires", "transporteur",             "TEXT DEFAULT ''"),
+        ("affaires", "contact_transport",        "TEXT DEFAULT ''"),
+        ("affaires", "prix_transport",           "TEXT DEFAULT ''"),
+        ("affaires", "num_suivi_transport",      "TEXT DEFAULT ''"),
+        ("affaires", "instructions_transport",   "TEXT DEFAULT ''"),
+        ("affaire_items", "dossier_path",       "TEXT DEFAULT ''"),
+        ("contacts", "usage_count",             "INTEGER DEFAULT 1"),
+        ("garanties", "responsable",             "TEXT DEFAULT ''"),
+        ("garanties", "client_notifie",          "INTEGER DEFAULT 0"),
+        ("garanties", "tech_notifie",            "INTEGER DEFAULT 0"),
+        ("garanties", "nom_demandeur",           "TEXT DEFAULT ''"),
+        ("garanties", "email_demandeur",         "TEXT DEFAULT ''"),
+        ("garanties", "telephone_demandeur",     "TEXT DEFAULT ''"),
     ]
     insp = _inspect(engine)
     for table, col, col_def in _migrations:
