@@ -18,8 +18,12 @@ __pycache__/
 # Données runtime (DB, logs)
 ems_api/data/ems.db
 ems_api/data/ems.log
+ems_api/data/dossiers/
 ems_project/data/ems.db
 *.log
+
+# Scripts et dossiers de vérification/debug
+verify_tmp/
 
 # Config locale (contient IP du serveur)
 # config.ini (racine) est versionné intentionnellement (template)
