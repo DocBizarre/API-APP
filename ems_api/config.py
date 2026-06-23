@@ -1,16 +1,31 @@
 """
 Configuration centrale de l'API EMS.
-Toutes les valeurs peuvent être surchargées via variables d'environnement.
+Priorité : config.ini [files] data_dir  >  env EMS_DATA_DIR  >  ./data
 """
 import os
+from configparser import ConfigParser
 from pathlib import Path
+
+
+def _detect_data_dir(base: Path) -> Path:
+    """Lit data_dir depuis config.ini (à côté du repo), sinon env var, sinon défaut."""
+    for ini in (base.parent / "config.ini", base / "config.ini"):
+        if ini.is_file():
+            try:
+                cfg = ConfigParser()
+                cfg.read(str(ini), encoding="utf-8")
+                d = cfg.get("files", "data_dir", fallback="").strip()
+                if d:
+                    return Path(d)
+            except Exception:
+                pass
+    return Path(os.environ.get("EMS_DATA_DIR", str(base / "data")))
 
 
 class Settings:
     # ─── Chemins ─────────────────────────────────────────────────────────
     BASE_DIR: Path = Path(__file__).resolve().parent
-    DATA_DIR: Path = Path(os.environ.get("EMS_DATA_DIR",
-                                          str(BASE_DIR / "data")))
+    DATA_DIR: Path = _detect_data_dir(BASE_DIR)
     DB_PATH: Path = DATA_DIR / "ems.db"
     DOSSIERS_DIR: Path = DATA_DIR / "dossiers"
     GARANTIES_DIR: Path = DATA_DIR / "garanties"
