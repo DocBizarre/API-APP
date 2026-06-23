@@ -27,6 +27,30 @@ $ROOT    = $PSScriptRoot
 $DIST    = Join-Path $ROOT "dist"
 $DEPLOY  = Join-Path $ROOT "EMS_Distribution"
 
+# ─── Bump de version (uniquement pour un build complet) ───────────────────────
+$versionFile = "$ROOT\shared\version.py"
+$currentVersionLine = Get-Content $versionFile | Where-Object { $_ -match '__version__' } | Select-Object -First 1
+$currentVersion = [regex]::Match($currentVersionLine, '"([^"]+)"').Groups[1].Value
+
+if (-not $App) {
+    Write-Host ""
+    Write-Host "  Version actuelle : $currentVersion" -ForegroundColor Cyan
+    $newVersion = Read-Host "  Nouvelle version (Entree pour garder $currentVersion)"
+    if ($newVersion -and $newVersion -ne $currentVersion) {
+        if ($newVersion -notmatch '^\d+\.\d+\.\d+$') {
+            Write-Host "  Format invalide (attendu : X.Y.Z)" -ForegroundColor Red
+            exit 1
+        }
+        $content = Get-Content $versionFile -Raw
+        $content = $content -replace '__version__ = "[^"]+"', "__version__ = `"$newVersion`""
+        Set-Content $versionFile -Value $content.TrimEnd() -Encoding UTF8 -NoNewline
+        Write-Host "  Version mise a jour : $currentVersion -> $newVersion" -ForegroundColor Green
+    } else {
+        Write-Host "  Version inchangee : $currentVersion" -ForegroundColor Yellow
+    }
+    Write-Host ""
+}
+
 $SPECS = [ordered]@{
     "Launcher"     = "ems_launcher.spec"
     "Affaire"      = "EMS_Affaire.spec"
