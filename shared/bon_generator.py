@@ -311,6 +311,7 @@ def _build_html(inv, client=None, moteur=None, photos_annexe=None,
     urgence = _g(inv, "urgence", "Normale")
     type_inv = _g(inv, "type_intervention")
 
+    cls_garantie = _g(inv, "garantie_intervention", 0)
     cls_factur = _g(inv, "facturable", 0)
     cls_interne = _g(inv, "interne", 0)
 
@@ -476,7 +477,7 @@ def _build_html(inv, client=None, moteur=None, photos_annexe=None,
                 hdr_txt += f" &ndash; {date_jour}"
             jour_hdr = (f'<tr><td colspan="4" style="background:#eef2f7;'
                         f'font-weight:700;font-size:9.5px;color:#002b5c;'
-                        f'padding:3px 8px;">{hdr_txt}</td></tr>')
+                        f'padding:3px 8px;text-align:center;">{hdr_txt}</td></tr>')
         else:
             jour_hdr = ""
 
@@ -497,7 +498,7 @@ def _build_html(inv, client=None, moteur=None, photos_annexe=None,
             t_p  = _esc(tech.get("temps_preparation", ""))
             t_r  = _esc(tech.get("temps_rangement", ""))
             rows_html += (
-                f'<tr><td class="lbl">Temps de trajet</td>'
+                f'<tr><td class="lbl">Km parcourus</td>'
                 f'<td class="val">{t_ar}</td>'
                 f'<td class="lbl">Frais de repas</td>'
                 f'<td class="val">{_check(tech.get("frais_repas", 0))}</td></tr>'
@@ -543,8 +544,19 @@ def _build_html(inv, client=None, moteur=None, photos_annexe=None,
             hi += 1; mi = 0
         return f"{hi}h{mi:02d}" if mi else f"{hi}h"
 
-    _t_keys = ["trajet_aller_retour", "duree_intervention",
-               "temps_preparation", "temps_rangement"]
+    def _parse_km(s):
+        s = str(s).strip().lower().replace(',', '.').replace(' ', '')
+        if not s:
+            return None
+        m = _re.match(r'^(\d+(?:\.\d+)?)(?:km)?$', s)
+        return float(m.group(1)) if m else None
+
+    def _fmt_km(v):
+        return f"{int(v)} km" if v == int(v) else f"{v:.1f} km"
+
+    _h_keys = ["duree_intervention", "temps_preparation", "temps_rangement"]
+    _km_keys = ["trajet_aller_retour"]
+    _t_keys = _km_keys + _h_keys
     _f_keys = ["frais_repas", "frais_hotel", "frais_peages"]
     _totaux = {k: None for k in _t_keys}
     _frais  = {k: 0 for k in _f_keys}
@@ -552,8 +564,12 @@ def _build_html(inv, client=None, moteur=None, photos_annexe=None,
     for _j in jours_list:
         for _t in _j.get("techniciens", []):
             _nb_tech_jours += 1
-            for _k in _t_keys:
+            for _k in _h_keys:
                 _v = _parse_h(_t.get(_k, ""))
+                if _v is not None:
+                    _totaux[_k] = (_totaux[_k] or 0) + _v
+            for _k in _km_keys:
+                _v = _parse_km(_t.get(_k, ""))
                 if _v is not None:
                     _totaux[_k] = (_totaux[_k] or 0) + _v
             for _k in _f_keys:
@@ -561,6 +577,9 @@ def _build_html(inv, client=None, moteur=None, photos_annexe=None,
 
     def _tv(k):
         return _fmt_h(_totaux[k]) if _totaux[k] is not None else "&mdash;"
+
+    def _tv_km(k):
+        return _fmt_km(_totaux[k]) if _totaux[k] is not None else "&mdash;"
 
     _show_totaux = (len(jours_list) > 1 or _nb_tech_jours > 1 or
                     any(v is not None for v in _totaux.values()))
@@ -577,8 +596,8 @@ def _build_html(inv, client=None, moteur=None, photos_annexe=None,
             f'TOTAUX ({_nb_j_lbl} &ndash; {_nb_t_lbl})</td></tr>'
             f'<tr><td class="lbl">Duree interventions</td>'
             f'<td class="val"><strong>{_tv("duree_intervention")}</strong></td>'
-            f'<td class="lbl">Trajet total</td>'
-            f'<td class="val">{_tv("trajet_aller_retour")}</td></tr>'
+            f'<td class="lbl">Distance totale</td>'
+            f'<td class="val">{_tv_km("trajet_aller_retour")}</td></tr>'
             f'<tr><td class="lbl">Preparation</td>'
             f'<td class="val">{_tv("temps_preparation")}</td>'
             f'<td class="lbl">Rangement</td>'
@@ -602,6 +621,11 @@ def _build_html(inv, client=None, moteur=None, photos_annexe=None,
                "Normale": "norm"}.get(urgence, "norm")
 
     type_inv_display = _esc(type_inv) if type_inv else "—"
+    _cls_parts = []
+    if cls_garantie: _cls_parts.append("Garantie")
+    if cls_factur:   _cls_parts.append("Facturable")
+    if cls_interne:  _cls_parts.append("Interne")
+    cls_display = " / ".join(_cls_parts)
 
     logo_uri = _logo_data_uri()
     logo_html = f'<img src="{logo_uri}" alt="EMS">' if logo_uri else '<div class="logo-fallback">EMS</div>'
@@ -620,7 +644,7 @@ def _build_html(inv, client=None, moteur=None, photos_annexe=None,
         _safe = lambda s: str(s).replace('"', "'").replace("\\", "")
         _footer_left = _safe(num_bon)
         if num_cmd:
-            _footer_left += f"  –  N° cmd : {_safe(num_cmd)}"
+            _footer_left += f"  –  N° CMD : {_safe(num_cmd)}"
         css_pdf_extra = f"""
 /* === WeasyPrint : regle @page unique avec pieds de page === */
 @page {{
@@ -921,6 +945,7 @@ tr, .sign-box {{ page-break-inside: avoid; break-inside: avoid; }}
   <div class="header-right">
     <div class="titre">Type d'intervention :</div>
     <div class="type-selected">{type_inv_display}</div>
+    {f'<div class="type-selected" style="margin-top:2px;">{_esc(cls_display)}</div>' if cls_display else ''}
   </div>
 </div>
 </div>
@@ -947,7 +972,7 @@ tr, .sign-box {{ page-break-inside: avoid; break-inside: avoid; }}
 <div class="section-header section-header-orange">CONTACTS</div>
 <table class="bloc-info">
   <tr>
-    <td class="lbl-section" colspan="4">Demandeur (personne ayant appele)</td>
+    <td class="lbl-section" colspan="4">Demandeur</td>
   </tr>
   <tr>
     <td class="lbl">Nom</td>
@@ -960,7 +985,7 @@ tr, .sign-box {{ page-break-inside: avoid; break-inside: avoid; }}
     <td colspan="3">{_esc(email_demandeur)}</td>
   </tr>
   <tr>
-    <td class="lbl-section" colspan="4">Signataire (personne signant le bon)</td>
+    <td class="lbl-section" colspan="4">Signataire</td>
   </tr>
   <tr>
     <td class="lbl">Nom</td>
@@ -978,12 +1003,6 @@ tr, .sign-box {{ page-break-inside: avoid; break-inside: avoid; }}
 <div class="section-header section-header-green">EQUIPEMENT</div>
 {_moteur_bloc("MOTEUR 1", navire, machine, marque, num_serie, type_mot, ref_const, nb_heures, date_svc)}
 {_extra_moteurs_html}
-<!-- Classifications -->
-<div class="classif">
-  <span class="pill {'on' if cls_factur else ''}">{_check(cls_factur)} Facturable</span>
-  <span class="pill {'on' if cls_interne else ''}">{_check(cls_interne)} Interne</span>
-</div>
-
 <!-- DEMANDE DU CLIENT -->
 <div class="section-bloc">
 <div class="section-title">DEMANDE DU CLIENT :</div>

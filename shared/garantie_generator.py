@@ -50,6 +50,27 @@ def _get_garanties_root() -> Path:
 _DOSSIERS_BASE = _get_garanties_root()
 
 
+# ─── Logo ────────────────────────────────────────────────────────────────────
+def _logo_data_uri() -> str:
+    logo_path = Path(__file__).parent / "assets" / "logo_ems.png"
+    if logo_path.is_file():
+        try:
+            import base64
+            b = logo_path.read_bytes()
+            return f"data:image/png;base64,{base64.b64encode(b).decode()}"
+        except Exception:
+            pass
+    try:
+        from .logo_data import LOGO_EMS_B64
+        return f"data:image/png;base64,{LOGO_EMS_B64}"
+    except ImportError:
+        try:
+            from shared.logo_data import LOGO_EMS_B64
+            return f"data:image/png;base64,{LOGO_EMS_B64}"
+        except ImportError:
+            return ""
+
+
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 def _esc(v) -> str:
     """Echappe un texte pour le HTML, gere les None."""
@@ -105,26 +126,41 @@ def generer_html(g: Dict) -> str:
     titre = f"Fiche Garantie - {num_ems}" if num_ems else "Fiche Garantie"
 
     def ligne(label, value, color=None):
-        v = _esc(value) if value else "<span class='vide'>-</span>"
-        style = f" style='color:{color}'" if color else ""
+        v = _esc(value) if value else "<span class='vide'>—</span>"
+        style = f" style='color:{color};font-weight:600'" if color else ""
         return (f"<tr><th>{_esc(label)}</th>"
                 f"<td{style}>{v}</td></tr>")
 
     def bloc(label, value):
-        v = _esc(value) if value else "<em class='vide'>(aucun)</em>"
+        v = _esc(value).replace("\n", "<br>") if value else "<em class='vide'>(aucun)</em>"
         return (f"<div class='bloc'>"
                 f"<div class='bloc-label'>{_esc(label)}</div>"
                 f"<div class='bloc-content'>{v}</div></div>")
 
-    # Couleur du statut
     couleurs_statut = {
-        "Suivi EMS": "#0056b3",
-        "Envoyée":   "#1e7e3e",
+        "Suivi EMS": "#5a3090",
+        "Envoyée":   "#c67c00",
         "Acceptée":  "#1e7e3e",
         "Refusée":   "#c62828",
-        "Cloturée":  "#6b7785",
+        "Clôturée":  "#555a64",
+        "Cloturée":  "#555a64",
     }
-    statut_color = couleurs_statut.get(statut, "#1a2332")
+    statut_color = couleurs_statut.get(statut, "#92177e")
+
+    logo_uri = _logo_data_uri()
+    if logo_uri:
+        logo_html = (f'<img src="{logo_uri}" alt="EMS – Emeraude Moteurs Systemes" '
+                     f'style="max-height:54px;max-width:150px;">')
+    else:
+        logo_html = '<span class="logo-text">EMS</span>'
+
+    date_line = ""
+    if date_ouverture:
+        date_line += f"Ouverture&nbsp;: {_esc(date_ouverture)}"
+    if date_cloture:
+        if date_line:
+            date_line += "&nbsp;&nbsp;·&nbsp;&nbsp;"
+        date_line += f"Clôture&nbsp;: {_esc(date_cloture)}"
 
     return f"""<!DOCTYPE html>
 <html lang="fr">
@@ -132,103 +168,166 @@ def generer_html(g: Dict) -> str:
 <meta charset="UTF-8">
 <title>{_esc(titre)}</title>
 <style>
-  @page {{ size: A4; margin: 1.5cm; }}
+  @page {{ size: A4; margin: 1.2cm 1.4cm; }}
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{
     font-family: 'Segoe UI', Arial, sans-serif;
-    color: #1a2332;
+    color: #1a1a2e;
     background: #fff;
-    margin: 0;
-    padding: 20px 30px;
-    font-size: 11pt;
+    font-size: 10.5pt;
+    line-height: 1.45;
   }}
-  h1 {{
-    color: #002b5c;
-    border-bottom: 3px solid #c62828;
-    padding-bottom: 8px;
-    margin: 0 0 6px 0;
-    font-size: 22pt;
-  }}
-  h2 {{
-    color: #002b5c;
-    font-size: 13pt;
-    margin: 24px 0 8px 0;
-    border-bottom: 1px solid #d0d7de;
-    padding-bottom: 4px;
-  }}
-  .header-info {{
+
+  /* ── Header ── */
+  .doc-header {{
+    background: linear-gradient(135deg, #92177e 0%, #5c0670 100%);
+    color: white;
+    padding: 18px 26px;
     display: flex;
+    align-items: center;
     justify-content: space-between;
-    color: #6b7785;
-    font-size: 10pt;
-    margin-bottom: 18px;
+    min-height: 78px;
   }}
+  .header-logo .logo-text {{
+    font-size: 24pt;
+    font-weight: 900;
+    letter-spacing: 4px;
+    color: white;
+  }}
+  .header-right {{
+    text-align: right;
+  }}
+  .header-right h1 {{
+    font-size: 17pt;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 3px;
+  }}
+  .header-right .num-ems {{
+    font-size: 11pt;
+    color: rgba(255,255,255,0.82);
+    letter-spacing: 0.5px;
+  }}
+
+  /* ── Corps ── */
+  .doc-body {{
+    padding: 20px 26px 10px;
+  }}
+
+  /* ── Bandeau statut ── */
+  .status-bar {{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #faf5fb;
+    border-left: 4px solid #92177e;
+    padding: 9px 14px;
+    margin-bottom: 18px;
+    border-radius: 0 4px 4px 0;
+  }}
+  .badge {{
+    display: inline-block;
+    padding: 4px 14px;
+    border-radius: 20px;
+    background: {statut_color};
+    color: #fff;
+    font-size: 9.5pt;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+  }}
+  .status-dates {{
+    font-size: 9pt;
+    color: #7a6080;
+  }}
+
+  /* ── Sections ── */
+  h2 {{
+    color: #92177e;
+    font-size: 9.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.9px;
+    margin: 18px 0 7px 0;
+    padding-bottom: 4px;
+    border-bottom: 2px solid #f0d0ec;
+  }}
+
+  /* ── Tableaux ── */
   table {{
     width: 100%;
     border-collapse: collapse;
-    margin: 4px 0;
+    margin-bottom: 2px;
   }}
   th, td {{
     text-align: left;
-    padding: 7px 12px;
-    border-bottom: 1px solid #e5e9ee;
+    padding: 6px 12px;
+    border-bottom: 1px solid #f0e8ee;
     vertical-align: top;
   }}
   th {{
-    background: #f5f7fa;
-    color: #6b7785;
+    color: #9a6090;
     font-weight: 600;
-    width: 30%;
-    font-size: 10pt;
+    width: 32%;
+    font-size: 9pt;
     text-transform: uppercase;
     letter-spacing: 0.3px;
   }}
-  td {{ color: #1a2332; }}
-  .vide {{ color: #b0b7be; font-style: italic; }}
-  .badge {{
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 12px;
-    background: {statut_color};
-    color: #fff;
-    font-size: 9pt;
-    font-weight: 600;
-  }}
+  td {{ color: #1a1a2e; font-size: 10pt; }}
+  tr:last-child th, tr:last-child td {{ border-bottom: none; }}
+  .vide {{ color: #b8b8c8; font-style: italic; }}
+
+  /* ── Blocs texte ── */
   .bloc {{
-    margin: 10px 0;
-    padding: 12px 14px;
-    background: #f5f7fa;
-    border-left: 3px solid #0056b3;
-    border-radius: 3px;
+    margin: 8px 0;
+    padding: 11px 15px;
+    background: #faf5fb;
+    border-left: 3px solid #92177e;
+    border-radius: 0 4px 4px 0;
   }}
   .bloc-label {{
-    font-weight: 600;
-    color: #6b7785;
-    font-size: 9pt;
+    font-weight: 700;
+    color: #92177e;
+    font-size: 8.5pt;
     text-transform: uppercase;
-    letter-spacing: 0.3px;
-    margin-bottom: 6px;
+    letter-spacing: 0.5px;
+    margin-bottom: 5px;
   }}
   .bloc-content {{
-    white-space: pre-wrap;
-    color: #1a2332;
-    line-height: 1.5;
+    color: #1a1a2e;
+    line-height: 1.55;
+    font-size: 10pt;
   }}
+
+  /* ── Footer ── */
   .footer {{
-    margin-top: 30px;
-    padding-top: 10px;
-    border-top: 1px solid #d0d7de;
-    color: #6b7785;
-    font-size: 9pt;
+    margin-top: 24px;
+    padding-top: 9px;
+    border-top: 1px solid #e8d0e8;
+    color: #8a7090;
+    font-size: 8.5pt;
     text-align: center;
+    line-height: 1.6;
   }}
+  .footer strong {{ color: #92177e; }}
 </style>
 </head>
 <body>
 
-<h1>Fiche de Garantie</h1>
-<div class="header-info">
-  <div><strong>N° EMS :</strong> {_esc(num_ems) or "-"}</div>
-  <div>Statut : <span class="badge">{_esc(statut) or "-"}</span></div>
+<div class="doc-header">
+  <div class="header-logo">
+    {logo_html}
+  </div>
+  <div class="header-right">
+    <h1>Fiche de Garantie</h1>
+    <div class="num-ems">{_esc(num_ems) or "—"}</div>
+  </div>
+</div>
+
+<div class="doc-body">
+
+<div class="status-bar">
+  <div>Statut&nbsp;: <span class="badge">{_esc(statut) or "—"}</span></div>
+  <div class="status-dates">{date_line}</div>
 </div>
 
 <h2>Identification</h2>
@@ -236,29 +335,31 @@ def generer_html(g: Dict) -> str:
   {ligne("N° EMS",            num_ems)}
   {ligne("N° constructeur",   num_constr)}
   {ligne("Client",            client_nom)}
-  {ligne("Moteur (n° série)", num_serie)}
-  {ligne("Marque moteur",     moteur_marque)}
+  {ligne("Moteur — n° série", num_serie)}
+  {ligne("Marque",            moteur_marque)}
   {ligne("Attribution",       attribution)}
 </table>
 
-<h2>Suivi</h2>
+<h2>Suivi financier</h2>
 <table>
-  {ligne("Statut",         statut, color=statut_color)}
-  {ligne("Date ouverture", date_ouverture)}
-  {ligne("Date clôture",   date_cloture)}
-  {ligne("Montant",        montant)}
+  {ligne("Statut",          statut, color=statut_color)}
+  {ligne("Date ouverture",  date_ouverture)}
+  {ligne("Date clôture",    date_cloture)}
+  {ligne("Montant",         (montant + " €") if montant else "")}
 </table>
 
 <h2>Description</h2>
 {bloc("Description de la garantie", description)}
-{bloc("Commentaires",                commentaires)}
+{bloc("Commentaires / Suivi",        commentaires)}
+
+</div>
 
 <div class="footer">
   Fiche générée le {datetime.now().strftime("%d/%m/%Y à %H:%M")}
-  &nbsp;·&nbsp; Création : {created or "-"}
-  &nbsp;·&nbsp; Dernière modification : {updated or "-"}
-  <br><br>
-  Emeraude Moteurs Systèmes
+  &nbsp;·&nbsp; Création&nbsp;: {created or "—"}
+  &nbsp;·&nbsp; Modifié&nbsp;: {updated or "—"}
+  <br>
+  <strong>Emeraude Moteurs Systèmes</strong>
 </div>
 
 </body>
