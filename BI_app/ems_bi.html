@@ -147,34 +147,52 @@ body{font-family:'Space Grotesk',sans-serif;background:var(--bg);color:var(--tex
 .alert-toggle{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;cursor:pointer;color:var(--text-2);padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface)}
 .alert-toggle:hover{background:var(--bg)}
 
+/* ══ ANIMATIONS ══ */
+@keyframes fadeInUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes heroGlowA{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-14px,10px) scale(1.08)}}
+@keyframes heroGlowB{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(12px,-8px) scale(1.1)}}
+@keyframes pulseDanger{0%,100%{opacity:1;text-shadow:0 0 0 rgba(255,135,135,0)}50%{opacity:.82;text-shadow:0 0 14px rgba(255,135,135,.55)}}
+@media (prefers-reduced-motion:reduce){
+  .dash-hero,.dash-hero::before,.dash-hero::after,.kpi,.dash-grid .cc,.hero-kpi .val.danger{animation:none!important}
+}
+
 /* ══ DASHBOARD ══ */
-.dash-hero{background:linear-gradient(135deg,var(--navy-2) 0%,var(--navy-3) 100%);border-radius:var(--rl);padding:24px 28px;margin-bottom:18px;display:flex;align-items:center;gap:24px;box-shadow:var(--sh-lg);position:relative;overflow:hidden}
-.dash-hero::before{content:'';position:absolute;top:-80px;right:-80px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(29,110,245,.22) 0%,transparent 70%);pointer-events:none}
-.dash-hero::after{content:'';position:absolute;bottom:-60px;left:160px;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,rgba(112,72,232,.12) 0%,transparent 70%);pointer-events:none}
+.dash-hero{background:linear-gradient(135deg,var(--navy-2) 0%,var(--navy-3) 100%);border-radius:var(--rl);padding:24px 28px;margin-bottom:18px;display:flex;align-items:center;gap:24px;box-shadow:var(--sh-lg);position:relative;overflow:hidden;animation:fadeInUp .5s ease both}
+.dash-hero::before{content:'';position:absolute;top:-80px;right:-80px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(29,110,245,.22) 0%,transparent 70%);pointer-events:none;animation:heroGlowA 9s ease-in-out infinite}
+.dash-hero::after{content:'';position:absolute;bottom:-60px;left:160px;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,rgba(112,72,232,.12) 0%,transparent 70%);pointer-events:none;animation:heroGlowB 11s ease-in-out infinite}
 .hero-main{flex:1;position:relative;z-index:1}
 .hero-date{font-size:11px;color:rgba(255,255,255,.38);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px}
 .hero-title{font-size:19px;font-weight:700;color:#fff;margin-bottom:3px;letter-spacing:-.3px}
 .hero-sub{font-size:13px;color:rgba(255,255,255,.45)}
 .hero-sep{width:1px;background:rgba(255,255,255,.1);align-self:stretch;flex-shrink:0;position:relative;z-index:1}
 .hero-kpis{display:flex;gap:0;position:relative;z-index:1}
-.hero-kpi{text-align:center;padding:0 22px;border-right:1px solid rgba(255,255,255,.1)}
+.hero-kpi{text-align:center;padding:0 22px;border-right:1px solid rgba(255,255,255,.1);border-radius:8px;transition:transform .18s,background .18s}
+.hero-kpi:hover{transform:translateY(-2px);background:rgba(255,255,255,.04)}
 .hero-kpi:last-child{border-right:none}
 .hero-kpi .val{font-size:26px;font-weight:700;color:#fff;line-height:1;letter-spacing:-.5px}
 .hero-kpi .val.warn{color:#ffd43b}
-.hero-kpi .val.danger{color:#ff8787}
+.hero-kpi .val.danger{color:#ff8787;display:inline-block;animation:pulseDanger 1.8s ease-in-out infinite}
 .hero-kpi .lbl{font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;margin-top:5px}
 .hero-kpi .trend{font-size:11px;margin-top:3px}
 .hero-kpi .trend.up{color:#6ee7b7}.hero-kpi .trend.dn{color:#fca5a5}.hero-kpi .trend.flat{color:rgba(255,255,255,.3)}
 
 /* KPI row */
+.kpi-section-label{grid-column:1/-1;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin:2px 0 0;display:flex;align-items:center;gap:6px}
+.kpi-section-label::after{content:'';flex:1;height:1px;background:var(--border)}
 .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
-.kpi{background:var(--surface);border-radius:var(--r);padding:15px 17px;border:1px solid var(--border);box-shadow:var(--sh-sm);display:flex;flex-direction:column;gap:6px;transition:background .2s,border-color .2s}
+.kpi{background:var(--surface);border-radius:var(--r);padding:15px 17px;border:1px solid var(--border);box-shadow:var(--sh-sm);display:flex;flex-direction:column;gap:6px;transition:background .2s,border-color .2s,transform .18s,box-shadow .18s;animation:fadeInUp .4s ease both}
+.kpi:hover{transform:translateY(-3px);box-shadow:var(--sh-lg);border-color:var(--border-2)}
+.kpi-grid .kpi:nth-child(2){animation-delay:.02s}
+.kpi-grid .kpi:nth-child(3){animation-delay:.07s}
+.kpi-grid .kpi:nth-child(4){animation-delay:.12s}
+.kpi-grid .kpi:nth-child(5){animation-delay:.17s}
 .kpi-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
 .kpi-label{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px}
-.kpi-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.kpi-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;transition:transform .25s}
+.kpi:hover .kpi-icon{transform:scale(1.12) rotate(-4deg)}
 .kpi-num{font-size:25px;font-weight:700;color:var(--text-1);line-height:1;letter-spacing:-.5px}
 .kpi-bar{height:3px;background:var(--bg-2);border-radius:2px;overflow:hidden}
-.kpi-fill{height:100%;border-radius:2px;transition:width .6s}
+.kpi-fill{height:100%;border-radius:2px;transition:width .7s cubic-bezier(.22,1,.36,1)}
 .kpi-foot{font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:5px}
 .trend-chip{display:inline-flex;align-items:center;gap:2px;font-size:11px;font-weight:600;padding:1px 5px;border-radius:5px}
 .trend-up{background:var(--green-ghost);color:var(--green)}
@@ -195,6 +213,11 @@ body{font-family:'Space Grotesk',sans-serif;background:var(--bg);color:var(--tex
 .g12{grid-template-columns:1fr 1fr}
 .gcol2{grid-column:span 2}
 .cc{background:var(--surface);border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--sh-sm);overflow:hidden;transition:background .2s,border-color .2s}
+.dash-grid .cc{transition:background .2s,border-color .2s,transform .18s,box-shadow .18s;animation:fadeInUp .45s ease both}
+.dash-grid .cc:hover{transform:translateY(-3px);box-shadow:var(--sh-lg);border-color:var(--border-2)}
+.dash-grid .cc:nth-child(1){animation-delay:.05s}
+.dash-grid .cc:nth-child(2){animation-delay:.12s}
+.dash-grid .cc:nth-child(3){animation-delay:.19s}
 .cc-head{padding:13px 17px 0;display:flex;align-items:flex-start;justify-content:space-between}
 .cc-title{font-size:13px;font-weight:600;color:var(--text-1)}
 .cc-sub{font-size:11px;color:var(--text-3);margin-top:2px}
@@ -211,7 +234,7 @@ body{font-family:'Space Grotesk',sans-serif;background:var(--bg);color:var(--tex
 .sname{flex:1;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sbar{width:75px;flex-shrink:0}
 .sbar-bg{height:5px;background:var(--bg-2);border-radius:3px;overflow:hidden}
-.sbar-fg{height:100%;border-radius:3px;transition:width .5s}
+.sbar-fg{height:100%;border-radius:3px;transition:width .6s cubic-bezier(.22,1,.36,1)}
 .scount{font-size:12px;font-weight:600;color:var(--text-2);min-width:22px;text-align:right;flex-shrink:0}
 
 /* ══ FILTER PANEL ══ */
@@ -326,7 +349,7 @@ tbody td{padding:8px 13px;color:var(--text-1);font-size:13px}
 .tech-card-stat .lbl{color:var(--text-3)}
 .tech-card-stat .val{font-weight:600;color:var(--text-1)}
 .tcs-bar{height:6px;background:var(--bg);border-radius:3px;overflow:hidden;margin-top:3px}
-.tcs-fill{height:100%;border-radius:3px}
+.tcs-fill{height:100%;border-radius:3px;transition:width .6s cubic-bezier(.22,1,.36,1)}
 .tcs-rate{font-size:20px;font-weight:700;color:var(--text-1);margin:8px 0 2px}
 .tcs-rate-lbl{font-size:11px;color:var(--text-3)}
 
@@ -364,6 +387,62 @@ tbody td{padding:8px 13px;color:var(--text-1);font-size:13px}
 
 /* Compat alias — supprime l'ancien section-heading */
 .section-heading{display:none}
+
+/* ══ HAMBURGER (bascule sidebar mobile) ══ */
+.btn-menu{display:none}
+.sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(10,22,40,.45);z-index:190;opacity:0;transition:opacity .2s}
+
+/* ══ RESPONSIVE ══ */
+/* Grand écran : recentre le contenu du dashboard au lieu de l'étirer indéfiniment */
+@media (min-width:1500px){
+  #page-dashboard > .kpi-grid, #page-dashboard > .dash-grid, #page-dashboard > .dash-hero{
+    max-width:1680px;
+    margin-left:max(24px, calc((100% - 1680px)/2));
+    margin-right:max(24px, calc((100% - 1680px)/2));
+  }
+}
+@media (max-width:1300px){
+  .g3{grid-template-columns:1fr 1fr}
+}
+@media (max-width:1100px){
+  .g2{grid-template-columns:1fr}
+  .g12{grid-template-columns:1fr}
+  .gcol2{grid-column:span 1}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  .hero-kpis{flex-wrap:wrap;row-gap:10px}
+  .hero-kpi{padding:0 16px}
+}
+@media (max-width:900px){
+  .sidebar{transform:translateX(-100%);transition:transform .22s ease;box-shadow:var(--sh-lg)}
+  .sidebar.open{transform:translateX(0)}
+  .main{margin-left:0}
+  .btn-menu{display:inline-flex}
+  .sidebar-backdrop.open{display:block;opacity:1}
+  .dash-hero{flex-direction:column;align-items:flex-start;gap:16px}
+  .hero-sep{display:none}
+  .hero-kpis{width:100%}
+  .gsearch{width:140px}
+  .gsearch:focus{width:180px}
+}
+@media (max-width:640px){
+  .kpi-grid{grid-template-columns:1fr}
+  .g3{grid-template-columns:1fr}
+  .topbar{padding:0 12px;gap:6px}
+  .topbar-title{font-size:13px}
+  .topbar-title .crumb{display:none}
+  .gsearch-wrap{display:none}
+  .page > .fp, .page > .tc, .page > .cc, .page > .kpi-grid, .page > .dash-grid,
+  .page > .dash-hero, .page > #tech-cards-grid, .page > #alerts-page-content {
+    margin-left:12px; margin-right:12px;
+  }
+  .page-header{padding:14px 12px 12px}
+  .page-header-actions{width:100%}
+  .hero-kpi{padding:0 10px}
+  .hero-kpi .val{font-size:21px}
+  .fp-body{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+  .dinner{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+  .tech-grid{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
@@ -403,12 +482,14 @@ tbody td{padding:8px 13px;color:var(--text-1);font-size:13px}
   </nav>
   <div class="sb-foot">Emeraude Moteurs Systèmes<br><span id="sb-upd"></span></div>
 </aside>
+<div class="sidebar-backdrop" id="sidebar-backdrop" onclick="toggleSidebar(false)"></div>
 
 <!-- ══ MAIN ══ -->
 <main class="main">
 
   <!-- TOPBAR -->
   <div class="topbar">
+    <button class="btn btn-ghost btn-sm btn-menu" onclick="toggleSidebar()" title="Menu" aria-label="Ouvrir le menu">☰</button>
     <div class="topbar-title" id="pt">Vue d'ensemble <span class="crumb" id="pc"></span></div>
     <div class="top-spacer"></div>
     <!-- Global search -->
@@ -450,6 +531,19 @@ tbody td{padding:8px 13px;color:var(--text-1);font-size:13px}
         <div class="page-header-sub">Tableau de bord EMS — indicateurs clés</div>
       </div>
       <div class="page-header-actions">
+        <select class="btn btn-ghost btn-sm" id="dash-year" onchange="buildDash()" style="padding:5px 10px;font-size:12px" title="Année">
+          <option value="">Toutes les années</option>
+        </select>
+        <input type="date" id="dash-from" onchange="buildDash()" class="btn btn-ghost btn-sm" style="padding:5px 8px;font-size:12px" title="Plage personnalisée — Du (remplace l'année si renseigné)">
+        <span style="color:var(--text-3);font-size:12px">→</span>
+        <input type="date" id="dash-to" onchange="buildDash()" class="btn btn-ghost btn-sm" style="padding:5px 8px;font-size:12px" title="Plage personnalisée — Au">
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('dash-from').value='';document.getElementById('dash-to').value='';buildDash()" title="Effacer la plage personnalisée">✕</button>
+        <select class="btn btn-ghost btn-sm" id="dash-gran" onchange="buildDash()" style="padding:5px 10px;font-size:12px" title="Granularité">
+          <option value="day">Par jour</option>
+          <option value="week">Par semaine</option>
+          <option value="month" selected>Par mois</option>
+          <option value="year">Par année</option>
+        </select>
         <button class="btn btn-ghost btn-sm" onclick="window.print()" title="Imprimer">🖨 Imprimer</button>
       </div>
     </div>
@@ -951,6 +1045,7 @@ function bootAll(){
   document.querySelector('.sb-item[data-page="dashboard"]').classList.add('active');
   document.getElementById('pt').innerHTML='Vue d\'ensemble <span class="crumb">Tableau de bord</span>';
 
+  _popDashYears();
   buildDash();
   buildInt();  bindFP('interventions',fInt,['fi-q','fi-from','fi-to'],['fi-statut','fi-urgence','fi-type','fi-tech','fi-client','fi-lieu','fi-classif','fi-ncli','fi-ntech']);
   buildMot();  bindFP('moteurs',fMot,['fm-q','fm-code','fm-navire','fm-misfrom','fm-misto'],['fm-client','fm-marque','fm-famille','fm-type','fm-app','fm-typo','fm-coll','fm-cyl','fm-tcli']);
@@ -1124,7 +1219,19 @@ function nav(el){
   const t=document.getElementById('page-'+pg);if(t)t.classList.add('active');
   const[ti,cr]=PTITLES[pg]||[pg,''];
   document.getElementById('pt').innerHTML=`${ti} <span class="crumb">${cr}</span>`;
+  if(window.innerWidth<=900) toggleSidebar(false); // referme le menu mobile après navigation
 }
+
+// ══════════════════════════════════════════════════════════════════
+//  SIDEBAR MOBILE (off-canvas <=900px)
+// ══════════════════════════════════════════════════════════════════
+function toggleSidebar(force){
+  const sb=document.querySelector('.sidebar'),bd=document.getElementById('sidebar-backdrop');
+  const open=typeof force==='boolean'?force:!sb.classList.contains('open');
+  sb.classList.toggle('open',open);
+  bd.classList.toggle('open',open);
+}
+window.addEventListener('resize',()=>{ if(window.innerWidth>900) toggleSidebar(false); });
 
 // ══════════════════════════════════════════════════════════════════
 //  FILTER PANEL
@@ -1206,89 +1313,138 @@ function buildDash(){
   killCharts();
   const now=new Date();
   document.getElementById('hero-date').textContent=now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  
-  const invAll=q(`SELECT statut,urgence,date_creation FROM interventions`);
+
+  // Référentiel temporel choisi par l'utilisateur (granularité + année, ou plage perso Du/Au)
+  const gran=gv('dash-gran')||'month';
+  const yearSel=gv('dash-year'); // '' = toutes les années
+  const granInfo=_GRAN_LABELS[gran]||_GRAN_LABELS.month;
+
+  // Plage personnalisée (n'importe quelle étendue, pas seulement un mois/une semaine isolée).
+  // Dès qu'une des deux bornes est renseignée elle remplace le sélecteur "Année".
+  const fromSel=gv('dash-from'); // 'YYYY-MM-DD' | ''
+  const toSel=gv('dash-to');     // 'YYYY-MM-DD' | ''
+  const hasRange=!!(fromSel||toSel);
+
+  const matchYear=dc=>!yearSel||dateToYear(dc)===yearSel;
+  const matchRange=dc=>{
+    const iso=toISO(dc);
+    if(!iso)return false;
+    if(fromSel&&iso<fromSel)return false;
+    if(toSel&&iso>toSel)return false;
+    return true;
+  };
+  const matchPeriod=dc=>hasRange?matchRange(dc):matchYear(dc);
+
+  const invAll=q(`SELECT statut,urgence,date_creation FROM interventions`).filter(r=>matchPeriod(r.date_creation));
   const nC=q('SELECT COUNT(*) n FROM clients')[0]?.n||0;
   const nM=q('SELECT COUNT(*) n FROM moteurs')[0]?.n||0;
   const nT=q('SELECT COUNT(*) n FROM techniciens')[0]?.n||0;
   const cnt={tot:invAll.length,'En cours':0,'À facturer':0,'Facturé':0,'Clos':0,Urg:0,Crit:0};
   invAll.forEach(r=>{if(r.statut in cnt)cnt[r.statut]++;if(r.urgence==='Urgente')cnt.Urg++;if(r.urgence==='Critique')cnt.Crit++;});
 
-  // Groupement mensuel (géré en JS pour supporter DD/MM/YYYY et YYYY-MM-DD)
-  const _mMap={};
-  invAll.forEach(r=>{const m=dateToYearMonth(r.date_creation);if(m)_mMap[m]=(_mMap[m]||0)+1;});
+  // Groupement selon la granularité choisie (géré en JS pour supporter DD/MM/YYYY et YYYY-MM-DD)
+  const _bMap={};
+  invAll.forEach(r=>{const b=dateToBucket(r.date_creation,gran);if(b)_bMap[b]=(_bMap[b]||0)+1;});
+  // Échelle calendaire normale : toutes les périodes de la fenêtre, y compris celles à 0 bon
+  // (sinon l'axe ne montre que les dates où il y a eu un événement, ce qui n'est pas représentatif)
+  const byBucket=_bucketRange(gran,yearSel,fromSel,toSel).map(b=>({b,n:_bMap[b]||0}));
 
-  // Trend vs previous period
-  const _tm=_monthStr(0),_pm=_monthStr(-1);
-  const tmn=(_mMap[_tm]||0),pmn=(_mMap[_pm]||0);
+  // Tendance : dernière période affichée vs précédente (s'adapte à la granularité et au filtre)
+  const tmn=byBucket.length?byBucket[byBucket.length-1].n:0;
+  const pmn=byBucket.length>1?byBucket[byBucket.length-2].n:0;
   const trendPct=pmn>0?Math.round((tmn-pmn)/pmn*100):0;
   const trendCls=trendPct>0?'up':trendPct<0?'dn':'flat';
   const trendTxt=trendPct>0?`↑ +${trendPct}%`:trendPct<0?`↓ ${trendPct}%`:'→ stable';
+  const periodeTxt=hasRange
+    ?`${fromSel?fmt(fromSel):'…'} → ${toSel?fmt(toSel):'aujourd\'hui'}`
+    :(yearSel?`année ${yearSel}`:'toutes périodes');
 
   document.getElementById('hero-sub').textContent=`${cnt.tot} bon${cnt.tot>1?'s':''} • ${nC} client${nC>1?'s':''} • ${nM} moteur${nM>1?'s':''} • ${nT} technicien${nT>1?'s':''}`;
-  document.getElementById('hero-kpis').innerHTML=[
+  const heroKpisEl=document.getElementById('hero-kpis');
+  heroKpisEl.innerHTML=[
     {val:cnt['En cours'],  lbl:'En cours',  cls:cnt['En cours']>0?'warn':'',  trend:trendTxt,trendCls},
     {val:cnt.Crit,         lbl:'Critiques', cls:cnt.Crit>0?'danger':'',  trend:'',trendCls:'flat'},
     {val:cnt.Urg,          lbl:'Urgentes',  cls:cnt.Urg>0?'warn':'',     trend:'',trendCls:'flat'},
     {val:cnt['À facturer'],lbl:'À facturer',cls:'',trend:'',trendCls:'flat'},
-  ].map(k=>`<div class="hero-kpi"><div class="val ${k.cls}">${k.val}</div><div class="lbl">${k.lbl}</div>${k.trend?`<div class="trend ${k.trendCls}">${k.trend}</div>`:''}</div>`).join('');
+  ].map(k=>`<div class="hero-kpi"><div class="val ${k.cls}" data-count="${k.val}">0</div><div class="lbl">${k.lbl}</div>${k.trend?`<div class="trend ${k.trendCls}">${k.trend}</div>`:''}</div>`).join('');
+  animateCounters(heroKpisEl);
 
-  const tot=cnt.tot||1;
+  // Les bons "Clos" sont un état final/historique : les inclure dans le total dilue
+  // la répartition du travail réellement en cours. Les 3 statuts actifs sont donc
+  // exprimés en % des bons ACTIFS (hors Clos) ; seul "Clos" garde le total complet
+  // (c'est la seule façon de mesurer "quelle part finit par être clôturée").
+  const totActif=(cnt['En cours']+cnt['À facturer']+cnt['Facturé'])||1;
+  const totAll=cnt.tot||1;
   const statKpis=[
-    {lbl:'En cours',  val:cnt['En cours'],  ico:'🔄',cls:'amber'},
-    {lbl:'À facturer',val:cnt['À facturer'],ico:'📋',cls:'violet'},
-    {lbl:'Facturé',   val:cnt['Facturé'],   ico:'💰',cls:'blue'},
-    {lbl:'Clos',      val:cnt['Clos'],      ico:'✅',cls:'green'},
+    {lbl:'En cours',  val:cnt['En cours'],  ico:'🔄',cls:'amber', pctBase:totActif,foot:'des bons actifs'},
+    {lbl:'À facturer',val:cnt['À facturer'],ico:'📋',cls:'violet',pctBase:totActif,foot:'des bons actifs'},
+    {lbl:'Facturé',   val:cnt['Facturé'],   ico:'💰',cls:'blue',  pctBase:totActif,foot:'des bons actifs'},
+    {lbl:'Clos',      val:cnt['Clos'],      ico:'✅',cls:'green', pctBase:totAll,  foot:'du total (historique)'},
   ];
-  document.getElementById('kpi-statuts').innerHTML=statKpis.map(k=>{
-    const pct=Math.round(k.val/tot*100);
-    const trend=k.lbl==='En cours'?`<span class="trend-chip trend-${trendCls}">${trendTxt} ce mois</span>`:'';
+  const kpiStatutsEl=document.getElementById('kpi-statuts');
+  kpiStatutsEl.innerHTML='<div class="kpi-section-label">📊 Statuts des interventions</div>'+statKpis.map(k=>{
+    const pct=Math.round(k.val/k.pctBase*100);
+    const trend=k.lbl==='En cours'?`<span class="trend-chip trend-${trendCls}">${trendTxt} ${granInfo.unitF}</span>`:'';
     return`<div class="kpi ${k.cls}">
       <div class="kpi-top"><div class="kpi-label">${k.lbl}</div><div class="kpi-icon">${k.ico}</div></div>
-      <div class="kpi-num">${k.val}</div>
-      <div class="kpi-bar"><div class="kpi-fill" style="width:${pct}%"></div></div>
-      <div class="kpi-foot">${pct}% du total ${trend}</div>
+      <div class="kpi-num" data-count="${k.val}">0</div>
+      <div class="kpi-bar"><div class="kpi-fill" data-w="${pct}" style="width:0%"></div></div>
+      <div class="kpi-foot">${pct}% ${k.foot} ${trend}</div>
     </div>`;
   }).join('');
+  animateCounters(kpiStatutsEl);
 
-  document.getElementById('kpi-parc').innerHTML=[
-    {lbl:'Total bons',  val:cnt.tot,ico:'📄',cls:'blue',  foot:'toutes périodes'},
+  const kpiParcEl=document.getElementById('kpi-parc');
+  kpiParcEl.innerHTML='<div class="kpi-section-label">🗂️ Parc &amp; équipe</div>'+[
+    {lbl:'Total bons',  val:cnt.tot,ico:'📄',cls:'blue',  foot:periodeTxt},
     {lbl:'Clients',     val:nC,     ico:'👥',cls:'teal',  foot:'dans la base'},
     {lbl:'Moteurs',     val:nM,     ico:'⚙️',cls:'violet',foot:'dans le parc'},
     {lbl:'Techniciens', val:nT,     ico:'👷',cls:'green', foot:'actifs'},
   ].map(k=>`
     <div class="kpi ${k.cls}">
       <div class="kpi-top"><div class="kpi-label">${k.lbl}</div><div class="kpi-icon">${k.ico}</div></div>
-      <div class="kpi-num">${k.val}</div>
+      <div class="kpi-num" data-count="${k.val}">0</div>
       <div class="kpi-foot">${k.foot}</div>
     </div>`).join('');
+  animateCounters(kpiParcEl);
 
   const isDark=document.documentElement.dataset.theme==='dark';
   const gridColor=isDark?'rgba(255,255,255,.06)':'rgba(0,0,0,.04)';
   const tickColor=isDark?'#4a5568':'#7a8fa8';
 
-  const byMonth=Object.entries(_mMap).map(([m,n])=>({m,n})).sort((a,b)=>a.m.localeCompare(b.m)).slice(-18);
+  const chartSub=hasRange?`${granInfo.sub} — ${periodeTxt}`:granInfo.sub;
   const r1=document.getElementById('dr1');r1.innerHTML='';
-  if(byMonth.length>=1){
-    r1.insertAdjacentHTML('beforeend',`<div class="cc gcol2"><div class="cc-head"><div><div class="cc-title">Activité mensuelle</div><div class="cc-sub">Bons créés par mois</div></div></div><div class="cc-body"><canvas id="ch-months"></canvas></div></div>`);
-    _C.months=new Chart(document.getElementById('ch-months'),{type:'bar',data:{labels:byMonth.map(r=>fmtMonth(r.m)),datasets:[{data:byMonth.map(r=>r.n),backgroundColor:'rgba(29,110,245,.18)',borderColor:'rgba(29,110,245,.85)',borderWidth:2,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false},tooltip:{callbacks:{title:tt=>tt[0].label}}},scales:{y:{beginAtZero:true,ticks:{precision:0,color:tickColor},grid:{color:gridColor}},x:{ticks:{color:tickColor,maxRotation:45,minRotation:30},grid:{display:false}}}}});
+  if(byBucket.length>=1){
+    r1.insertAdjacentHTML('beforeend',`<div class="cc gcol2"><div class="cc-head"><div><div class="cc-title">${granInfo.title}</div><div class="cc-sub">${esc(chartSub)}</div></div></div><div class="cc-body"><canvas id="ch-months"></canvas></div></div>`);
+    _C.months=new Chart(document.getElementById('ch-months'),{type:'bar',data:{labels:byBucket.map(r=>fmtBucket(r.b,gran)),datasets:[{data:byBucket.map(r=>r.n),backgroundColor:'rgba(29,110,245,.18)',borderColor:'rgba(29,110,245,.85)',borderWidth:2,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false},tooltip:{callbacks:{title:tt=>tt[0].label}}},scales:{y:{beginAtZero:true,ticks:{precision:0,color:tickColor},grid:{color:gridColor}},x:{ticks:{color:tickColor,maxRotation:45,minRotation:30},grid:{display:false}}}}});
   }
   r1.insertAdjacentHTML('beforeend',`<div class="cc"><div class="cc-head"><div><div class="cc-title">Statuts</div><div class="cc-sub">Répartition</div></div></div><div class="cc-body"><canvas id="ch-statuts"></canvas></div></div>`);
   _C.statuts=new Chart(document.getElementById('ch-statuts'),{type:'doughnut',data:{labels:['En cours','À facturer','Facturé','Clos'],datasets:[{data:[cnt['En cours'],cnt['À facturer'],cnt['Facturé'],cnt['Clos']],backgroundColor:['#f08c00','#7048e8','#1d6ef5','#2f9e44'],borderWidth:3,borderColor:isDark?'#1c2230':'#fff',hoverOffset:4}]},options:{responsive:true,cutout:'68%',plugins:{legend:{position:'bottom',labels:{padding:10,font:{size:11},color:isDark?'#a0aec0':'#3d4f6b'}}}}});
 
   const r2=document.getElementById('dr2');r2.innerHTML='';
-  const byType=q(`SELECT type_intervention t,COUNT(*) n FROM interventions WHERE type_intervention!='' GROUP BY t ORDER BY n DESC LIMIT 10`);
+  // Agrégations en JS (et non en SQL) pour pouvoir appliquer le même filtre année que le reste du dashboard
+  const _tMapType={};
+  q(`SELECT type_intervention t,date_creation FROM interventions WHERE type_intervention!=''`)
+    .filter(r=>matchPeriod(r.date_creation))
+    .forEach(r=>{_tMapType[r.t]=(_tMapType[r.t]||0)+1;});
+  const byType=Object.entries(_tMapType).map(([t,n])=>({t,n})).sort((a,b)=>b.n-a.n).slice(0,10);
   if(byType.length){
     r2.insertAdjacentHTML('beforeend',`<div class="cc"><div class="cc-head"><div><div class="cc-title">Types d'intervention</div><div class="cc-sub">Top 10</div></div></div><div class="cc-body"><canvas id="ch-types"></canvas></div></div>`);
     _C.types=new Chart(document.getElementById('ch-types'),{type:'bar',data:{labels:byType.map(r=>r.t),datasets:[{data:byType.map(r=>r.n),backgroundColor:'rgba(112,72,232,.75)',borderRadius:3,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0,color:tickColor},grid:{color:gridColor}},y:{ticks:{color:tickColor,font:{size:11}},grid:{display:false}}}}});
   }
-  const byClient=q(`SELECT c.nom n,COUNT(i.id) cnt FROM interventions i LEFT JOIN clients c ON i.client_id=c.id WHERE c.nom IS NOT NULL GROUP BY c.nom ORDER BY cnt DESC LIMIT 8`);
+  const _cMap={};
+  q(`SELECT c.nom n,i.date_creation dc FROM interventions i LEFT JOIN clients c ON i.client_id=c.id WHERE c.nom IS NOT NULL`)
+    .filter(r=>matchPeriod(r.dc))
+    .forEach(r=>{_cMap[r.n]=(_cMap[r.n]||0)+1;});
+  const byClient=Object.entries(_cMap).map(([n,cnt])=>({n,cnt})).sort((a,b)=>b.cnt-a.cnt).slice(0,8);
   if(byClient.length){
     const maxC=byClient[0].cnt;
     r2.insertAdjacentHTML('beforeend',`<div class="cc"><div class="cc-head"><div><div class="cc-title">Top clients</div><div class="cc-sub">Volume de bons</div></div></div><div class="slist">${byClient.map((r,i)=>`<div class="srow"><div class="srank${i<3?' top':''}">${i+1}</div><div class="sname" title="${esc(r.n)}">${esc(r.n)}</div><div class="sbar"><div class="sbar-bg"><div class="sbar-fg" style="width:${Math.round(r.cnt/maxC*100)}%;background:var(--teal)"></div></div></div><div class="scount">${r.cnt}</div></div>`).join('')}</div></div>`);
   }
-  const byTRaw=q(`SELECT technicien FROM interventions WHERE technicien!=''`);
-  const tMap={};byTRaw.forEach(r=>{(r.technicien||'').split(',').forEach(t=>{const n=t.trim();if(n)tMap[n]=(tMap[n]||0)+1;});});
+  const tMap={};
+  q(`SELECT technicien,date_creation FROM interventions WHERE technicien!=''`)
+    .filter(r=>matchPeriod(r.date_creation))
+    .forEach(r=>{(r.technicien||'').split(',').forEach(t=>{const n=t.trim();if(n)tMap[n]=(tMap[n]||0)+1;});});
   const tEnt=Object.entries(tMap).sort((a,b)=>b[1]-a[1]).slice(0,8);
   if(tEnt.length){
     const maxT=tEnt[0][1];
@@ -1401,14 +1557,13 @@ function exportPivotCSV(){
 function buildTimeline(){
   if(!db){return;}
   const groupBy=gv('tl-group')||'technicien';
-  const d12=new Date(Date.now()-365*864e5).toISOString().slice(0,10);
+  const d12=_daysAgoISO(365);
   const rows=q(`SELECT i.*,c.nom client_nom FROM interventions i LEFT JOIN clients c ON i.client_id=c.id WHERE i.date_creation>=? ORDER BY i.date_creation`,[d12]);
 
   // Build months axis (12 months)
   const months=[];
   for(let i=11;i>=0;i--){
-    const d=new Date();d.setMonth(d.getMonth()-i);
-    months.push(d.toISOString().slice(0,7));
+    months.push(_monthStr(-i));
   }
   const minDate=months[0]+'-01';
   const maxDate=months[months.length-1]+'-31';
@@ -1672,7 +1827,7 @@ function exportCSV(name){
   const cols=Object.keys(data[0]);
   const rows=[cols.join(';'),...data.map(r=>cols.map(c=>{let v=String(r[c]??'').replace(/"/g,'""');if(v.includes(';')||v.includes('\n')||v.includes('"'))v=`"${v}"`;return v;}).join(';'))];
   const blob=new Blob(['\uFEFF'+rows.join('\n')],{type:'text/csv;charset=utf-8;'});
-  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`EMS_${name}_${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url);
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`EMS_${name}_${_localISO(new Date())}.csv`;a.click();URL.revokeObjectURL(url);
   toast(`✅ ${data.length} lignes exportées`);
 }
 
@@ -1680,6 +1835,30 @@ function exportCSV(name){
 //  HELPERS
 // ══════════════════════════════════════════════════════════════════
 function gv(id){const e=document.getElementById(id);return e?e.value.trim():'';}
+
+// Compteur animé (count-up) — utilisé pour les valeurs des cartes KPI / hero du dashboard
+function animateCount(el,target,duration=650){
+  target=Number(target)||0;
+  const t0=performance.now();
+  function step(now){
+    const p=Math.min((now-t0)/duration,1);
+    const eased=1-Math.pow(1-p,3); // ease-out cubic
+    el.textContent=Math.round(target*eased);
+    if(p<1) requestAnimationFrame(step);
+    else el.textContent=target;
+  }
+  requestAnimationFrame(step);
+}
+// Anime tous les éléments [data-count] et [data-w] (barres) sous root — appelé après chaque (re)rendu du dashboard
+function animateCounters(root){
+  if(!root)return;
+  root.querySelectorAll('[data-count]').forEach(el=>animateCount(el,el.dataset.count));
+  // Double rAF : laisse le navigateur peindre l'état initial (width:0) avant de viser la valeur réelle,
+  // sinon la transition CSS ne se déclenche pas (les deux styles seraient appliqués avant le premier paint).
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    root.querySelectorAll('[data-w]').forEach(el=>{el.style.width=el.dataset.w+'%';});
+  }));
+}
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function fmt(s){
   if(!s||s==='—')return'—';
@@ -1717,11 +1896,111 @@ function dateToYearMonth(s){
 // Formate "2026-06" → "Juin '26"
 const _MOIS=['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Aoû','Sep','Oct','Nov','Déc'];
 function fmtMonth(m){if(!m||m==='—')return'—';const p=String(m).split('-');if(p.length<2)return m;const mo=parseInt(p[1],10)-1;return`${_MOIS[mo]??p[1]} '${p[0].slice(2)}`;}
+// Retourne l'année "YYYY" depuis une date quelconque
+function dateToYear(s){const iso=toISO(s);return iso?iso.slice(0,4):null;}
+// Retourne la clé semaine ISO-8601 "YYYY-Www" pour un objet Date local
+function _isoWeekKeyFromDate(d){
+  const t=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  const dayNum=(t.getDay()+6)%7;            // Lundi=0 … Dimanche=6
+  t.setDate(t.getDate()-dayNum+3);          // jeudi de la semaine (référence ISO)
+  const firstThu=new Date(t.getFullYear(),0,4);
+  const fDayNum=(firstThu.getDay()+6)%7;
+  firstThu.setDate(firstThu.getDate()-fDayNum+3);
+  const week=1+Math.round((t-firstThu)/(7*864e5));
+  return`${t.getFullYear()}-W${String(week).padStart(2,'0')}`;
+}
+// Retourne la clé semaine ISO-8601 "YYYY-Www" depuis une date quelconque
+function dateToYearWeek(s){const d=parseDateStr(s);return d?_isoWeekKeyFromDate(d):null;}
+// Regroupe une date selon la granularité choisie pour le tableau de bord
+function dateToBucket(s,gran){
+  if(gran==='day')return toISO(s)||null;
+  if(gran==='week')return dateToYearWeek(s);
+  if(gran==='year')return dateToYear(s);
+  return dateToYearMonth(s); // 'month' (défaut)
+}
+// Formate une clé de bucket pour l'affichage (axe du graphique, etc.)
+function fmtBucket(k,gran){
+  if(!k||k==='—')return'—';
+  if(gran==='day'){const p=k.split('-');return p.length===3?`${p[2]}/${p[1]}`:k;}
+  if(gran==='week'){const p=k.split('-W');return p.length===2?`S${p[1]} '${p[0].slice(2)}`:k;}
+  if(gran==='year')return k;
+  return fmtMonth(k);
+}
+// Libellés / nombre de buckets affichés selon la granularité du dashboard
+const _GRAN_LABELS={
+  day:  {title:'Activité quotidienne',  sub:'Bons créés par jour',    unitF:'ce jour'},
+  week: {title:'Activité hebdomadaire', sub:'Bons créés par semaine',  unitF:'cette semaine'},
+  month:{title:'Activité mensuelle',    sub:'Bons créés par mois',     unitF:'ce mois'},
+  year: {title:'Activité annuelle',     sub:'Bons créés par année',    unitF:'cette année'},
+};
+const _GRAN_CAP={day:60,week:26,month:18,year:12};
+// Calcule le début d'une fenêtre glissante de N périodes se terminant à "end" (inclus)
+function _trailingStart(gran,end,n){
+  const start=new Date(end);
+  if(gran==='day')start.setDate(start.getDate()-(n-1));
+  else if(gran==='week')start.setDate(start.getDate()-7*(n-1));
+  else if(gran==='year')start.setFullYear(start.getFullYear()-(n-1));
+  else{start.setDate(1);start.setMonth(start.getMonth()-(n-1));} // month
+  return start;
+}
+// Génère la liste COMPLÈTE et ORDONNÉE des clés de bucket pour la période affichée
+// (échelle calendaire normale, périodes sans bon incluses à 0 — pas seulement les
+// dates où des bons existent, sinon les "trous" disparaissent et le graphique
+// devient trompeur).
+// - Si une plage personnalisée (fromSel/toSel) est renseignée : cette plage exacte,
+//   quelle que soit son étendue (pas limitée à un mois ou une semaine isolée).
+// - Sinon si une année précise est sélectionnée : du 1er janvier au 31 décembre.
+// - Sinon : fenêtre glissante des N dernières périodes jusqu'à aujourd'hui.
+function _bucketRange(gran,yearSel,fromSel,toSel){
+  let start,end;
+  const n=_GRAN_CAP[gran]||18;
+  if(fromSel||toSel){
+    end=toSel?parseDateStr(toSel):new Date();
+    end.setHours(0,0,0,0);
+    start=fromSel?parseDateStr(fromSel):_trailingStart(gran,end,n);
+  }else if(yearSel){
+    start=new Date(+yearSel,0,1);
+    end=new Date(+yearSel,11,31);
+  }else{
+    end=new Date();end.setHours(0,0,0,0);
+    start=_trailingStart(gran,end,n);
+  }
+  if(gran==='month'||gran==='year')start.setDate(1); // évite les sauts de mois en fin de mois
+  const keys=[];
+  const cur=new Date(start);
+  let guard=0;
+  while(cur<=end&&guard<5000){ // plage perso potentiellement longue → garde-fou généreux
+    guard++;
+    if(gran==='day')keys.push(_localISO(cur));
+    else if(gran==='week')keys.push(_isoWeekKeyFromDate(cur));
+    else if(gran==='year')keys.push(String(cur.getFullYear()));
+    else keys.push(`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}`);
+    if(gran==='day')cur.setDate(cur.getDate()+1);
+    else if(gran==='week')cur.setDate(cur.getDate()+7);
+    else if(gran==='year')cur.setFullYear(cur.getFullYear()+1);
+    else cur.setMonth(cur.getMonth()+1);
+  }
+  return keys;
+}
 // Retourne "YYYY-MM" du mois courant + offset (offset=-1 → mois précédent)
 function _monthStr(offset){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()+offset);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;}
-// Retourne "YYYY-MM-DD" d'il y a N jours
-function _daysAgoISO(n){return new Date(Date.now()-n*864e5).toISOString().slice(0,10);}
+// Retourne "YYYY-MM-DD" en heure LOCALE (toISOString() renvoie la date en UTC,
+// ce qui décale le jour calendaire d'un cran selon l'heure et le fuseau de
+// l'utilisateur — ex: 1h du matin en France peut encore être "hier" en UTC).
+function _localISO(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+// Retourne "YYYY-MM-DD" d'il y a N jours, en heure locale
+function _daysAgoISO(n){const d=new Date();d.setDate(d.getDate()-n);return _localISO(d);}
 function popSel(id,vals){const e=document.getElementById(id);if(!e)return;e.innerHTML='<option value="">Tous</option>'+vals.map(v=>`<option>${esc(v)}</option>`).join('');}
+// Peuple le sélecteur d'année du tableau de bord avec les années réellement présentes en base
+function _popDashYears(){
+  const e=document.getElementById('dash-year');if(!e)return;
+  const prev=e.value;
+  const years=new Set();
+  q(`SELECT date_creation FROM interventions`).forEach(r=>{const y=dateToYear(r.date_creation);if(y)years.add(y);});
+  const sorted=[...years].sort((a,b)=>b.localeCompare(a));
+  e.innerHTML='<option value="">Toutes les années</option>'+sorted.map(y=>`<option>${y}</option>`).join('');
+  if(sorted.includes(prev))e.value=prev;
+}
 function setCnt(id,f,t){const e=document.getElementById(id);if(!e)return;e.innerHTML=f===t?`<strong>${t.toLocaleString('fr-FR')}</strong> résultat${t>1?'s':''}`:`<strong>${f.toLocaleString('fr-FR')}</strong> / ${t.toLocaleString('fr-FR')} résultats`;}
 let _tt;function toast(msg){const e=document.getElementById('toast');e.textContent=msg;e.classList.add('on');clearTimeout(_tt);_tt=setTimeout(()=>e.classList.remove('on'),3000);}
 function showLoad(){document.getElementById('loading').classList.add('on');}
