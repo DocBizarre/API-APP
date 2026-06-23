@@ -12,15 +12,28 @@ class Affaire(Base):
     client_id       = Column(String, ForeignKey("clients.id"), index=True)
     nom_projet      = Column(String, default="")
     navire_machine  = Column(String, default="")
-    ref_interne     = Column(String, default="")
-    charge_affaire  = Column(String, default="")
+    ref_interne            = Column(String, default="")
+    num_commande_client    = Column(String, default="")
+    charge_affaire         = Column(String, default="")
     date_debut      = Column(String, default="")   # JJ/MM/AAAA
     date_fin_prevue = Column(String, default="")   # JJ/MM/AAAA
     date_cloture    = Column(String, default="")   # JJ/MM/AAAA
     statut          = Column(String, default="En cours", index=True)
     description     = Column(String, default="")
     commentaires    = Column(String, default="")
-    dossier_path    = Column(String, default="")
+    dossier_path             = Column(String, default="")
+    prix_ht                  = Column(String, default="")
+    exonere_tva              = Column(Integer, default=0)
+    date_achat               = Column(String, default="")   # JJ/MM/AAAA
+    fournisseur              = Column(String, default="")
+    etablissement_financier  = Column(String, default="")
+    echeances_facturation    = Column(String, default="[]")
+    whiteboard               = Column(String, default="")
+    transporteur             = Column(String, default="")
+    contact_transport        = Column(String, default="")
+    prix_transport           = Column(String, default="")
+    num_suivi_transport      = Column(String, default="")
+    instructions_transport   = Column(String, default="")
     version         = Column(Integer, default=1)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
     updated_at      = Column(DateTime(timezone=True), server_default=func.now(),
@@ -46,6 +59,7 @@ class AffaireItem(Base):
     suivi       = Column(String, default="")   # Notes de suivi
     statut      = Column(String, default="À faire")  # À faire / En cours / Terminé / NC
     details_json = Column(String, default="{}")  # Champs spécifiques au type
+    dossier_path = Column(String, default="")   # Sous-dossier dédié au chapitre
     ordre       = Column(Integer, default=0)
     version     = Column(Integer, default=1)
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
