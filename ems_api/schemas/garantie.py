@@ -13,6 +13,10 @@ class GarantieCreate(BaseModel):
     intervention_id:    Optional[str] = None
     attribution:        str = "Constructeur"
     statut:             str = "Suivi EMS"
+    responsable:        str = ""
+    nom_demandeur:      str = ""
+    email_demandeur:    str = ""
+    telephone_demandeur: str = ""
     date_ouverture:     str = ""
     date_cloture:       str = ""
     montant:            str = ""
@@ -29,12 +33,18 @@ class GarantieUpdate(BaseModel):
     intervention_id:    Optional[str] = None
     attribution:        Optional[str] = None
     statut:             Optional[str] = None
+    responsable:        Optional[str] = None
+    nom_demandeur:      Optional[str] = None
+    email_demandeur:    Optional[str] = None
+    telephone_demandeur: Optional[str] = None
     date_ouverture:     Optional[str] = None
     date_cloture:       Optional[str] = None
     montant:            Optional[str] = None
     description:        Optional[str] = None
     commentaires:       Optional[str] = None
     dossier_path:       Optional[str] = None
+    client_notifie:     Optional[int] = None
+    tech_notifie:       Optional[int] = None
 
 
 class GarantieOut(BaseModel):
@@ -46,12 +56,18 @@ class GarantieOut(BaseModel):
     intervention_id:    Optional[str] = None
     attribution:        str
     statut:             str
+    responsable:        str = ""
+    nom_demandeur:      str = ""
+    email_demandeur:    str = ""
+    telephone_demandeur: str = ""
     date_ouverture:     str
     date_cloture:       str
     montant:            str
     description:        str
     commentaires:       str
     dossier_path:       str
+    client_notifie:     int = 0
+    tech_notifie:       int = 0
     # Champs enrichis (ajoutes par _to_out dans le router)
     client_nom:         Optional[str] = ""
     intervention_num_bon: Optional[str] = ""

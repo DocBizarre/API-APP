@@ -30,6 +30,10 @@ def _to_out(g: Garantie) -> dict:
     d["num_serie"]     = g.moteur.num_serie if g.moteur else ""
     d["marque"]        = g.moteur.marque if g.moteur else ""
     d["moteur_marque"] = g.moteur.marque if g.moteur else ""
+    # Champs entiers : garantir 0 plutôt que None
+    for f in ("client_notifie", "tech_notifie"):
+        if d.get(f) is None:
+            d[f] = 0
     return d
 
 
@@ -121,6 +125,23 @@ def update_garantie(garantie_id: str, data: GarantieUpdate,
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(g, field, value)
     g.version = (g.version or 0) + 1
+    db.commit()
+    db.refresh(g)
+    return _to_out(g)
+
+
+@router.post("/{garantie_id}/notifie/{kind}", response_model=GarantieOut)
+def mark_notifie(garantie_id: str, kind: str, db: Session = Depends(get_db)):
+    """Marque le client ou le technicien comme notifié (kind: 'client' ou 'tech')."""
+    g = db.query(Garantie).filter(Garantie.id == garantie_id).first()
+    if not g:
+        raise HTTPException(404, f"Garantie {garantie_id} introuvable")
+    if kind == "client":
+        g.client_notifie = 1
+    elif kind == "tech":
+        g.tech_notifie = 1
+    else:
+        raise HTTPException(400, "kind doit être 'client' ou 'tech'")
     db.commit()
     db.refresh(g)
     return _to_out(g)

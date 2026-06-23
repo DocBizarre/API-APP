@@ -15,12 +15,18 @@ class Garantie(Base):
     intervention_id     = Column(String, ForeignKey("interventions.id"), index=True)
     attribution         = Column(String, default="Constructeur")  # Constructeur / EMS
     statut              = Column(String, default="Suivi EMS", index=True)
+    responsable         = Column(String, default="")   # nom du technicien responsable
+    nom_demandeur       = Column(String, default="")
+    email_demandeur     = Column(String, default="")
+    telephone_demandeur = Column(String, default="")
     date_ouverture      = Column(String, default="")   # JJ/MM/AAAA
     date_cloture        = Column(String, default="")   # JJ/MM/AAAA
     montant             = Column(String, default="")
     description         = Column(String, default="")
     commentaires        = Column(String, default="")
     dossier_path        = Column(String, default="")
+    client_notifie      = Column(Integer, default=0)
+    tech_notifie        = Column(Integer, default=0)
     version             = Column(Integer, default=1)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
     updated_at          = Column(DateTime(timezone=True), server_default=func.now(),
