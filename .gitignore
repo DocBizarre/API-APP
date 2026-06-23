@@ -2,6 +2,9 @@
 build/
 dist/
 
+# Packages de release (gros binaires, distribués hors git)
+releases/
+
 # Distribution : exécutables compilés + config locale (IP réelle) +
 # dossiers générés à l'exécution (bons PDF/HTML, photos clients)
 EMS_Distribution/

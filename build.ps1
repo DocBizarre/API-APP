@@ -29,6 +29,7 @@ $DEPLOY  = Join-Path $ROOT "EMS_Distribution"
 
 $SPECS = [ordered]@{
     "Launcher"     = "ems_launcher.spec"
+    "Affaire"      = "EMS_Affaire.spec"
     "Bons"         = "EMS_Bons.spec"
     "Parc"         = "EMS_Parc.spec"
     "Garanties"    = "EMS_Garanties.spec"
@@ -122,6 +123,14 @@ if (Test-Path $srcCfg) {
     }
 }
 
+# Copier suivi_affaires.html (interface web affaires — ouverte par EMS_Affaire.exe)
+$srcHtml  = Join-Path $ROOT "suivi_affaires.html"
+$destHtml = Join-Path $DEPLOY "suivi_affaires.html"
+if (Test-Path $srcHtml) {
+    Copy-Item $srcHtml $destHtml -Force
+    Write-Host "  Déployé : suivi_affaires.html" -ForegroundColor Green
+}
+
 # ─── Résumé ───────────────────────────────────────────────────────────────────
 Write-Header "Résumé"
 if ($errors -eq 0) {
@@ -129,4 +138,36 @@ if ($errors -eq 0) {
 } else {
     Write-Host "$errors erreur(s) lors du build. Vérifiez les messages ci-dessus." -ForegroundColor Red
     exit 1
+}
+
+# ─── Zippage de EMS_Distribution/ ────────────────────────────────────────────
+Write-Header "Création du package de mise à jour"
+
+# Lire la version depuis shared/version.py
+$versionLine = Get-Content "$ROOT\shared\version.py" | Where-Object { $_ -match '__version__' } | Select-Object -First 1
+$version = [regex]::Match($versionLine, '"([^"]+)"').Groups[1].Value
+if (-not $version) { $version = "0.0.0" }
+
+$RELEASES = Join-Path $ROOT "releases"
+New-Item -ItemType Directory -Path $RELEASES -Force | Out-Null
+
+$zipName = "EMS_v$version.zip"
+$zipPath = Join-Path $RELEASES $zipName
+
+# Supprimer un zip existant de même nom
+if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+
+# Zipper le contenu de EMS_Distribution/ (pas le dossier lui-même)
+$items = Get-ChildItem -Path $DEPLOY -File | Where-Object { $_.Extension -in '.exe', '.html', '.ini' }
+if ($items) {
+    Compress-Archive -Path $items.FullName -DestinationPath $zipPath
+    $sizeMb = [math]::Round((Get-Item $zipPath).Length / 1MB, 1)
+    Write-Host "  Package : $zipName ($sizeMb Mo)" -ForegroundColor Green
+    Write-Host "  Chemin  : $zipPath" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  Prochaine etape :" -ForegroundColor Cyan
+    Write-Host "    1. Copier $zipName sur le serveur (partage ou static/)" -ForegroundColor White
+    Write-Host "    2. Editer ems_api\data\updates.json : version=$version, url=<url_du_zip>" -ForegroundColor White
+} else {
+    Write-Warning "Aucun fichier trouvé dans $DEPLOY - zip non créé."
 }
