@@ -74,6 +74,36 @@ try {
 Write-Step "Copie du code dev vers prod"
 
 $folders = @("ems_api", "shared", "ems_client")
+
+# Copier suivi_affaires.html (interface web affaires)
+$srcHtml = "$DEV_PATH\suivi_affaires.html"
+$dstHtml = "$SHARE_PATH\suivi_affaires.html"
+if (Test-Path $srcHtml) {
+    Copy-Item $srcHtml $dstHtml -Force
+    Write-Ok "suivi_affaires.html copié"
+} else {
+    Write-WarnMsg "suivi_affaires.html introuvable (ignoré)"
+}
+
+# Créer le config.ini serveur si absent (pointe data vers EMS_Distribution)
+$serverConfig = "$SHARE_PATH\config.ini"
+if (-not (Test-Path $serverConfig)) {
+    @"
+[server]
+url = http://${SERVER_IP}:${SERVER_PORT}
+
+[files]
+; Chemin LOCAL sur le serveur vers O:\APPLICATIONS METIER EMS\EMS_Distribution
+; Modifier selon le chemin réel sur EMSVMA001 (ex: C:\APPLICATIONS METIER EMS\EMS_Distribution)
+data_dir = \\${SERVER_NAME}\APPLICATIONS METIER EMS\EMS_Distribution
+"@ | Set-Content $serverConfig -Encoding UTF8
+    Write-WarnMsg "config.ini serveur créé : $serverConfig"
+    Write-WarnMsg "IMPORTANT : Vérifier et ajuster [files] data_dir dans ce fichier !"
+    Write-WarnMsg "            Mettre le chemin LOCAL sur $SERVER_NAME vers EMS_Distribution"
+} else {
+    Write-Ok "config.ini serveur présent (non écrasé)"
+}
+
 foreach ($folder in $folders) {
     Write-Host "  Copie de $folder ..."
     $src = "$DEV_PATH\$folder"
@@ -86,7 +116,7 @@ foreach ($folder in $folders) {
     
     # /MIR = mirror (synchro), /XD exclut les dossiers cache,
     # /XF exclut les bases et logs (ne JAMAIS ecraser la DB de prod)
-    $result = robocopy $src $dst /MIR /XD __pycache__ .venv /XF *.db *.log *.db-journal /NJH /NJS /NDL /NFL /NC /NS
+    $result = robocopy $src $dst /MIR /XD __pycache__ .venv /XF *.db *.log *.db-journal updates.json /NJH /NJS /NDL /NFL /NC /NS
     
     # Robocopy renvoie 0-7 = succes, 8+ = erreur
     if ($LASTEXITCODE -ge 8) {
