@@ -116,7 +116,7 @@ foreach ($folder in $folders) {
     
     # /MIR = mirror (synchro), /XD exclut les dossiers cache,
     # /XF exclut les bases et logs (ne JAMAIS ecraser la DB de prod)
-    $result = robocopy $src $dst /MIR /XD __pycache__ .venv /XF *.db *.log *.db-journal updates.json /NJH /NJS /NDL /NFL /NC /NS
+    $result = robocopy $src $dst /MIR /XD __pycache__ .venv /XF *.db *.log *.db-journal /NJH /NJS /NDL /NFL /NC /NS
     
     # Robocopy renvoie 0-7 = succes, 8+ = erreur
     if ($LASTEXITCODE -ge 8) {
@@ -125,6 +125,21 @@ foreach ($folder in $folders) {
     }
 }
 Write-Ok "Code copie"
+
+# Déployer updates.json uniquement s'il n'existe pas encore sur le serveur
+# (évite d'écraser le manifest édité par l'admin lors des releases suivantes)
+$srcManifest = "$DEV_PATH\ems_api\data\updates.json"
+$dstManifest = "$SHARE_PATH\ems_api\data\updates.json"
+if (-not (Test-Path $dstManifest)) {
+    if (Test-Path $srcManifest) {
+        Copy-Item $srcManifest $dstManifest -Force
+        Write-Ok "updates.json déployé (première installation)"
+    } else {
+        Write-WarnMsg "updates.json introuvable dans le dossier dev — à créer manuellement sur le serveur"
+    }
+} else {
+    Write-Ok "updates.json déjà présent sur le serveur (non écrasé)"
+}
 
 # ----- 3. Redemarrage du service -----
 Write-Step "Redemarrage du service sur le serveur"
