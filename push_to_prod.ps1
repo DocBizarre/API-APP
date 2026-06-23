@@ -104,6 +104,18 @@ data_dir = \\${SERVER_NAME}\APPLICATIONS METIER EMS\EMS_Distribution
     Write-Ok "config.ini serveur présent (non écrasé)"
 }
 
+# Copier les fichiers Python racine utilisés par le serveur
+foreach ($rootFile in @("convertisseurpdf.py")) {
+    $srcF = "$DEV_PATH\$rootFile"
+    $dstF = "$SHARE_PATH\$rootFile"
+    if (Test-Path $srcF) {
+        Copy-Item $srcF $dstF -Force
+        Write-Ok "$rootFile copié"
+    } else {
+        Write-WarnMsg "$rootFile introuvable dans le dossier dev (ignoré)"
+    }
+}
+
 foreach ($folder in $folders) {
     Write-Host "  Copie de $folder ..."
     $src = "$DEV_PATH\$folder"
@@ -139,6 +151,18 @@ if (-not (Test-Path $dstManifest)) {
     }
 } else {
     Write-Ok "updates.json déjà présent sur le serveur (non écrasé)"
+}
+
+# ----- 2b. Installation des dépendances Python sur le serveur -----
+Write-Step "Mise a jour des dependances Python"
+try {
+    Invoke-Command -ComputerName $SERVER_NAME -ErrorAction Stop -ScriptBlock {
+        & "C:\EMS\.venv\Scripts\pip.exe" install -r "C:\EMS\requirements.txt" --quiet 2>&1 | Out-Null
+    }
+    Write-Ok "Dépendances installées (pip install -r requirements.txt)"
+} catch {
+    Write-WarnMsg "PSRemoting indisponible - installation manuelle requise si nouvelles dépendances :"
+    Write-Host '    C:\EMS\.venv\Scripts\pip.exe install -r C:\EMS\requirements.txt' -ForegroundColor White
 }
 
 # ----- 3. Redemarrage du service -----

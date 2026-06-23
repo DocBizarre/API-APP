@@ -8,9 +8,12 @@ pydantic-settings>=2.0
 # ─── Client HTTP (ems_client/) ────────────────────────────────────────────────
 requests>=2.31
 
-# ─── Génération PDF (shared/bon_generator.py) ─────────────────────────────────
+# ─── Génération PDF (shared/bon_generator.py + convertisseurpdf.py) ───────────
 # Requis uniquement côté SERVEUR. Ne pas inclure dans les .exe clients.
 weasyprint>=60.0
+pdfplumber>=0.11
+pypdf>=4.0
+pillow>=10.0
 
 # ─── Import CSV/Excel (ems_api/import_pieces.py) ─────────────────────────────
 openpyxl>=3.1

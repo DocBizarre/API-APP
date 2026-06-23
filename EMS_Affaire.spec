@@ -3,13 +3,10 @@ import os
 
 a = Analysis(
     ['affaire_app\\app_affaire.py'],
-    pathex=[SPECPATH, os.path.join(SPECPATH, 'affaire_app')],
+    pathex=[SPECPATH],
     binaries=[],
-    datas=[('config.ini', '.')],
-    hiddenimports=[
-        'ems_client.api', 'ems_client.sync_config', 'ems_client.sync_client',
-        'shared.bon_generator', 'shared.logo_data',
-    ],
+    datas=[('suivi_affaires.html', '.')],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

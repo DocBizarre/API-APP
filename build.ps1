@@ -52,14 +52,15 @@ if (-not $App) {
 }
 
 $SPECS = [ordered]@{
-    "Launcher"     = "ems_launcher.spec"
-    "Affaire"      = "EMS_Affaire.spec"
-    "Bons"         = "EMS_Bons.spec"
-    "Parc"         = "EMS_Parc.spec"
-    "Garanties"    = "EMS_Garanties.spec"
-    "Amelioration" = "EMS_Amelioration.spec"
-    "Pieces"       = "EMS_Pieces.spec"
-    "BI"           = "EMS_BI.spec"
+    "Launcher"        = "ems_launcher.spec"
+    "Affaire"         = "EMS_Affaire.spec"
+    "Bons"            = "EMS_Bons.spec"
+    "Parc"            = "EMS_Parc.spec"
+    "Garanties"       = "EMS_Garanties.spec"
+    "Amelioration"    = "EMS_Amelioration.spec"
+    "Pieces"          = "EMS_Pieces.spec"
+    "BI"              = "EMS_BI.spec"
+    "ConvertisseurPDF" = "EMS_ConvertisseurPDF.spec"
 }
 
 function Write-Header([string]$text) {
