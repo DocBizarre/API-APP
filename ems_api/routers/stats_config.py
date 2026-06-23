@@ -51,6 +51,7 @@ def stats(db: Session = Depends(get_db)) -> Dict[str, int]:
     res = {
         "Total":        total,
         "En cours":     par_statut.get("En cours", 0),
+        "Date à programmer": par_statut.get("Date à programmer", 0),
         "Facturé":      par_statut.get("Facturé", 0),
         "À facturer":   par_statut.get("À facturer", 0),
         "Clos":         par_statut.get("Clos", 0),
@@ -166,7 +167,7 @@ def _set_list_config(db: Session, cle: str, val: List[str]):
 @router_config.get("/dashboard-widgets", response_model=List[str])
 def get_dashboard_widgets(db: Session = Depends(get_db)) -> List[str]:
     return _get_list_config(db, "dashboard_widgets",
-        ["stats_cards", "urgentes", "activite_recente",
+        ["stats_cards", "urgentes", "a_programmer", "activite_recente",
          "garantie_expirante", "par_technicien", "non_notifies", "par_type"])
 
 
@@ -180,7 +181,7 @@ def set_dashboard_widgets(widgets: List[str] = Body(...),
 @router_config.get("/dashboard-cards", response_model=List[str])
 def get_dashboard_cards(db: Session = Depends(get_db)) -> List[str]:
     return _get_list_config(db, "dashboard_cards",
-        ["En cours", "Facturé", "Clos", "Total", "Urgentes"])
+        ["En cours", "Date à programmer", "Facturé", "Clos", "Total", "Urgentes"])
 
 
 @router_config.post("/dashboard-cards")
