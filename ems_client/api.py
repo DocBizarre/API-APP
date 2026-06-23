@@ -222,6 +222,14 @@ def get_technicien_by_nom(nom: str) -> Optional[Dict]:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+#   Contacts (signataires / demandeurs)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def get_contacts(search: str = "") -> List[Dict]:
+    return _client.get("/contacts", search=search)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 #   Clients
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -497,6 +505,14 @@ def get_interventions_urgentes(limit: int = 10) -> List[Dict]:
     return _client.get("/interventions/urgentes", limit=limit)
 
 
+def get_interventions_a_programmer(limit: int = 10) -> List[Dict]:
+    return _client.get("/interventions/a-programmer", limit=limit)
+
+
+def get_interventions_a_facturer(limit: int = 10) -> List[Dict]:
+    return _client.get("/interventions/a-facturer", limit=limit)
+
+
 def get_non_notifies(limit: int = 50) -> List[Dict]:
     return _client.get("/interventions/non-notifies", limit=limit)
 
@@ -580,6 +596,11 @@ def update_garantie(garantie_id: str, data: Dict) -> Dict:
 
 def delete_garantie(garantie_id: str) -> None:
     _client.delete(f"/garanties/{garantie_id}")
+
+
+def mark_notifie_garantie(garantie_id: str, kind: str) -> None:
+    """Marque le client ou le technicien comme notifié (kind: 'client' ou 'tech')."""
+    _client.post(f"/garanties/{garantie_id}/notifie/{kind}")
 
 
 def get_stats_garanties() -> Dict:
