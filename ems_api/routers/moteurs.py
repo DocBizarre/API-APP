@@ -5,10 +5,45 @@ from sqlalchemy.orm import joinedload
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
+from pydantic import BaseModel
 
 from ..database import get_db
 from ..models import Moteur, Client
 from ..schemas.moteur import MoteurCreate, MoteurUpdate, MoteurOut
+
+
+# ── Schémas allégés pour les sous-ensembles ──────────────────────────────────
+# Un sous-ensemble EST un Moteur (parent_moteur_id renseigné). On expose
+# un sous-ensemble de champs plus simples que le modèle complet.
+class SousEnsembleCreate(BaseModel):
+    libelle:   str
+    type:      str = ""
+    reference: str = ""
+    marque:    str = ""
+    num_serie: str = ""
+    etat:      str = ""
+    notes:     str = ""
+
+class SousEnsembleUpdate(BaseModel):
+    libelle:   Optional[str] = None
+    type:      Optional[str] = None
+    reference: Optional[str] = None
+    marque:    Optional[str] = None
+    num_serie: Optional[str] = None
+    etat:      Optional[str] = None
+    notes:     Optional[str] = None
+
+def _se_to_out(m: Moteur) -> dict:
+    return {
+        "id":        m.id,
+        "libelle":   m.type_moteur      or "",
+        "type":      m.famille          or "",
+        "reference": m.ref_constructeur or "",
+        "marque":    m.marque           or "",
+        "num_serie": m.num_serie        or "",
+        "etat":      m.application      or "",
+        "notes":     m.collection       or "",
+    }
 
 router = APIRouter(prefix="/moteurs", tags=["moteurs"])
 
@@ -142,3 +177,78 @@ def delete_moteur(moteur_id: str, db: Session = Depends(get_db)):
     db.delete(m)
     db.commit()
     return None
+
+
+# ─── Sous-ensembles d'un moteur ──────────────────────────────────────────────
+
+@router.get("/{moteur_id}/sous-ensembles")
+def list_sous_ensembles(moteur_id: str, db: Session = Depends(get_db)):
+    if not db.query(Moteur).filter(Moteur.id == moteur_id).first():
+        raise HTTPException(404, "Moteur introuvable")
+    items = (db.query(Moteur)
+               .filter(Moteur.parent_moteur_id == moteur_id)
+               .order_by(Moteur.type_moteur)
+               .all())
+    return [_se_to_out(m) for m in items]
+
+
+@router.post("/{moteur_id}/sous-ensembles", status_code=201)
+def add_sous_ensemble(moteur_id: str, body: SousEnsembleCreate,
+                      db: Session = Depends(get_db)):
+    parent = db.query(Moteur).filter(Moteur.id == moteur_id).first()
+    if not parent:
+        raise HTTPException(404, "Moteur introuvable")
+    ns = body.num_serie.strip() if body.num_serie.strip() else f"SE-{str(uuid4())[:8]}"
+    while db.query(Moteur).filter(Moteur.num_serie == ns).first():
+        ns = f"SE-{str(uuid4())[:8]}"
+    m = Moteur(
+        id=str(uuid4()),
+        parent_moteur_id=moteur_id,
+        client_id=parent.client_id,
+        num_serie=ns,
+        type_moteur=body.libelle,
+        famille=body.type,
+        ref_constructeur=body.reference,
+        marque=body.marque,
+        application=body.etat,
+        collection=body.notes,
+    )
+    db.add(m)
+    db.commit()
+    db.refresh(m)
+    return _se_to_out(m)
+
+
+@router.put("/{moteur_id}/sous-ensembles/{se_id}")
+def update_sous_ensemble(moteur_id: str, se_id: str, body: SousEnsembleUpdate,
+                         db: Session = Depends(get_db)):
+    m = db.query(Moteur).filter(
+        Moteur.id == se_id, Moteur.parent_moteur_id == moteur_id
+    ).first()
+    if not m:
+        raise HTTPException(404, "Sous-ensemble introuvable")
+    if body.libelle   is not None: m.type_moteur      = body.libelle
+    if body.type      is not None: m.famille           = body.type
+    if body.reference is not None: m.ref_constructeur = body.reference
+    if body.marque    is not None: m.marque            = body.marque
+    if body.etat      is not None: m.application       = body.etat
+    if body.notes     is not None: m.collection        = body.notes
+    if body.num_serie is not None and body.num_serie.strip():
+        ns = body.num_serie.strip()
+        if db.query(Moteur).filter(Moteur.num_serie == ns, Moteur.id != se_id).first():
+            raise HTTPException(400, f"N° série {ns} déjà utilisé")
+        m.num_serie = ns
+    db.commit()
+    db.refresh(m)
+    return _se_to_out(m)
+
+
+@router.delete("/{moteur_id}/sous-ensembles/{se_id}", status_code=204)
+def delete_sous_ensemble(moteur_id: str, se_id: str, db: Session = Depends(get_db)):
+    m = db.query(Moteur).filter(
+        Moteur.id == se_id, Moteur.parent_moteur_id == moteur_id
+    ).first()
+    if not m:
+        raise HTTPException(404, "Sous-ensemble introuvable")
+    db.delete(m)
+    db.commit()
