@@ -28,6 +28,12 @@ except ImportError:
     __version__ = "1.8.0"
     APP_NAME = "EMS – Emeraude Moteurs Systèmes"
 
+try:
+    from shared import updater as _updater
+    _HAS_UPDATER = True
+except ImportError:
+    _HAS_UPDATER = False
+
 
 _FROZEN = getattr(sys, "frozen", False)
 _HERE   = Path(sys.executable).parent if _FROZEN else Path(__file__).resolve().parent
@@ -58,8 +64,8 @@ def _demarrer_app(app_key, here_str):
         "pieces":          here / "pieces_app",
         "garanties":     here / "garanties_app",
         "amelioration":  here / "amelioration_app",
-        "affaire":       here / "affaire_app",
         "BI":            here / "BI_app",
+        "convertisseur": here,
     }
     dossier = sous_dossiers.get(app_key)
     if dossier and dossier.is_dir():
@@ -68,6 +74,21 @@ def _demarrer_app(app_key, here_str):
             os.chdir(dossier)
         except OSError:
             pass
+
+    if app_key == "affaire":
+        import webbrowser as _wb
+        from pathlib import Path as _P
+        from configparser import ConfigParser as _CP
+        _cfg = _CP()
+        _ini = _P(here_str) / "config.ini"
+        _api_url = "http://localhost:8765"
+        if _ini.is_file():
+            _cfg.read(_ini, encoding="utf-8")
+            _url = _cfg.get("server", "url", fallback=None)
+            if _url:
+                _api_url = _url.rstrip("/")
+        _wb.open((_P(here_str) / "suivi_affaires.html").as_uri() + f"?api={_api_url}")
+        return
 
     if app_key == "bons":
         from main import AppEMS
@@ -89,22 +110,20 @@ def _demarrer_app(app_key, here_str):
         from app_amelioration import AmeliorationApp
         AmeliorationApp().mainloop()
 
-    elif app_key == "affaire":
-        from app_affaire import AffaireApp
-        AffaireApp().mainloop()
-
     elif app_key == "BI":
         import app_bi
         app_bi.main()
 
+    elif app_key == "convertisseur":
+        sys.path.insert(0, str(here))
+        import convertisseurpdf
+        convertisseurpdf.run_gui()
+
 
 APPS = [
-    {"key": "suivi_web",    "exe": "suivi_affaires",   "titre": "Suivi d'Affaires Web",
+    {"key": "affaire",      "exe": "EMS_Affaire",       "titre": "Suivi d'Affaires",
      "desc": "Interface web de suivi des affaires — chapitres, moteurs liés, interventions",
-     "icone": "🌐", "couleur": "#2563eb", "dossier": ""},
-    {"key": "affaire",      "exe": "EMS_Affaire",      "titre": "Affaires",
-     "desc": "Suivi des affaires clients, équipements et objectifs",
-     "icone": "📋", "couleur": "#d97706", "dossier": "affaire_app"},
+     "icone": "🌐", "couleur": "#2563eb", "dossier": "affaire_app"},
     {"key": "BI",           "exe": "EMS_BI",            "titre": "Business Intelligence",
      "desc": "Analyse d'affaire",
      "icone": "📈", "couleur": "#b8bb0e", "dossier": "BI_app"},
@@ -123,14 +142,19 @@ APPS = [
     {"key": "amelioration", "exe": "EMS_Amelioration",  "titre": "Amélioration continue",
      "desc": "Tickets de demande d'amélioration des clients",
      "icone": "💡", "couleur": "#1e7e3e", "dossier": "amelioration_app"},
+    {"key": "convertisseur", "exe": "EMS_Convertisseur", "titre": "Convertisseur PDF",
+     "desc": "Remise en page des accusés de réception de commande au format EMS",
+     "icone": "📄", "couleur": "#5d4037", "dossier": None},
 ]
 
 
 def _app_disponible(app):
-    if app["key"] == "suivi_web":
-        return (_HERE / "suivi_affaires.html").is_file()
     if _FROZEN:
         return _is_visible(_HERE / f"{app['exe']}.exe")
+    if app["key"] == "affaire":
+        return (_HERE / "suivi_affaires.html").is_file()
+    if app["key"] == "convertisseur":
+        return (_HERE / "convertisseurpdf.py").is_file()
     return app["dossier"] and (_HERE / app["dossier"]).is_dir()
 
 
@@ -139,11 +163,6 @@ def _lancer(app_key, fenetre=None):
     app = next((a for a in APPS if a["key"] == app_key), None)
     if app is None:
         return
-
-    if app_key == "suivi_web":
-        html_path = _HERE / "suivi_affaires.html"
-        webbrowser.open(html_path.as_uri())
-        return  # ne ferme pas le launcher, la page s'ouvre à côté
 
     if _FROZEN:
         exe = _HERE / f"{app['exe']}.exe"
@@ -214,6 +233,123 @@ C = {
     "card": "#ffffff", "border": "#d8dee5",
     "text": "#1a2332", "muted": "#6b7785",
 }
+
+class UpdateDialog(tk.Toplevel):
+    """Dialog de mise à jour : notes de version + barre de progression + bouton appliquer."""
+
+    def __init__(self, parent, update_info: dict, install_dir):
+        super().__init__(parent)
+        self._parent = parent
+        self._info = update_info
+        self._install_dir = install_dir
+        self._batch_path = None
+
+        self.title("Mise à jour disponible")
+        self.geometry("520x380")
+        self.configure(bg=C["bg"])
+        self.resizable(False, False)
+        self.grab_set()
+
+        # En-tête
+        head = tk.Frame(self, bg=C["header"], height=60)
+        head.pack(fill="x")
+        head.pack_propagate(False)
+        tk.Frame(head, bg="#1e7e3e", width=5).pack(side="left", fill="y")
+        tk.Label(head,
+                 text=f"  Mise à jour  v{update_info.get('version', '?')}  disponible",
+                 font=("Segoe UI", 13, "bold"),
+                 bg=C["header"], fg="white").pack(side="left", padx=12)
+
+        body = tk.Frame(self, bg=C["bg"])
+        body.pack(fill="both", expand=True, padx=22, pady=14)
+
+        tk.Label(body, text="Notes de version :",
+                 font=("Segoe UI", 9, "bold"),
+                 bg=C["bg"], fg=C["text"]).pack(anchor="w")
+
+        notes_frame = tk.Frame(body, bg=C["border"])
+        notes_frame.pack(fill="both", expand=True, pady=(4, 12))
+        notes_txt = tk.Text(notes_frame, wrap="word", font=("Segoe UI", 9),
+                            bg=C["card"], fg=C["text"], relief="flat",
+                            padx=8, pady=8, state="disabled")
+        notes_txt.pack(fill="both", expand=True, padx=1, pady=1)
+        notes_txt.config(state="normal")
+        notes_txt.insert("end", update_info.get("notes", "(aucune note disponible)"))
+        notes_txt.config(state="disabled")
+
+        # Barre de statut / progression
+        self._status_var = tk.StringVar(value="")
+        self._status_lbl = tk.Label(body, textvariable=self._status_var,
+                                     font=("Segoe UI", 8), bg=C["bg"], fg=C["muted"],
+                                     anchor="w")
+        self._status_lbl.pack(fill="x")
+
+        self._progress_var = tk.IntVar(value=0)
+        from tkinter import ttk
+        self._bar = ttk.Progressbar(body, variable=self._progress_var,
+                                     maximum=100, length=460)
+        self._bar.pack(fill="x", pady=(2, 0))
+        self._bar.pack_forget()  # cachée jusqu'au téléchargement
+
+        # Boutons
+        bf = tk.Frame(self, bg=C["bg"])
+        bf.pack(side="bottom", fill="x", padx=22, pady=12)
+
+        self._btn_download = tk.Button(
+            bf, text="⬇  Télécharger et installer",
+            font=("Segoe UI", 9, "bold"),
+            bg="#1e7e3e", fg="white", relief="flat", padx=14, pady=6,
+            cursor="hand2", command=self._start_download)
+        self._btn_download.pack(side="left")
+
+        self._btn_apply = tk.Button(
+            bf, text="▶  Relancer et appliquer",
+            font=("Segoe UI", 9, "bold"),
+            bg="#0056b3", fg="white", relief="flat", padx=14, pady=6,
+            cursor="hand2", command=self._apply)
+        self._btn_apply.pack(side="left", padx=8)
+        self._btn_apply.pack_forget()
+
+        tk.Button(bf, text="Plus tard", font=("Segoe UI", 9),
+                  bg="#888", fg="white", relief="flat", padx=12, pady=6,
+                  cursor="hand2", command=self.destroy).pack(side="right")
+
+    def _start_download(self):
+        self._btn_download.config(state="disabled")
+        self._bar.pack(fill="x", pady=(2, 0))
+        if not _HAS_UPDATER:
+            self._status_var.set("Module updater indisponible.")
+            return
+        _updater.download_and_apply(
+            self._info,
+            self._install_dir,
+            on_progress=self._on_progress,
+            on_done=self._on_done,
+            on_error=self._on_error,
+        )
+
+    def _on_progress(self, msg: str, pct: int):
+        self.after(0, lambda: self._status_var.set(msg))
+        if pct >= 0:
+            self.after(0, lambda: self._progress_var.set(pct))
+
+    def _on_done(self, batch_path: str):
+        self._batch_path = batch_path
+        self.after(0, self._show_apply_button)
+
+    def _on_error(self, msg: str):
+        self.after(0, lambda: self._status_var.set(f"Erreur : {msg}"))
+        self.after(0, lambda: self._btn_download.config(state="normal"))
+
+    def _show_apply_button(self):
+        self._status_var.set("Mise à jour prête. Fermez toutes les apps EMS puis cliquez ▶")
+        self._progress_var.set(100)
+        self._btn_apply.pack(side="left", padx=8)
+
+    def _apply(self):
+        if self._batch_path and _HAS_UPDATER:
+            _updater.launch_batch_and_quit(self._batch_path, self._parent.destroy)
+
 
 class ParametresSyncDialog(tk.Toplevel):
     """Configuration de la synchronisation : serveur central + ID appareil."""
@@ -363,6 +499,12 @@ class Launcher(tk.Tk):
                   cursor="hand2", activebackground="#013a7a",
                   command=self._ouvrir_params).pack(side="right", padx=16)
 
+        self._update_badge = tk.Label(
+            head, text="", font=("Segoe UI", 8, "bold"),
+            bg="#1e7e3e", fg="white", cursor="hand2",
+            padx=8, pady=4)
+        self._update_info = None
+
         logo = _charger_logo()
         if logo is not None:
             ll = tk.Label(head, image=logo, bg=C["header"])
@@ -420,6 +562,33 @@ class Launcher(tk.Tk):
 
         self.update_idletasks()
         self.deiconify()
+        # Vérification des mises à jour après affichage (non bloquant)
+        if _HAS_UPDATER:
+            self.after(2000, self._check_update_bg)
+
+    def _check_update_bg(self):
+        """Lance la vérification de mise à jour dans un thread background."""
+        import threading
+        def _run():
+            try:
+                from ems_client import sync_config
+                api_url = sync_config.server_url()
+            except Exception:
+                api_url = "http://127.0.0.1:8765"
+            info = _updater.check_for_update(api_url, __version__)
+            if info:
+                self.after(0, lambda: self._show_update_badge(info))
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _show_update_badge(self, info: dict):
+        """Affiche le badge de mise à jour dans l'en-tête."""
+        self._update_info = info
+        v = info.get("version", "?")
+        self._update_badge.config(text=f"↑ v{v} disponible")
+        self._update_badge.pack(side="right", padx=(0, 8))
+        self._update_badge.bind(
+            "<Button-1>",
+            lambda _e: UpdateDialog(self, self._update_info, _HERE))
 
     def _ouvrir_params(self):
         ParametresSyncDialog(self)

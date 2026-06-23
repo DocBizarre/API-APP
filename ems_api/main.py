@@ -42,7 +42,7 @@ from .routers import (
        clients, moteurs, techniciens,
        interventions, garanties, ameliorations, documents,
        types_intervention, statuts_garantie, stats_config, pieces, sync, admin,
-       pdf_export, marques, affaires
+       pdf_export, marques, affaires, contacts, updates
    )
 
 
@@ -127,6 +127,9 @@ app.include_router(admin.router, dependencies=deps)
 app.include_router(pdf_export.router, dependencies=deps)
 app.include_router(pdf_export.router_render, dependencies=deps)
 app.include_router(affaires.router, dependencies=deps)
+app.include_router(contacts.router, dependencies=deps)
+# /updates sans authentification : tous les clients du réseau doivent y accéder
+app.include_router(updates.router)
 
 if __name__ == "__main__":
     import uvicorn
