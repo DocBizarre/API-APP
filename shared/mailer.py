@@ -10,9 +10,56 @@ Strategie d'envoi (ordre de priorite) :
 """
 
 import os
+import base64
+import html as _html_mod
 from pathlib import Path
 from urllib.parse import quote
 import webbrowser
+
+_LOGO_PATH = Path(__file__).parent / "assets" / "logo_ems.png"
+
+
+def _logo_email_uri():
+    """Logo EMS en data URI (priorité : fichier PNG, fallback logo_data embarqué)."""
+    if _LOGO_PATH.is_file():
+        try:
+            return "data:image/png;base64," + base64.b64encode(
+                _LOGO_PATH.read_bytes()).decode("ascii")
+        except OSError:
+            pass
+    try:
+        from .logo_data import LOGO_EMS_B64
+        if LOGO_EMS_B64:
+            return "data:image/png;base64," + LOGO_EMS_B64
+    except ImportError:
+        pass
+    return ""
+
+
+def _text_to_html(body, logo_uri=""):
+    """Convertit un corps texte brut en HTML, avec logo EMS en pied de mail."""
+    safe = _html_mod.escape(body or "").replace("\n", "<br>\n")
+    logo_block = ""
+    if logo_uri:
+        logo_block = (
+            '<br><hr style="border:none;border-top:1px solid #d0d7de;margin:24px 0 16px">'
+            f'<img src="{logo_uri}" alt="EMS – Emeraude Moteurs Systemes" '
+            'style="max-height:56px;display:block;margin-bottom:6px">'
+            '<span style="font-family:\'Segoe UI\',Arial,sans-serif;font-size:11px;'
+            'color:#6b7785;line-height:1.6">'
+            'EMS – Emeraude Moteurs Systemes<br>'
+            '9 Rue d\'Armorique – 35540 Miniac Morvan<br>'
+            '<a href="https://www.emeraudemoteurs.com" '
+            'style="color:#002b5c;text-decoration:none;">'
+            'www.emeraudemoteurs.com</a>&nbsp;&middot;&nbsp;02.99.19.01.99'
+            '</span>'
+        )
+    return (
+        '<!DOCTYPE html><html><body style="font-family:\'Segoe UI\',Arial,sans-serif;'
+        'font-size:13px;color:#1a2332;line-height:1.6;max-width:620px;margin:0;padding:0">'
+        f'{safe}{logo_block}'
+        '</body></html>'
+    )
 
 
 def _esc(s):
@@ -179,10 +226,10 @@ def _ouvrir_brouillon(to, cc, subject, body, attachment_path=""):
             pythoncom.CoInitialize()
             ol   = _wc.Dispatch("Outlook.Application")
             mail = ol.CreateItem(0)
-            mail.To      = to or ""
-            mail.CC      = cc or ""
-            mail.Subject = subject or ""
-            mail.Body    = body or ""
+            mail.To       = to or ""
+            mail.CC       = cc or ""
+            mail.Subject  = subject or ""
+            mail.HTMLBody = _text_to_html(body, _logo_email_uri())
             mail.Attachments.Add(Source=pj)
             mail.Display(True)
             return True
@@ -298,7 +345,7 @@ CLIENT
   Email    : {email}
   Adresse  : {adresse}
 
-DEMANDEUR (personne ayant appele)
+DEMANDEUR
   Nom   : {nom_demandeur}
   Email : {email_demandeur}
   Tel   : {tel_demandeur}
@@ -637,3 +684,88 @@ def email_cloture(inv, client, moteur, technicien_emails=None, bon_path=""):
     pj_auto = _ouvrir_brouillon(to=to_str, cc=cc_str, subject=subject, body=body,
                                attachment_path=bon_path)
     return to_str, pj_auto
+
+
+# ─── Templates garantie ──────────────────────────────────────────────────────
+
+_TEMPLATE_GARANTIE_CLIENT = """\
+Madame, Monsieur{contact_line},
+
+Nous vous contactons au sujet de votre dossier de demande de garantie \
+n° {num_ems} concernant le moteur {num_serie}.
+
+Statut actuel : {statut}
+Attribution    : {attribution}
+Responsable    : {responsable}
+Date d'ouverture : {date_ouverture}
+
+{description}
+
+Nous restons à votre disposition pour tout renseignement complémentaire.
+
+Cordialement,
+EMS – Emeraude Moteurs Systemes
+"""
+
+_TEMPLATE_GARANTIE_TECH = """\
+Bonjour {responsable},
+
+Vous êtes désigné(e) responsable du dossier de garantie n° {num_ems}.
+
+Client       : {client_nom}
+Moteur       : {num_serie}
+Attribution  : {attribution}
+Statut       : {statut}
+Date ouv.    : {date_ouverture}
+
+Description :
+{description}
+
+Merci de prendre en charge ce dossier.
+
+Cordialement,
+EMS – Emeraude Moteurs Systemes
+"""
+
+
+def email_garantie_client(g: dict, client: dict, moteur: dict,
+                          fiche_path: str = "") -> tuple:
+    """Brouillon de notification client pour une demande de garantie."""
+    email = (_safe(client, "email") or "")
+    contact = (_safe(client, "contact") or _safe(client, "nom") or "")
+    contact_line = f" {contact}" if contact else ""
+    subject = f"[EMS] Dossier de garantie {_safe(g, 'num_ems')}"
+    body = _TEMPLATE_GARANTIE_CLIENT.format(
+        contact_line=contact_line,
+        num_ems=_safe(g, "num_ems"),
+        num_serie=_safe(moteur, "num_serie") or _safe(g, "num_serie"),
+        statut=_safe(g, "statut"),
+        attribution=_safe(g, "attribution"),
+        responsable=_safe(g, "responsable") or "—",
+        date_ouverture=_safe(g, "date_ouverture") or "—",
+        description=_safe(g, "description") or "—",
+    )
+    pj_auto = _ouvrir_brouillon(to=email, cc="", subject=subject, body=body,
+                                attachment_path=fiche_path)
+    return email, pj_auto
+
+
+def email_garantie_technicien(g: dict, client: dict, moteur: dict,
+                              tech_email: str = "",
+                              fiche_path: str = "") -> tuple:
+    """Brouillon d'assignation du responsable garantie."""
+    subject = (f"[EMS] Dossier de garantie assigné – "
+               f"{_safe(g, 'num_ems')} – {_safe(moteur, 'num_serie') or _safe(g, 'num_serie')}")
+    body = _TEMPLATE_GARANTIE_TECH.format(
+        responsable=_safe(g, "responsable") or "Responsable",
+        num_ems=_safe(g, "num_ems"),
+        client_nom=_safe(client, "nom") or _safe(g, "client_nom"),
+        num_serie=_safe(moteur, "num_serie") or _safe(g, "num_serie"),
+        attribution=_safe(g, "attribution"),
+        statut=_safe(g, "statut"),
+        date_ouverture=_safe(g, "date_ouverture") or "—",
+        description=_safe(g, "description") or "—",
+    )
+    pj_auto = _ouvrir_brouillon(to=tech_email, cc="", subject=subject, body=body,
+                                attachment_path=fiche_path)
+    return tech_email, pj_auto
