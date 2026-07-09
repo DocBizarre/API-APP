@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EMS — Numérotation (admin)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary: #1e3a5f;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --success: #059669;
+  --success-bg: #d1fae5;
+  --warning: #d97706;
+  --warning-bg: #fef3c7;
+  --danger: #dc2626;
+  --danger-bg: #fee2e2;
+  --gray: #6b7280;
+  --gray-bg: #f3f4f6;
+  --surface: #f8fafc;
+  --card: #ffffff;
+  --border: #e2e8f0;
+  --text: #111827;
+  --text-muted: #6b7280;
+  --text-light: #9ca3af;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{font-family:'Inter',sans-serif;font-size:14px;color:var(--text);background:var(--surface)}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select{font-family:inherit;font-size:14px}
+
+header{
+  background:var(--primary);color:#fff;padding:16px 24px;
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
+}
+header h1{font-size:17px;font-weight:700}
+header h1 span{color:#60a5fa}
+header .sub{font-size:11px;color:rgba(255,255,255,.55);margin-top:2px}
+.api-input{
+  padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.2);
+  background:rgba(255,255,255,.08);color:#fff;font-size:12px;width:220px
+}
+.api-input::placeholder{color:rgba(255,255,255,.4)}
+
+main{max-width:1100px;margin:0 auto;padding:24px}
+
+.tabs{display:flex;gap:6px;margin-bottom:18px}
+.tab-btn{
+  padding:8px 18px;border-radius:20px;font-size:13px;font-weight:600;
+  border:1px solid var(--border);background:#fff;color:var(--text-muted);
+}
+.tab-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+.banner{
+  padding:12px 16px;border-radius:var(--radius);font-size:13px;margin-bottom:16px;
+  display:flex;align-items:center;gap:10px;
+}
+.banner.ok{background:var(--success-bg);color:#065f46}
+.banner.warn{background:var(--warning-bg);color:#92400e}
+.banner.err{background:var(--danger-bg);color:#991b1b}
+
+.card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden
+}
+.card-header{
+  padding:14px 18px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px
+}
+.card-header .prefixe{font-size:15px;font-weight:700}
+.card-header .meta{font-size:12px;color:var(--text-muted)}
+.badge{
+  padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.3px
+}
+.badge.ok{background:var(--success-bg);color:#065f46}
+.badge.incoherent{background:var(--warning-bg);color:#92400e}
+
+.card-body{padding:14px 18px}
+.stats-row{display:flex;gap:22px;flex-wrap:wrap;margin-bottom:12px}
+.stat{font-size:12px;color:var(--text-muted)}
+.stat b{display:block;font-size:18px;color:var(--text);font-weight:700}
+
+.gap-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.gap-chip{
+  padding:3px 9px;border-radius:6px;background:var(--danger-bg);color:#991b1b;
+  font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums
+}
+
+.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{
+  padding:8px 14px;border-radius:6px;border:1px solid var(--border);
+  background:#fff;color:var(--text);font-size:12.5px;font-weight:600;transition:all .15s
+}
+.btn:hover{border-color:#94a3b8}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn.primary:hover{background:var(--accent-hover)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.num-input{
+  width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;outline:none
+}
+.num-input:focus{border-color:#93c5fd}
+
+.detail-toggle{font-size:12px;color:var(--accent);font-weight:600;margin-top:4px;display:inline-block}
+.dossiers-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px}
+.dossiers-table th{
+  text-align:left;padding:6px 8px;color:var(--text-muted);font-weight:600;
+  border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase
+}
+.dossiers-table td{padding:6px 8px;border-bottom:1px solid #f1f5f9}
+.dossiers-table tr.trou td{background:var(--danger-bg);color:#991b1b;font-style:italic}
+
+.empty{padding:40px;text-align:center;color:var(--text-light)}
+.loading{padding:40px;text-align:center;color:var(--text-muted)}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>EMS — <span>Numérotation</span></h1>
+    <div class="sub">Diagnostic et correction des compteurs (affaires / bons d'intervention)</div>
+  </div>
+  <input id="api-base-input" class="api-input" placeholder="http://localhost:8765">
+</header>
+
+<main>
+  <div class="tabs">
+    <button class="tab-btn active" data-type="affaire">Affaires</button>
+    <button class="tab-btn" data-type="bon">Bons d'intervention</button>
+  </div>
+
+  <div id="content"></div>
+</main>
+
+<script>
+const API_BASE = new URLSearchParams(window.location.search).get('api')
+  || localStorage.getItem('ems_numerotation_api')
+  || 'http://localhost:8765';
+
+const apiInput = document.getElementById('api-base-input');
+apiInput.value = API_BASE;
+apiInput.addEventListener('change', () => {
+  localStorage.setItem('ems_numerotation_api', apiInput.value.trim());
+  // Le paramètre ?api= de l'URL (passé par le lanceur EMS) est prioritaire sur
+  // localStorage : on l'enlève ici pour que la saisie manuelle soit bien prise
+  // en compte au rechargement.
+  const url = new URL(window.location.href);
+  url.searchParams.delete('api');
+  window.location.href = url.toString();
+});
+
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(API_BASE + path, opts);
+  if (!r.ok) {
+    const txt = await r.text();
+    let msg = txt || r.statusText;
+    try { const j = JSON.parse(txt); if (j.detail) msg = j.detail; } catch (_) {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+let currentType = 'affaire';
+let lastDiagnostic = [];
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentType = btn.dataset.type;
+    loadDiagnostic();
+  });
+});
+
+function fmtNum(n) { return n.toLocaleString('fr-FR'); }
+
+async function loadDiagnostic() {
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="loading">Chargement…</div>';
+  let data;
+  try {
+    data = await api('GET', `/admin/numerotation/${currentType}`);
+  } catch (e) {
+    content.innerHTML = `<div class="banner err">Impossible de contacter le serveur EMS sur <b>${API_BASE}</b>.<br>${e.message}</div>`;
+    return;
+  }
+
+  const groupes = data.groupes || [];
+  lastDiagnostic = groupes;
+  if (!groupes.length) {
+    content.innerHTML = '<div class="empty">Aucune donnée de numérotation pour ce type.</div>';
+    return;
+  }
+
+  const nbIncoherents = groupes.filter(g => g.incoherent).length;
+  let html = '';
+  if (nbIncoherents > 0) {
+    html += `<div class="banner warn">⚠ ${nbIncoherents} série(s) présentent des trous dans la numérotation. Les trous en fin de séquence peuvent être corrigés (recalibrage du compteur) ; les trous internes correspondent à des dossiers supprimés et ne sont pas rattrapables sans renumérotation.</div>`;
+  } else {
+    html += `<div class="banner ok">✓ Aucune incohérence détectée : tous les numéros sont continus jusqu'au dernier utilisé.</div>`;
+  }
+
+  for (const g of groupes) {
+    html += renderGroupe(g);
+  }
+  content.innerHTML = html;
+
+  // Wire actions
+  groupes.forEach(g => {
+    const card = document.getElementById(`card-${cssId(g.prefixe)}`);
+    if (!card) return;
+    card.querySelector('.btn-recalibrer')?.addEventListener('click', () => recalibrer(g.prefixe));
+    card.querySelector('.btn-appliquer')?.addEventListener('click', () => appliquerValeur(g.prefixe));
+    card.querySelector('.detail-toggle')?.addEventListener('click', () => toggleDossiers(g.prefixe));
+  });
+}
+
+function cssId(prefixe) { return prefixe.replace(/[^a-zA-Z0-9]/g, '_'); }
+
+function renderGroupe(g) {
+  const id = cssId(g.prefixe);
+  const manquants = g.numeros_manquants || [];
+  const trouEnFin = g.trou_en_fin || 0;
+  const trousInternes = manquants.length - trouEnFin;
+
+  let gapsHtml = '';
+  if (manquants.length) {
+    gapsHtml = '<div class="gap-list">' + manquants.map(n => {
+      const isFinal = n > g.db_max;
+      return `<span class="gap-chip" title="${isFinal ? 'Trou en fin de séquence — rattrapable' : 'Dossier supprimé — non rattrapable'}">${String(n).padStart(4,'0')}${isFinal ? ' ⟲' : ''}</span>`;
+    }).join('') + '</div>';
+  }
+
+  return `
+  <div class="card" id="card-${id}">
+    <div class="card-header">
+      <div>
+        <div class="prefixe">${g.prefixe}</div>
+        <div class="meta">${g.nb_enregistrements} dossier(s) — dernier numéro utilisé : ${String(g.db_max).padStart(4,'0')} — compteur (HWM) : ${String(g.hwm).padStart(4,'0')}</div>
+      </div>
+      <span class="badge ${g.incoherent ? 'incoherent' : 'ok'}">${g.incoherent ? `${manquants.length} trou(s)` : 'cohérent'}</span>
+    </div>
+    <div class="card-body">
+      ${gapsHtml}
+      ${trouEnFin > 0 ? `<div class="stats-row"><div class="stat">Numéros brûlés en fin de séquence (compteur avancé sans dossier créé)<b>${trouEnFin}</b></div>${trousInternes > 0 ? `<div class="stat">Dossiers supprimés (non rattrapables)<b>${trousInternes}</b></div>` : ''}</div>` : ''}
+      <div class="actions">
+        ${trouEnFin > 0 ? `<button class="btn primary btn-recalibrer">Recalibrer le compteur sur ${String(g.db_max).padStart(4,'0')} (récupère les ${trouEnFin} numéro(s) brûlé(s))</button>` : ''}
+        <input type="number" min="0" class="num-input" placeholder="valeur" id="input-${id}">
+        <button class="btn btn-appliquer">Fixer le compteur à cette valeur</button>
+      </div>
+      <a class="detail-toggle" data-prefixe="${g.prefixe}">Voir le détail des dossiers ▾</a>
+      <div id="dossiers-${id}"></div>
+    </div>
+  </div>`;
+}
+
+async function recalibrer(prefixe) {
+  if (!confirm(`Recalibrer le compteur de ${prefixe} sur le dernier numéro réellement utilisé ?\nLes prochains dossiers créés reprendront la suite depuis ce point.`)) return;
+  try {
+    await api('POST', `/admin/numerotation/${currentType}/${encodeURIComponent(prefixe)}/compteur`, { valeur: null });
+    loadDiagnostic();
+  } catch (e) {
+    alert('Erreur : ' + e.message);
+  }
+}
+
+async function appliquerValeur(prefixe) {
+  const id = cssId(prefixe);
+  const input = document.getElementById(`input-${id}`);
+  const val = parseInt(input.value, 10);
+  if (isNaN(val) || val < 0) { alert('Entrez une valeur numérique positive.'); return; }
+  if (!confirm(`Fixer le compteur de ${prefixe} à ${val} ?\nLe prochain numéro généré sera ${val + 1}.`)) return;
+  try {
+    await api('POST', `/admin/numerotation/${currentType}/${encodeURIComponent(prefixe)}/compteur`, { valeur: val });
+    loadDiagnostic();
+  } catch (e) {
+    alert('Erreur : ' + e.message);
+  }
+}
+
+async function toggleDossiers(prefixe) {
+  const id = cssId(prefixe);
+  const container = document.getElementById(`dossiers-${id}`);
+  if (container.dataset.open === '1') {
+    container.innerHTML = '';
+    container.dataset.open = '0';
+    return;
+  }
+  container.innerHTML = '<div class="loading">Chargement…</div>';
+  container.dataset.open = '1';
+  try {
+    const data = await api('GET', `/admin/numerotation/${currentType}/${encodeURIComponent(prefixe)}/dossiers`);
+    const dossiers = data.dossiers || [];
+    const parGroupe = groupeParDiagnostic(prefixe);
+    const plafond = parGroupe ? Math.max(parGroupe.db_max, parGroupe.hwm) : 0;
+    const parNumero = {};
+    dossiers.forEach(d => parNumero[d.numero] = d);
+
+    let rows = '';
+    for (let n = 1; n <= plafond; n++) {
+      const d = parNumero[n];
+      if (d) {
+        rows += `<tr><td>${d.num}</td><td>${d.libelle || '—'}</td><td>${d.statut || '—'}</td><td>${d.id}</td></tr>`;
+      } else {
+        rows += `<tr class="trou"><td colspan="4">Numéro ${String(n).padStart(4,'0')} — aucun dossier (supprimé ou création échouée)</td></tr>`;
+      }
+    }
+    container.innerHTML = `<table class="dossiers-table"><thead><tr><th>Numéro</th><th>Libellé</th><th>Statut</th><th>ID</th></tr></thead><tbody>${rows}</tbody></table>`;
+  } catch (e) {
+    container.innerHTML = `<div class="banner err">${e.message}</div>`;
+  }
+}
+
+function groupeParDiagnostic(prefixe) {
+  return lastDiagnostic.find(g => g.prefixe === prefixe);
+}
+
+loadDiagnostic();
+</script>
+</body>
+</html>

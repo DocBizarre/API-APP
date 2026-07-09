@@ -405,6 +405,35 @@ def delete_type_intervention(libelle: str) -> None:
     _client.delete(f"/types-intervention/{libelle}")
 
 
+def get_types_moteur() -> List[Dict]:
+    """Retourne [{libelle, marque}, ...]."""
+    return _client.get("/types-moteur")
+
+
+def add_type_moteur(libelle: str, marque: str = "") -> bool:
+    try:
+        _client.post("/types-moteur", json={"libelle": libelle, "marque": marque})
+        return True
+    except APIError as e:
+        if e.status_code == 409:
+            return False
+        raise
+
+
+def update_type_moteur(old: str, new: str, marque: str = "") -> bool:
+    try:
+        _client.put("/types-moteur", json={"old": old, "new": new, "marque": marque})
+        return True
+    except APIError as e:
+        if e.status_code in (404, 409):
+            return False
+        raise
+
+
+def delete_type_moteur(libelle: str) -> None:
+    _client.delete(f"/types-moteur/{libelle}")
+
+
 def get_marques() -> List[str]:
     items = _client.get("/marques-moteur")
     return [it["libelle"] for it in items]

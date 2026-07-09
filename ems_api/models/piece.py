@@ -1,5 +1,5 @@
 """Modèle Piece (pièces détachées en stock)."""
-from sqlalchemy import Column, String, Integer, DateTime, func
+from sqlalchemy import Column, String, Integer, Float, DateTime, func
 from ..database import Base
 
 
@@ -11,6 +11,7 @@ class Piece(Base):
     libelle    = Column(String, default="", index=True)
     marque     = Column(String, default="", index=True)
     notes      = Column(String, default="")
+    prix_achat = Column(Float, default=0.0)
 
     version    = Column(Integer, default=1)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

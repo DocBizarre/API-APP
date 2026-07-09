@@ -90,6 +90,21 @@ def _demarrer_app(app_key, here_str):
         _wb.open((_P(here_str) / "suivi_affaires.html").as_uri() + f"?api={_api_url}")
         return
 
+    if app_key == "numerotation":
+        import webbrowser as _wb
+        from pathlib import Path as _P
+        from configparser import ConfigParser as _CP
+        _cfg = _CP()
+        _ini = _P(here_str) / "config.ini"
+        _api_url = "http://localhost:8765"
+        if _ini.is_file():
+            _cfg.read(_ini, encoding="utf-8")
+            _url = _cfg.get("server", "url", fallback=None)
+            if _url:
+                _api_url = _url.rstrip("/")
+        _wb.open((_P(here_str) / "admin_numerotation.html").as_uri() + f"?api={_api_url}")
+        return
+
     if app_key == "bons":
         from main import AppEMS
         AppEMS(mode="bons").mainloop()
@@ -145,6 +160,9 @@ APPS = [
     {"key": "convertisseur", "exe": "EMS_Convertisseur", "titre": "Convertisseur PDF",
      "desc": "Remise en page des accusés de réception de commande au format EMS",
      "icone": "📄", "couleur": "#5d4037", "dossier": None},
+    {"key": "numerotation", "exe": "EMS_Numerotation", "titre": "Numérotation (admin)",
+     "desc": "Diagnostic et correction des compteurs de numéros d'affaires et de bons",
+     "icone": "🔢", "couleur": "#455a64", "dossier": None},
 ]
 
 
@@ -153,6 +171,8 @@ def _app_disponible(app):
         return _is_visible(_HERE / f"{app['exe']}.exe")
     if app["key"] == "affaire":
         return (_HERE / "suivi_affaires.html").is_file()
+    if app["key"] == "numerotation":
+        return (_HERE / "admin_numerotation.html").is_file()
     if app["key"] == "convertisseur":
         return (_HERE / "convertisseurpdf.py").is_file()
     return app["dossier"] and (_HERE / app["dossier"]).is_dir()
@@ -249,6 +269,8 @@ class UpdateDialog(tk.Toplevel):
         self.configure(bg=C["bg"])
         self.resizable(False, False)
         self.grab_set()
+        if update_info.get("required", False):
+            self.protocol("WM_DELETE_WINDOW", lambda: None)
 
         # En-tête
         head = tk.Frame(self, bg=C["header"], height=60)
@@ -310,9 +332,10 @@ class UpdateDialog(tk.Toplevel):
         self._btn_apply.pack(side="left", padx=8)
         self._btn_apply.pack_forget()
 
-        tk.Button(bf, text="Plus tard", font=("Segoe UI", 9),
-                  bg="#888", fg="white", relief="flat", padx=12, pady=6,
-                  cursor="hand2", command=self.destroy).pack(side="right")
+        if not update_info.get("required", False):
+            tk.Button(bf, text="Plus tard", font=("Segoe UI", 9),
+                      bg="#888", fg="white", relief="flat", padx=12, pady=6,
+                      cursor="hand2", command=self.destroy).pack(side="right")
 
     def _start_download(self):
         self._btn_download.config(state="disabled")
@@ -589,6 +612,8 @@ class Launcher(tk.Tk):
         self._update_badge.bind(
             "<Button-1>",
             lambda _e: UpdateDialog(self, self._update_info, _HERE))
+        if info.get("required", False):
+            UpdateDialog(self, self._update_info, _HERE)
 
     def _ouvrir_params(self):
         ParametresSyncDialog(self)

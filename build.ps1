@@ -32,6 +32,7 @@ $versionFile = "$ROOT\shared\version.py"
 $currentVersionLine = Get-Content $versionFile | Where-Object { $_ -match '__version__' } | Select-Object -First 1
 $currentVersion = [regex]::Match($currentVersionLine, '"([^"]+)"').Groups[1].Value
 
+$releaseNotes = ""
 if (-not $App) {
     Write-Host ""
     Write-Host "  Version actuelle : $currentVersion" -ForegroundColor Cyan
@@ -45,9 +46,11 @@ if (-not $App) {
         $content = $content -replace '__version__ = "[^"]+"', "__version__ = `"$newVersion`""
         Set-Content $versionFile -Value $content.TrimEnd() -Encoding UTF8 -NoNewline
         Write-Host "  Version mise a jour : $currentVersion -> $newVersion" -ForegroundColor Green
+        $currentVersion = $newVersion
     } else {
         Write-Host "  Version inchangee : $currentVersion" -ForegroundColor Yellow
     }
+    $releaseNotes = Read-Host "  Notes de version (laisser vide pour inchangees)"
     Write-Host ""
 }
 
@@ -61,6 +64,7 @@ $SPECS = [ordered]@{
     "Pieces"          = "EMS_Pieces.spec"
     "BI"              = "EMS_BI.spec"
     "ConvertisseurPDF" = "EMS_ConvertisseurPDF.spec"
+    "Installer"       = "EMS_Installer.spec"
 }
 
 function Write-Header([string]$text) {
@@ -91,6 +95,13 @@ function Deploy-Exe([string]$name) {
     $src  = Join-Path $DIST "EMS_$name.exe"
     $dest = Join-Path $DEPLOY "EMS_$name.exe"
     if (Test-Path $src) {
+        # Tuer le process si en cours (evite "fichier ouvert" sur onefile PyInstaller)
+        $proc = Get-Process -Name "EMS_$name" -ErrorAction SilentlyContinue
+        if ($proc) {
+            $proc | Stop-Process -Force
+            Write-Host "  Arrêté : EMS_$name.exe (PID $($proc.Id))" -ForegroundColor Yellow
+            Start-Sleep -Milliseconds 500
+        }
         Copy-Item $src $dest -Force
         Write-Host "  Déployé : EMS_$name.exe" -ForegroundColor Green
     } else {
@@ -189,10 +200,45 @@ if ($items) {
     $sizeMb = [math]::Round((Get-Item $zipPath).Length / 1MB, 1)
     Write-Host "  Package : $zipName ($sizeMb Mo)" -ForegroundColor Green
     Write-Host "  Chemin  : $zipPath" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "  Prochaine etape :" -ForegroundColor Cyan
-    Write-Host "    1. Copier $zipName sur le serveur (partage ou static/)" -ForegroundColor White
-    Write-Host "    2. Editer ems_api\data\updates.json : version=$version, url=<url_du_zip>" -ForegroundColor White
+
+    # ── Déploiement automatique vers ems_api/static/ (build complet uniquement) ─
+    if (-not $App) {
+        $staticDir    = Join-Path $ROOT "ems_api\static"
+        $manifestPath = Join-Path $ROOT "ems_api\data\updates.json"
+
+        New-Item -ItemType Directory -Path $staticDir -Force | Out-Null
+        Copy-Item $zipPath (Join-Path $staticDir $zipName) -Force
+        Write-Host "  Copié vers : ems_api\static\$zipName" -ForegroundColor Green
+
+        # Lire l'IP serveur depuis EMS_Distribution/config.ini
+        $serverUrl = "http://192.168.1.10:8765"
+        $deployCfg = Join-Path $DEPLOY "config.ini"
+        if (Test-Path $deployCfg) {
+            $cfgContent = Get-Content $deployCfg -Raw
+            $match = [regex]::Match($cfgContent, 'url\s*=\s*(\S+)')
+            if ($match.Success) { $serverUrl = $match.Groups[1].Value.TrimEnd('/') }
+        }
+
+        # Lire les notes actuelles si pas de nouvelles saisies
+        $existingNotes = ""
+        if (Test-Path $manifestPath) {
+            try {
+                $existingManifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+                $existingNotes = $existingManifest.notes
+            } catch {}
+        }
+        $finalNotes = if ($releaseNotes) { $releaseNotes } else { $existingNotes }
+
+        $manifest = [ordered]@{
+            version  = $version
+            url      = "$serverUrl/static/$zipName"
+            notes    = $finalNotes
+            required = $false
+        }
+        $manifest | ConvertTo-Json -Depth 2 | Set-Content $manifestPath -Encoding UTF8
+        Write-Host "  Manifest mis a jour : ems_api\data\updates.json" -ForegroundColor Green
+        Write-Host "  URL : $serverUrl/static/$zipName" -ForegroundColor Gray
+    }
 } else {
     Write-Warning "Aucun fichier trouvé dans $DEPLOY - zip non créé."
 }

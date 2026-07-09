@@ -22,6 +22,7 @@ from ..models.intervention import Intervention
 from ..models.garantie import Garantie
 from ..models.amelioration import Amelioration
 from ..models.affaire import Affaire
+from ..models.bon_commande import BonCommande
 
 # Serialize sequence generation within a single process (SQLite safety).
 _num_lock = threading.Lock()
@@ -105,6 +106,47 @@ def next_num_amelioration(db: Session, device_prefix: str = "") -> str:
     return _prochain_numero(db, Amelioration, "num_ticket", "AME", device_prefix)
 
 
+def next_num_bon_commande(db: Session, device_prefix: str = "") -> str:
+    """Génère le prochain numéro de bon de commande : BC-AAAA-XXXX."""
+    return _prochain_numero(db, BonCommande, "num_bc", "BC", device_prefix)
+
+
 def next_num_affaire(db: Session, device_prefix: str = "") -> str:
-    """Génère le prochain numéro d'affaire : AFF-AAAA-XXXX."""
-    return _prochain_numero(db, Affaire, "num_affaire", "AFF", device_prefix)
+    """Génère le prochain numéro d'affaire : AMOTYYYYNNNN (ex. AMOT20260001)."""
+    with _num_lock:
+        annee = datetime.now().year
+        prefixe = f"AMOT{annee}"
+        col = Affaire.num_affaire
+
+        dernier_db = (
+            db.query(Affaire)
+            .filter(col.like(f"{prefixe}%"))
+            .order_by(col.desc())
+            .first()
+        )
+        num_db = 0
+        if dernier_db:
+            try:
+                num_db = int(dernier_db.num_affaire[len(prefixe):])
+            except (ValueError, AttributeError):
+                num_db = 0
+
+        from ..models.configurations import Config
+        hwm_key = f"hwm:{prefixe}"
+        cfg = db.query(Config).filter(Config.cle == hwm_key).first()
+        num_hwm = 0
+        if cfg and cfg.valeur:
+            try:
+                num_hwm = int(cfg.valeur)
+            except ValueError:
+                num_hwm = 0
+
+        num = max(num_db, num_hwm) + 1
+        new_num_str = f"{prefixe}{num:04d}"
+
+        if cfg:
+            cfg.valeur = str(num)
+        else:
+            db.add(Config(cle=hwm_key, valeur=str(num)))
+        db.commit()
+        return new_num_str

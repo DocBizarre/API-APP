@@ -11,7 +11,11 @@ MODIFICATIONS (perf/stabilite) :
 - Plus de fichiers temporaires : write_pdf() sans argument retourne
   directement les bytes du PDF.
 """
-from fastapi import APIRouter, HTTPException, Request
+import os
+import re
+import tempfile
+
+from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -58,6 +62,126 @@ async def render_pdf_from_html(request: Request):
         raise HTTPException(500, f"Echec generation PDF (WeasyPrint) : {e}")
 
     return Response(content=data, media_type="application/pdf")
+
+
+async def _convert_document(file: UploadFile, doc_type: "str | None", include_cgv: bool) -> Response:
+    """Logique commune aux endpoints de conversion PDF (CC / CF / DE).
+
+    doc_type=None => auto-détection côté serveur (via convertisseurpdf.detect_doc_type).
+    Le client (exe allégé, sans pdfplumber) ne peut pas détecter le type
+    lui-même : c'est pour ça que l'endpoint générique /pdf/convert existe.
+    """
+    try:
+        import convertisseurpdf as _conv
+    except ImportError as e:
+        raise HTTPException(500, f"convertisseurpdf indisponible : {e}")
+
+    try:
+        from weasyprint import HTML  # noqa: F401 — vérifie la dispo avant de lire le fichier
+    except ImportError as e:
+        raise HTTPException(500, f"WeasyPrint non installé sur le serveur : {e}")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(400, "Fichier PDF vide")
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        if doc_type is None:
+            doc_type = _conv.detect_doc_type(tmp_path)
+
+        logo = _conv.extract_logo_datauri(tmp_path)
+
+        if doc_type == "CF":
+            data = _conv.parse_bon_fournisseur(tmp_path)
+            html_str = _conv.build_html_bon_fournisseur(data, logo)
+            num = _conv._clean(data["entete"].get("N° Cde EMS", ""))
+            suffix = "_commande_fournisseur_EMS.pdf"
+        elif doc_type == "DE":
+            data = _conv.parse_devis(tmp_path)
+            html_str = _conv.build_html_devis(data, logo)
+            num = _conv._clean(data["entete"].get("N° Devis EMS", ""))
+            suffix = "_devis_EMS.pdf"
+        else:
+            data = _conv.parse_commande(tmp_path)
+            html_str = _conv.build_html(data, logo)
+            num = _conv._clean(data["entete"].get("N° Cde EMS", ""))
+            suffix = "_accuse_EMS.pdf"
+
+        safe = re.sub(r"[^\w\-]+", "_", num).strip("_") or "document"
+        out_name = safe + suffix
+
+        issues = _conv._validate_data(data, doc_type)
+        if issues:
+            import logging as _log
+            _log.getLogger("convertisseurpdf").warning(
+                "[%s] %s : %s", doc_type, file.filename, " | ".join(issues)
+            )
+
+        pdf_bytes = await run_in_threadpool(
+            lambda: _conv._render_to_bytes(data, html_str, tmp_path, include_cgv)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Echec conversion PDF : {e}")
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{out_name}"'},
+    )
+
+
+@router_render.post("/accuse-reception",
+                    summary="Remise en page d'un accusé de réception de commande",
+                    response_class=Response)
+async def convert_accuse_reception(
+    file: UploadFile = File(...),
+    include_cgv: bool = Query(default=True),
+):
+    return await _convert_document(file, "CC", include_cgv)
+
+
+@router_render.post("/bon-fournisseur",
+                    summary="Remise en page d'un bon de commande fournisseur",
+                    response_class=Response)
+async def convert_bon_fournisseur(
+    file: UploadFile = File(...),
+    include_cgv: bool = Query(default=True),
+):
+    return await _convert_document(file, "CF", include_cgv)
+
+
+@router_render.post("/devis",
+                    summary="Remise en page d'un devis client",
+                    response_class=Response)
+async def convert_devis(
+    file: UploadFile = File(...),
+    include_cgv: bool = Query(default=True),
+):
+    return await _convert_document(file, "DE", include_cgv)
+
+
+@router_render.post("/convert",
+                    summary="Remise en page avec auto-détection du type (CC/CF/DE)",
+                    response_class=Response)
+async def convert_auto(
+    file: UploadFile = File(...),
+    include_cgv: bool = Query(default=True),
+):
+    """À utiliser par les clients qui n'embarquent pas pdfplumber (exe allégé) :
+    le type de document (accusé / bon fournisseur / devis) est détecté ici,
+    côté serveur, plutôt que par le client."""
+    return await _convert_document(file, None, include_cgv)
 
 
 def _to_dict(orm_obj):

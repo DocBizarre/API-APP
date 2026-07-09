@@ -10,6 +10,7 @@ class PieceCreate(BaseModel):
     libelle:    str = ""
     marque:     str = ""
     notes:      str = ""
+    prix_achat: float = 0
 
 
 class PieceUpdate(BaseModel):
@@ -17,6 +18,7 @@ class PieceUpdate(BaseModel):
     libelle:    Optional[str] = None
     marque:     Optional[str] = None
     notes:      Optional[str] = None
+    prix_achat: Optional[float] = None
 
 
 class PieceOut(BaseModel):
@@ -25,6 +27,7 @@ class PieceOut(BaseModel):
     libelle:    str
     marque:     str
     notes:      str
+    prix_achat: float = 0
     version:    int = 1
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

@@ -9,8 +9,10 @@ from .configurations import TypeIntervention, StatutGarantie, Config
 from .piece import Piece
 from .affaire import Affaire, AffaireItem
 from .contact import Contact
+from .bon_commande import BonCommande, BonCommandeLigne
 
 __all__ = ["Client", "Moteur", "Intervention",
            "Garantie", "Amelioration", "Technicien",
            "TypeIntervention", "StatutGarantie", "Config",
-           "Piece", "Affaire", "AffaireItem", "Contact"]
+           "Piece", "Affaire", "AffaireItem", "Contact",
+           "BonCommande", "BonCommandeLigne"]

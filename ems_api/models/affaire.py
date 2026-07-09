@@ -15,6 +15,7 @@ class Affaire(Base):
     ref_interne            = Column(String, default="")
     num_commande_client    = Column(String, default="")
     charge_affaire         = Column(String, default="")
+    resp_technique         = Column(String, default="")
     date_debut      = Column(String, default="")   # JJ/MM/AAAA
     date_fin_prevue = Column(String, default="")   # JJ/MM/AAAA
     date_cloture    = Column(String, default="")   # JJ/MM/AAAA
@@ -34,6 +35,9 @@ class Affaire(Base):
     prix_transport           = Column(String, default="")
     num_suivi_transport      = Column(String, default="")
     instructions_transport   = Column(String, default="")
+    conditions_reglement     = Column(String, default="")
+    garanties                = Column(String, default="")
+    interlocuteurs_client    = Column(String, default="[]")
     version         = Column(Integer, default=1)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
     updated_at      = Column(DateTime(timezone=True), server_default=func.now(),

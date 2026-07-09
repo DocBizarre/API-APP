@@ -34,6 +34,7 @@ def init_db():
     from .models import amelioration, technicien  # noqa
     from .models import configurations  # noqa
     from .models import affaire, contact  # noqa
+    from .models import bon_commande  # noqa
     Base.metadata.create_all(bind=engine)
 
     # Migrations : ajout de colonnes manquantes sur tables existantes
@@ -66,6 +67,10 @@ def init_db():
         ("affaires", "prix_transport",           "TEXT DEFAULT ''"),
         ("affaires", "num_suivi_transport",      "TEXT DEFAULT ''"),
         ("affaires", "instructions_transport",   "TEXT DEFAULT ''"),
+        ("affaires", "conditions_reglement",     "TEXT DEFAULT ''"),
+        ("affaires", "garanties",                "TEXT DEFAULT ''"),
+        ("affaires", "resp_technique",           "TEXT DEFAULT ''"),
+        ("affaires", "interlocuteurs_client",    "TEXT DEFAULT '[]'"),
         ("affaire_items", "dossier_path",       "TEXT DEFAULT ''"),
         ("contacts", "usage_count",             "INTEGER DEFAULT 1"),
         ("garanties", "responsable",             "TEXT DEFAULT ''"),
@@ -74,6 +79,10 @@ def init_db():
         ("garanties", "nom_demandeur",           "TEXT DEFAULT ''"),
         ("garanties", "email_demandeur",         "TEXT DEFAULT ''"),
         ("garanties", "telephone_demandeur",     "TEXT DEFAULT ''"),
+        ("types_moteur", "marque",               "TEXT DEFAULT ''"),
+        ("pieces", "prix_achat",                 "REAL DEFAULT 0"),
+        ("bons_commande", "date_livraison_reelle", "TEXT DEFAULT ''"),
+        ("bons_commande", "date_reglement",        "TEXT DEFAULT ''"),
     ]
     insp = _inspect(engine)
     for table, col, col_def in _migrations:

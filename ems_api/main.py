@@ -42,8 +42,9 @@ logger = logging.getLogger(__name__)
 from .routers import (
        clients, moteurs, techniciens,
        interventions, garanties, ameliorations, documents,
-       types_intervention, statuts_garantie, stats_config, pieces, sync, admin,
-       pdf_export, marques, affaires, contacts, updates, accuse_reception
+       types_intervention, types_moteur, statuts_garantie, stats_config, pieces, sync, admin,
+       pdf_export, marques, affaires, contacts, updates, accuse_reception,
+       bons_commande, modeles_chapitre,
    )
 
 
@@ -118,6 +119,7 @@ app.include_router(garanties.router, dependencies=deps)
 app.include_router(ameliorations.router, dependencies=deps)
 app.include_router(documents.router, dependencies=deps)
 app.include_router(types_intervention.router, dependencies=deps)
+app.include_router(types_moteur.router, dependencies=deps)
 app.include_router(statuts_garantie.router, dependencies=deps)
 app.include_router(marques.router, dependencies=deps)
 app.include_router(stats_config.router_stats, dependencies=deps)
@@ -128,8 +130,10 @@ app.include_router(admin.router, dependencies=deps)
 app.include_router(pdf_export.router, dependencies=deps)
 app.include_router(pdf_export.router_render, dependencies=deps)
 app.include_router(affaires.router, dependencies=deps)
+app.include_router(bons_commande.router, dependencies=deps)
 app.include_router(contacts.router, dependencies=deps)
 app.include_router(accuse_reception.router, dependencies=deps)
+app.include_router(modeles_chapitre.router, dependencies=deps)
 # /updates sans authentification : tous les clients du réseau doivent y accéder
 app.include_router(updates.router)
 

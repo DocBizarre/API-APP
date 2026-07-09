@@ -23,7 +23,7 @@ def _to_out(p: Piece) -> dict:
     for c in p.__table__.columns:
         val = getattr(p, c.name)
         if val is None and not c.name.endswith("_at"):
-            val = ""
+            val = 0 if str(c.type).startswith(("FLOAT", "INTEGER")) else ""
         d[c.name] = val
     return d
 

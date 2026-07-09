@@ -24,7 +24,7 @@ else:
     CONFIG_PATH = Path(__file__).resolve().parent / "sync_config.json"
 
 DEFAULTS: Dict[str, str] = {
-    "server_url": "http://192.168.1.50:8765",   # serveur atelier (a adapter)
+    "server_url": "http://192.168.1.10:8765",   # serveur atelier (a adapter)
     "local_url":  "http://127.0.0.1:8765",       # cache local de la tablette
     "device_id":  "",                            # "" = bureau ; "T1" = tablette 1
 }

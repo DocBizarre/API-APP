@@ -22,10 +22,18 @@ import argparse
 import base64
 import html
 import io
+import logging
 import os
 import re
 import sys
 from pathlib import Path
+
+# pdfminer génère beaucoup de bruit de bas niveau — on le garde silencieux.
+# pypdf en revanche est laissé à son niveau par défaut : ses avertissements
+# "Data-loss" sont des signaux utiles qui déclenchent la validation des données.
+logging.getLogger("pdfminer").setLevel(logging.ERROR)
+
+_logger = logging.getLogger("convertisseurpdf")
 
 # pdfplumber, pypdf, weasyprint et PIL sont importés lazily dans les fonctions
 # qui en ont besoin — le .exe n'a ainsi plus besoin de les embarquer quand il
@@ -58,12 +66,45 @@ COL = {
 
 CGV_MARKER = "CONDITIONS GENERALES DE VENTE"
 
+# En-têtes canoniques du tableau articles, par type de document. Les
+# libellés réels des PDF sources sont souvent coupés sur 2-3 lignes dans des
+# colonnes étroites (ex. "Total\nHT", "Qt\né C\nde") : les reconstruire au
+# mot près via _join_cell est fragile et peut produire une clé ("TotalHT",
+# "Qt é Cde") qui ne correspond plus aux colonnes attendues par le HTML,
+# faisant disparaître la valeur de la cellule. Comme la mise en page de ces
+# documents est toujours la même (même nombre de colonnes, même ordre), on
+# utilise ces libellés fixes dès que le nombre de colonnes extraites
+# correspond — la reconstruction via _join_cell ne sert alors qu'en secours.
+ARTICLES_HEADERS = {
+    "CC": ["Code", "Libellé", "Qté Cde", "PU HT", "Remise", "Total HT", "Commentaire"],
+    "DE": ["Code", "Libellé", "Qté Cde", "PU HT", "Remise", "Total HT", "Commentaire"],
+    "CF": ["Code", "Réf Fourn.", "Libellé", "Qté Cde", "PU HT", "Remise", "Total HT"],
+}
+
+
+def _canon_articles_header(raw_hdr, doc_type):
+    """Remplace l'en-tête reconstruit par la liste canonique si le nombre de
+    colonnes correspond (voir ARTICLES_HEADERS ci-dessus)."""
+    canon = ARTICLES_HEADERS.get(doc_type)
+    if canon and len(raw_hdr) == len(canon):
+        return canon
+    return raw_hdr
+
 
 # ==========================================================================
 #  OUTILS DE PARSING
 # ==========================================================================
 def _clean(s):
     return re.sub(r"\s+", " ", (s or "").replace("\xa0", " ")).strip()
+
+
+def _fix_modalites(s):
+    """Corrige des fautes récurrentes du texte 'Modalités' extrait des PDF
+    sources (ex. Sage) : espace manquant après ':' et accord manquant sur
+    'définie(s)'."""
+    s = re.sub(r"(paiement\s*:)\s*", r"\1 ", s)
+    s = re.sub(r"\bsont défini(e)?\b", "sont définies", s)
+    return s
 
 
 def _join_cell(s):
@@ -219,8 +260,12 @@ def parse_commande(path):
         cli_hdr = next((r for r in rows0 if "Client:" in r["text"]
                         or "Expédier" in r["text"]), None)
         if cli_hdr:
-            xs = [w["x0"] for w in cli_hdr["words"]]
-            split_x = (min(xs) + max(xs)) / 2 if len(xs) > 1 else 280
+            exp_w = next((w for w in cli_hdr["words"]
+                          if w["text"].lower().startswith("exp")), None)
+            split_x = (exp_w["x0"] - 5) if exp_w else (
+                (min(w["x0"] for w in cli_hdr["words"])
+                 + max(w["x0"] for w in cli_hdr["words"])) / 2
+                if len(cli_hdr["words"]) > 1 else 280)
             region = [w for w in words0 if cli_hdr["top"] + 6 < w["top"] < items_top - 4]
             for r in _lines(region):
                 lw = [w for w in r["words"] if w["x0"] < split_x]
@@ -239,7 +284,7 @@ def parse_commande(path):
             if not t_items:
                 continue
             raw = t_items.extract()
-            hdr = [_join_cell(c) for c in raw[0]]
+            hdr = _canon_articles_header([_join_cell(c) for c in raw[0]], "CC")
             if not header_set:
                 data["articles_header"] = hdr
                 header_set = True
@@ -289,10 +334,289 @@ def parse_commande(path):
             w_m = pg_m.extract_words(use_text_flow=False, keep_blank_chars=False)
             for l in _lines(w_m):
                 if "Modalit" in l["text"]:
-                    data["modalites"] = l["text"]
+                    data["modalites"] = _fix_modalites(l["text"])
                     break
             if data["modalites"]:
                 break
+    return data
+
+
+def detect_doc_type(path):
+    """Détecte le type de document PDF : 'CF', 'DE' ou 'CC' (défaut)."""
+    try:
+        import pdfplumber
+        with pdfplumber.open(path) as pdf:
+            text = (pdf.pages[0].extract_text() or "").upper()
+    except Exception:
+        return "CC"
+    if "BON DE COMMANDE FOURNISSEUR" in text:
+        return "CF"
+    if "DEVIS" in text and ("N° DEVIS" in text or "DEVIS CLIENT" in text):
+        return "DE"
+    return "CC"
+
+
+def parse_bon_fournisseur(path):
+    """Parse un PDF 'Bon de commande Fournisseur'. Retourne un dict structuré."""
+    import pdfplumber
+    data = {
+        "entete": {}, "fournisseur": [], "expedier": [],
+        "articles_header": [], "articles": [],
+        "commentaire_commande": [],
+        "totaux_header": [], "totaux": [],
+    }
+    with pdfplumber.open(path) as pdf:
+        cgv_idx = None
+        for i, pg in enumerate(pdf.pages):
+            if CGV_MARKER in (pg.extract_text() or "").upper():
+                cgv_idx = i
+                break
+        doc_pages = list(pdf.pages[:cgv_idx]) if cgv_idx else list(pdf.pages)
+        data["cgv_start"] = cgv_idx
+
+        p0 = doc_pages[0]
+        words0 = p0.extract_words(use_text_flow=False, keep_blank_chars=False)
+        rows0 = _lines(words0)
+        t_items0, _ = _find_tables(p0)
+        title_top = next(
+            (r["top"] for r in rows0
+             if "commande" in r["text"].lower() or "fournisseur" in r["text"].lower()),
+            0,
+        )
+        items_top = t_items0.bbox[1] if t_items0 else 1e9
+
+        labels = ["Date commande", "N° Cde EMS", "N° Cde Fournisseur"]
+        for lab in labels:
+            data["entete"][lab] = ""
+
+        hdr_label = next(
+            (r for r in rows0 if r["top"] > title_top
+             and ("Date" in r["text"] or "Cde" in r["text"])),
+            None,
+        )
+        if hdr_label:
+            lab_cols = _split_cols(hdr_label["words"], gap=14)
+            anchors = [c["x0"] for c in lab_cols]
+            val_row = next(
+                (r for r in rows0 if hdr_label["top"] + 4 < r["top"] < hdr_label["top"] + 40),
+                None,
+            )
+            if val_row:
+                for vc in _split_cols(val_row["words"], gap=14):
+                    if not anchors:
+                        continue
+                    idx = min(range(len(anchors)),
+                              key=lambda k, a=anchors, x=vc["x0"]: abs(a[k] - x))
+                    if idx < len(labels):
+                        data["entete"][labels[idx]] = vc["text"]
+
+        # Cherche "Expédier" uniquement — évite de matcher le titre
+        # "Bon de commande Fournisseur" qui contient aussi "Fournisseur".
+        cli_hdr = next(
+            (r for r in rows0 if "Expédier" in r["text"]),
+            None,
+        )
+        if cli_hdr:
+            exp_w = next((w for w in cli_hdr["words"]
+                          if w["text"].lower().startswith("exp")), None)
+            split_x = (exp_w["x0"] - 5) if exp_w else (
+                (min(w["x0"] for w in cli_hdr["words"])
+                 + max(w["x0"] for w in cli_hdr["words"])) / 2
+                if len(cli_hdr["words"]) > 1 else 280)
+            region = [w for w in words0 if cli_hdr["top"] + 6 < w["top"] < items_top - 4]
+            for r in _lines(region):
+                lw = [w for w in r["words"] if w["x0"] < split_x]
+                rw = [w for w in r["words"] if w["x0"] >= split_x]
+                if lw:
+                    data["fournisseur"].append(_clean(" ".join(w["text"] for w in lw)))
+                if rw:
+                    data["expedier"].append(_clean(" ".join(w["text"] for w in rw)))
+        data["fournisseur"] = [l for l in data["fournisseur"] if l]
+        data["expedier"] = [l for l in data["expedier"] if l]
+
+        header_set = False
+        for pg in doc_pages:
+            t_items, _ = _find_tables(pg)
+            if not t_items:
+                continue
+            raw = t_items.extract()
+            hdr = _canon_articles_header([_join_cell(c) for c in raw[0]], "CF")
+            if not header_set:
+                data["articles_header"] = hdr
+                header_set = True
+            for row in raw[1:]:
+                cells = [_join_cell(c) for c in row]
+                if not any(cells):
+                    continue
+                data["articles"].append(dict(zip(hdr, cells)))
+
+        pL = doc_pages[0]
+        for pg in doc_pages:
+            if _find_tables(pg)[0] is not None:
+                pL = pg
+        wordsL = pL.extract_words(use_text_flow=False, keep_blank_chars=False)
+        t_itemsL, t_totL = _find_tables(pL)
+
+        # Commentaire : entre fin du tableau articles et début des totaux
+        if t_itemsL:
+            items_bot = t_itemsL.bbox[3]
+            if t_totL:
+                tot_top = t_totL.bbox[1]
+            else:
+                taux_w = next(
+                    (w for w in wordsL if w["text"] == "Taux" and w["top"] > items_bot),
+                    None,
+                )
+                tot_top = taux_w["top"] if taux_w else items_bot + 200
+            band = [w for w in wordsL
+                    if items_bot + 2 < w["top"] < tot_top - 2 and w["x0"] < 250]
+            blines = [r["text"] for r in _lines(band)]
+            data["commentaire_commande"] = [
+                b for b in blines if b and "Commentaire commande" not in b
+            ]
+
+        if t_totL:
+            raw = t_totL.extract()
+            data["totaux_header"] = [_clean(c) for c in raw[0]]
+            for row in raw[1:]:
+                data["totaux"].append([_clean(c) for c in row])
+
+        if not data["totaux"]:
+            data["totaux_header"], data["totaux"] = _parse_totaux_from_words(wordsL)
+
+    return data
+
+
+def parse_devis(path):
+    """Parse un PDF 'Devis client'. Retourne un dict structuré."""
+    import pdfplumber
+    data = {
+        "entete": {}, "client": [], "expedier": [], "articles_header": [],
+        "articles": [], "commentaire_commande": [], "totaux_header": [],
+        "totaux": [], "modalites": "",
+    }
+    with pdfplumber.open(path) as pdf:
+        cgv_idx = None
+        for i, pg in enumerate(pdf.pages):
+            if CGV_MARKER in (pg.extract_text() or "").upper():
+                cgv_idx = i
+                break
+        doc_pages = list(pdf.pages[:cgv_idx]) if cgv_idx else [pdf.pages[0]]
+        data["cgv_start"] = cgv_idx
+
+        p0 = doc_pages[0]
+        words0 = p0.extract_words(use_text_flow=False, keep_blank_chars=False)
+        rows0 = _lines(words0)
+        t_items0, _ = _find_tables(p0)
+        title_top = next((r["top"] for r in rows0 if "Devis" in r["text"]), 0)
+        items_top = t_items0.bbox[1] if t_items0 else 1e9
+
+        labels = ["Date", "N° Devis EMS", "N° Devis Client",
+                  "Moyen de paiement", "Échéances de paiement"]
+        for lab in labels:
+            data["entete"][lab] = ""
+
+        hdr_label = next(
+            (r for r in rows0 if r["top"] > title_top
+             and ("Devis" in r["text"] or "Date" in r["text"] or "Moyen" in r["text"])),
+            None,
+        )
+        if hdr_label:
+            lab_cols = _split_cols(hdr_label["words"], gap=14)
+            anchors = [c["x0"] for c in lab_cols]
+            val_row = next(
+                (r for r in rows0 if hdr_label["top"] + 4 < r["top"] < hdr_label["top"] + 40),
+                None,
+            )
+            if val_row:
+                for vc in _split_cols(val_row["words"], gap=14):
+                    if not anchors:
+                        continue
+                    idx = min(range(len(anchors)),
+                              key=lambda k, a=anchors, x=vc["x0"]: abs(a[k] - x))
+                    if idx < len(labels):
+                        data["entete"][labels[idx]] = vc["text"]
+
+        cli_hdr = next(
+            (r for r in rows0 if "Client:" in r["text"] or "Expédier" in r["text"]),
+            None,
+        )
+        if cli_hdr:
+            exp_w = next((w for w in cli_hdr["words"]
+                          if w["text"].lower().startswith("exp")), None)
+            split_x = (exp_w["x0"] - 5) if exp_w else (
+                (min(w["x0"] for w in cli_hdr["words"])
+                 + max(w["x0"] for w in cli_hdr["words"])) / 2
+                if len(cli_hdr["words"]) > 1 else 280)
+            region = [w for w in words0 if cli_hdr["top"] + 6 < w["top"] < items_top - 4]
+            for r in _lines(region):
+                lw = [w for w in r["words"] if w["x0"] < split_x]
+                rw = [w for w in r["words"] if w["x0"] >= split_x]
+                if lw:
+                    data["client"].append(_clean(" ".join(w["text"] for w in lw)))
+                if rw:
+                    data["expedier"].append(_clean(" ".join(w["text"] for w in rw)))
+        data["client"] = [l for l in data["client"] if l]
+        data["expedier"] = [l for l in data["expedier"] if l]
+
+        header_set = False
+        for pg in doc_pages:
+            t_items, _ = _find_tables(pg)
+            if not t_items:
+                continue
+            raw = t_items.extract()
+            hdr = _canon_articles_header([_join_cell(c) for c in raw[0]], "DE")
+            if not header_set:
+                data["articles_header"] = hdr
+                header_set = True
+            for row in raw[1:]:
+                cells = [_join_cell(c) for c in row]
+                if not any(cells):
+                    continue
+                data["articles"].append(dict(zip(hdr, cells)))
+
+        pL = doc_pages[0]
+        for pg in doc_pages:
+            if _find_tables(pg)[0] is not None:
+                pL = pg
+        wordsL = pL.extract_words(use_text_flow=False, keep_blank_chars=False)
+        t_itemsL, t_totL = _find_tables(pL)
+
+        if t_itemsL:
+            items_bot = t_itemsL.bbox[3]
+            if t_totL:
+                tot_top = t_totL.bbox[1]
+            else:
+                taux_w = next(
+                    (w for w in wordsL if w["text"] == "Taux" and w["top"] > items_bot),
+                    None,
+                )
+                tot_top = taux_w["top"] if taux_w else items_bot + 200
+            band = [w for w in wordsL
+                    if items_bot + 2 < w["top"] < tot_top - 2 and w["x0"] < 250]
+            blines = [r["text"] for r in _lines(band)]
+            data["commentaire_commande"] = [
+                b for b in blines if b and "Commentaire commande" not in b
+            ]
+
+        if t_totL:
+            raw = t_totL.extract()
+            data["totaux_header"] = [_clean(c) for c in raw[0]]
+            for row in raw[1:]:
+                data["totaux"].append([_clean(c) for c in row])
+
+        if not data["totaux"]:
+            data["totaux_header"], data["totaux"] = _parse_totaux_from_words(wordsL)
+
+        for pg_m in doc_pages:
+            w_m = pg_m.extract_words(use_text_flow=False, keep_blank_chars=False)
+            for l in _lines(w_m):
+                if "Modalit" in l["text"]:
+                    data["modalites"] = _fix_modalites(l["text"])
+                    break
+            if data["modalites"]:
+                break
+
     return data
 
 
@@ -365,6 +689,158 @@ def _bloc_adresse(lines):
         cls = "nom" if i == 0 else ("mail" if "@" in l else "")
         out.append(f'<div class="{cls}">{_esc(l)}</div>')
     return "\n".join(out)
+
+
+def _shared_css(bottom_left=""):
+    """CSS commun aux trois templates PDF EMS."""
+    bl = _esc(bottom_left)
+    return f"""\
+@page {{
+  size: A4;
+  margin: 10mm 10mm 18mm 10mm;
+  @bottom-left  {{ content: "{bl}";
+                   font: 8pt 'Segoe UI', Arial, sans-serif; color: {COL['gris']}; }}
+  @bottom-center{{ content: "{EMS['nom']} — {EMS['adresse2']}";
+                   font: 7pt 'Segoe UI', Arial, sans-serif; color: {COL['gris']}; }}
+  @bottom-right {{ content: "Page " counter(page) " / " counter(pages);
+                   font: 8pt 'Segoe UI', Arial, sans-serif; color: {COL['gris']};
+                   font-weight: 600; }}
+}}
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{ font-family: 'Segoe UI', Arial, Helvetica, sans-serif;
+        font-size: 10.5px; color: {COL['ardoise']}; background: #fff; }}
+.muted {{ color: {COL['gris']}; }}
+.header-wrap {{ margin-bottom: 14px; padding-bottom: 4px; }}
+.header {{ display: grid; grid-template-columns: 1fr 1.6fr 1fr;
+           gap: 16px; align-items: center; }}
+.header-left {{ display: flex; align-items: center; justify-content: center; padding: 4px; }}
+.header-left img {{ max-width: 200px; max-height: 110px; }}
+.logo-fallback {{ font-size: 28px; font-weight: bold; color: {COL['bleu']}; letter-spacing: 3px; }}
+.header-mid {{ text-align: center; padding: 4px; }}
+.header-mid h1 {{ font-size: 17px; font-weight: 700; color: {COL['bleu']};
+                  margin: 0 0 6px 0; letter-spacing: 0.5px; }}
+.header-mid .info {{ font-size: 9px; line-height: 1.5; color: {COL['gris']}; }}
+.header-right {{ padding: 4px 0 4px 8px; font-size: 10px; line-height: 1.7; }}
+.header-right .titre {{ font-weight: bold; font-size: 11px;
+                         color: {COL['bleu']}; margin-bottom: 4px; }}
+.ref-box {{ display: inline-block; background: {COL['bleu']}; color: #fff;
+            padding: 5px 12px; font-size: 11px; font-weight: bold;
+            border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,.15);
+            margin-bottom: 6px; }}
+.num-cmd-box {{ display: inline-block; margin-left: 8px;
+                background: {COL['jaune']}; color: #6b4400;
+                padding: 5px 10px; font-size: 10px;
+                border: 1px solid {COL['jaune_bord']}; border-radius: 4px;
+                margin-bottom: 6px; }}
+.num-cmd-box strong {{ color: #6b4400; }}
+.parties {{ display: flex; gap: 10px; margin-bottom: 12px; }}
+.party {{ flex: 1; border: 1px solid {COL['trait']}; border-radius: 3px; overflow: hidden; }}
+.party-h {{ background: {COL['bleu']}; color: #fff; font-size: 10px;
+            font-weight: 700; letter-spacing: 1px; padding: 4px 10px;
+            text-transform: uppercase; }}
+.party-b {{ padding: 7px 9px; line-height: 1.35; font-size: 10px; }}
+.party-b .nom {{ font-weight: 700; }}
+.party-b .mail {{ color: {COL['bleu_fonce']}; }}
+.section-title {{ font-weight: 700; font-size: 11px; color: {COL['bleu']};
+                  margin: 14px 0 4px; padding-bottom: 3px;
+                  border-bottom: 2px solid {COL['rouge']};
+                  display: inline-block; padding-right: 12px;
+                  letter-spacing: 0.3px; }}
+table.items {{ width: 100%; border-collapse: collapse; margin-bottom: 10px; }}
+table.items th {{ background: {COL['bleu']}; color: #fff; font-size: 10px;
+                  font-weight: 700; text-align: left; padding: 6px 8px;
+                  letter-spacing: .3px; }}
+table.items th.num {{ text-align: right; }}
+table.items td {{ padding: 5px 7px; border: 1px solid {COL['trait']};
+                  font-size: 10px; vertical-align: top; }}
+table.items tr:nth-child(even) td {{ background: {COL['zebra']}; }}
+table.items td.num {{ text-align: right; white-space: nowrap; }}
+table.items td.code {{ font-weight: 700; color: {COL['bleu_fonce']}; white-space: nowrap; }}
+.note {{ border: 1px solid {COL['trait']}; border-left: 3px solid {COL['rouge']};
+         border-radius: 3px; padding: 6px 9px; margin-bottom: 12px;
+         background: #fafbfc; }}
+.note-lab {{ font-size: 9px; text-transform: uppercase; letter-spacing: .5px;
+             color: {COL['rouge']}; font-weight: 700; margin-bottom: 2px; }}
+.note-body {{ font-size: 10px; line-height: 1.35; }}
+.bottom {{ display: flex; justify-content: flex-end; margin-bottom: 12px; }}
+.totals {{ width: 46%; border: 1px solid {COL['trait']}; border-radius: 3px; overflow: hidden; }}
+.t-row {{ display: flex; justify-content: space-between; padding: 4px 10px;
+          font-size: 10px; border-bottom: 1px solid {COL['trait']}; }}
+.t-lab {{ color: {COL['gris']}; }}
+.t-val {{ font-weight: 600; }}
+.t-ttc {{ display: flex; justify-content: space-between; padding: 7px 10px;
+          background: {COL['bleu']}; color: #fff; }}
+.t-ttc .l {{ font-weight: 700; letter-spacing: .5px; }}
+.t-ttc .v {{ font-weight: 800; font-size: 12pt; }}
+.modal {{ margin-top: 14px; font-size: 8pt; color: {COL['gris']}; font-style: italic; }}
+.footer {{ border-top: 2px solid {COL['bleu']}; margin-top: 16px; padding-top: 8px;
+           font-size: 8.5px; color: {COL['gris']}; text-align: center; line-height: 1.7; }}
+.footer strong {{ color: {COL['bleu']}; }}"""
+
+
+def _build_items_html(data, cols, num_cols):
+    """Génère le HTML du tableau d'articles (colonnes et lignes)."""
+    th = "".join(
+        f'<th class="{"num" if c in num_cols else ""}">{_esc(c)}</th>' for c in cols)
+    trs = []
+    for art in data["articles"]:
+        tds = []
+        for c in cols:
+            v = art.get(c, "")
+            if c == "Remise":
+                v = _fmt_remise(v)
+            else:
+                v = _esc(_clean(v))
+            cls = "num" if c in num_cols else ("code" if c == "Code" else "")
+            tds.append(f'<td class="{cls}">{v}</td>')
+        trs.append("<tr>" + "".join(tds) + "</tr>")
+    n = len(cols)
+    items_html = "\n".join(trs) if trs else (
+        f'<tr><td colspan="{n}" class="muted" '
+        f'style="text-align:center">Aucun article</td></tr>')
+    return th, items_html
+
+
+def _build_totals_html(data):
+    """Génère le HTML du bloc totaux et renvoie (totals_html, ttc)."""
+    th_tot = [_clean(h) for h in data["totaux_header"]]
+    row_total = None
+    row_rate = None
+    for r in data["totaux"]:
+        if r and r[0].strip().lower().startswith("total"):
+            row_total = r
+        elif r:
+            row_rate = r
+    src = row_total or row_rate or []
+    tmap = dict(zip(th_tot, src)) if src else {}
+    taux = (row_rate[0] if row_rate else tmap.get("Taux de TVA", "")) or "—"
+
+    def g(k):
+        return _esc(_clean(tmap.get(k, ""))) or "—"
+
+    def _nonzero(k):
+        v = _clean(tmap.get(k, ""))
+        return v if v and v not in ("0", "0,00", "0,00 €", "0.00 €", "0 €") else ""
+
+    totals_rows = [("Total HT", g("Total HT"))]
+
+    # Port HT / Port TTC : présents uniquement dans certains CF (frais de port)
+    port_ht = _nonzero("Port HT")
+    if port_ht:
+        totals_rows.append(("Port HT", _esc(port_ht)))
+        port_ttc = _nonzero("Port TTC")
+        if port_ttc:
+            totals_rows.append(("Port TTC", _esc(port_ttc)))
+
+    totals_rows += [
+        ("Remise", g("Remise")),
+        ("Prix HT remisé", g("Prix HT remisé")),
+        (f"TVA ({_esc(_clean(taux))})", g("TVA")),
+    ]
+    totals_html = "".join(
+        f'<div class="t-row"><span class="t-lab">{lab}</span>'
+        f'<span class="t-val">{val}</span></div>' for lab, val in totals_rows)
+    return totals_html, g("Total TTC")
 
 
 def build_html(data, logo_datauri=None):
@@ -610,6 +1086,198 @@ table.items td.code {{ font-weight: 700; color: {COL['bleu_fonce']}; white-space
 </body></html>"""
 
 
+def build_html_bon_fournisseur(data, logo_datauri=None):
+    """Génère le HTML pour un Bon de commande Fournisseur."""
+    e = data["entete"]
+    num_ems = e.get("N° Cde EMS", "") or "—"
+    num_fourn = e.get("N° Cde Fournisseur", "")
+    date = e.get("Date commande", "")
+
+    logo_html = (f'<img src="{logo_datauri}" alt="EMS">'
+                 if logo_datauri else f'<div class="logo-fallback">EMS</div>')
+    num_fourn_html = (
+        f'<div class="num-cmd-box">N&deg; cde fournisseur&nbsp;:&nbsp;'
+        f'<strong>{_esc(num_fourn)}</strong></div>'
+        if num_fourn else ""
+    )
+
+    cols = ["Code", "Réf Fourn.", "Libellé", "Qté Cde", "PU HT", "Remise", "Total HT"]
+    num_cols = {"Qté Cde", "PU HT", "Remise", "Total HT"}
+    th, items_html = _build_items_html(data, cols, num_cols)
+
+    com = data.get("commentaire_commande", [])
+    com_html = ""
+    if com:
+        lignes = "<br>".join(_esc(c) for c in com)
+        com_html = (
+            '<div class="note">'
+            '<div class="note-lab">Commentaire commande</div>'
+            f'<div class="note-body">{lignes}</div></div>')
+
+    totals_html, ttc = _build_totals_html(data)
+
+    return f"""<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<style>
+{_shared_css(f"Cde EMS {num_ems}")}
+</style></head><body>
+
+<div class="ref-box">Cde EMS&nbsp;{_esc(num_ems)}</div>
+{num_fourn_html}
+
+<div class="header-wrap">
+<div class="header">
+  <div class="header-left">{logo_html}</div>
+  <div class="header-mid">
+    <h1>BON DE COMMANDE<br>FOURNISSEUR</h1>
+    <div class="info">
+      Tél.&nbsp;: {EMS['tel']}<br>
+      N° TVA&nbsp;: {EMS['tva']}<br>
+      {EMS['adresse1']} — {EMS['adresse2']}
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="titre">Informations commande</div>
+    Date&nbsp;: <strong>{_esc(date) or "—"}</strong>
+  </div>
+</div>
+</div>
+
+<div class="parties">
+  <div class="party">
+    <div class="party-h">Fournisseur</div>
+    <div class="party-b">{_bloc_adresse(data['fournisseur'])}</div>
+  </div>
+  <div class="party">
+    <div class="party-h">Expédier à</div>
+    <div class="party-b">{_bloc_adresse(data['expedier'])}</div>
+  </div>
+</div>
+
+<div class="section-title">ARTICLES</div>
+<table class="items">
+  <thead><tr>{th}</tr></thead>
+  <tbody>{items_html}</tbody>
+</table>
+
+{com_html}
+
+<div class="bottom">
+  <div class="totals">
+    {totals_html}
+    <div class="t-ttc"><span class="l">TOTAL TTC</span><span class="v">{ttc}</span></div>
+  </div>
+</div>
+
+<div class="footer">
+  <strong>{EMS['nom']}</strong> — Constructeur de groupe de puissance<br>
+  {EMS['adresse1']} — {EMS['adresse2']} — Tél.&nbsp;: {EMS['tel']}<br>
+  N° TVA&nbsp;: {EMS['tva']} &nbsp;|&nbsp; {EMS['tribunal']}
+</div>
+
+</body></html>"""
+
+
+def build_html_devis(data, logo_datauri=None):
+    """Génère le HTML pour un Devis client."""
+    e = data["entete"]
+    num_ems = e.get("N° Devis EMS", "") or "—"
+    num_cli = e.get("N° Devis Client", "")
+    date = e.get("Date", "")
+    moyen = e.get("Moyen de paiement", "")
+    echeance = e.get("Échéances de paiement", "")
+
+    logo_html = (f'<img src="{logo_datauri}" alt="EMS">'
+                 if logo_datauri else f'<div class="logo-fallback">EMS</div>')
+    num_cli_html = (
+        f'<div class="num-cmd-box">N&deg; devis client&nbsp;:&nbsp;'
+        f'<strong>{_esc(num_cli)}</strong></div>'
+        if num_cli else ""
+    )
+
+    cols = ["Code", "Libellé", "Qté Cde", "PU HT", "Remise", "Total HT", "Commentaire"]
+    num_cols = {"Qté Cde", "PU HT", "Remise", "Total HT"}
+    th, items_html = _build_items_html(data, cols, num_cols)
+
+    com = data.get("commentaire_commande", [])
+    com_html = ""
+    if com:
+        lignes = "<br>".join(_esc(c) for c in com)
+        com_html = (
+            '<div class="note">'
+            '<div class="note-lab">Commentaire</div>'
+            f'<div class="note-body">{lignes}</div></div>')
+
+    totals_html, ttc = _build_totals_html(data)
+    modalites = _esc(_clean(data.get("modalites", ""))) or \
+        "Modalités de paiement : les conditions de règlement sont définies au contrat."
+
+    return f"""<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<style>
+{_shared_css(f"Devis EMS {num_ems}")}
+</style></head><body>
+
+<div class="ref-box">Devis EMS&nbsp;{_esc(num_ems)}</div>
+{num_cli_html}
+
+<div class="header-wrap">
+<div class="header">
+  <div class="header-left">{logo_html}</div>
+  <div class="header-mid">
+    <h1>DEVIS CLIENT</h1>
+    <div class="info">
+      Tél.&nbsp;: {EMS['tel']}<br>
+      N° TVA&nbsp;: {EMS['tva']}<br>
+      {EMS['adresse1']} — {EMS['adresse2']}
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="titre">Informations devis</div>
+    Date&nbsp;: <strong>{_esc(date) or "—"}</strong><br>
+    Paiement&nbsp;: <strong>{_esc(moyen) or "—"}</strong><br>
+    Échéance(s)&nbsp;: <strong>{_esc(echeance) or "—"}</strong>
+  </div>
+</div>
+</div>
+
+<div class="parties">
+  <div class="party">
+    <div class="party-h">Client</div>
+    <div class="party-b">{_bloc_adresse(data['client'])}</div>
+  </div>
+  <div class="party">
+    <div class="party-h">Expédier à</div>
+    <div class="party-b">{_bloc_adresse(data['expedier'])}</div>
+  </div>
+</div>
+
+<div class="section-title">ARTICLES</div>
+<table class="items">
+  <thead><tr>{th}</tr></thead>
+  <tbody>{items_html}</tbody>
+</table>
+
+{com_html}
+
+<div class="bottom">
+  <div class="totals">
+    {totals_html}
+    <div class="t-ttc"><span class="l">TOTAL TTC</span><span class="v">{ttc}</span></div>
+  </div>
+</div>
+
+<div class="modal">{modalites}</div>
+
+<div class="footer">
+  <strong>{EMS['nom']}</strong> — Constructeur de groupe de puissance<br>
+  {EMS['adresse1']} — {EMS['adresse2']} — Tél.&nbsp;: {EMS['tel']}<br>
+  N° TVA&nbsp;: {EMS['tva']} &nbsp;|&nbsp; {EMS['tribunal']}
+</div>
+
+</body></html>"""
+
+
 # ==========================================================================
 #  RENDU PDF
 # ==========================================================================
@@ -629,7 +1297,7 @@ def _extract_cgv_text(source_pdf, cgv_start):
 
 
 def _build_cgv_logo_html(cgv_text, logo_uri=None):
-    """Génère une page CGV 2 colonnes + logo en bas, CSS identique aux bons."""
+    """Génère une page CGV 2 colonnes + logo ancré en bas (running element WeasyPrint)."""
     paragraphs = []
     for line in cgv_text.splitlines():
         line = line.strip()
@@ -644,13 +1312,28 @@ def _build_cgv_logo_html(cgv_text, logo_uri=None):
             paragraphs.append(f'<p class="cgv-p">{html.escape(line)}</p>')
     body = "\n".join(paragraphs) if paragraphs else \
         '<p class="cgv-p">Conditions générales de vente disponibles sur demande.</p>'
-    logo_html = (f'<img src="{logo_uri}" alt="Emeraude Moteurs Systemes" '
-                 f'style="max-width:340px;max-height:190px;">'
-                 if logo_uri else "")
+
+    if logo_uri:
+        # Le logo est extrait du flux normal (running element) et placé dans
+        # la marge basse de la page — évite de créer une page supplémentaire.
+        logo_html = (
+            f'<div class="cgv-logo-wrap">'
+            f'<img src="{logo_uri}" alt="Emeraude Moteurs Systemes" '
+            f'style="max-width:280px;max-height:150px;"></div>'
+        )
+        logo_css = ".cgv-logo-wrap { position: running(cgv-logo); text-align: center; padding-top: 5px; border-top: 1px solid #b8c0c9; }"
+        page_bottom = "46mm"
+        page_logo_box = "@bottom-center { content: element(cgv-logo); }"
+    else:
+        logo_html = ""
+        logo_css = ""
+        page_bottom = "8mm"
+        page_logo_box = ""
+
     return f"""<!DOCTYPE html>
 <html lang="fr"><head><meta charset="utf-8">
 <style>
-@page {{ size: A4; margin: 10mm 5mm 8mm 5mm; }}
+@page {{ size: A4; margin: 10mm 5mm {page_bottom} 5mm; {page_logo_box} }}
 * {{ box-sizing: border-box; margin: 0; padding: 0; }}
 body {{ font-family: 'Segoe UI', Arial, sans-serif;
        font-size: 7.8px; line-height: 1.38; color: #1a2332; }}
@@ -669,16 +1352,13 @@ body {{ font-family: 'Segoe UI', Arial, sans-serif;
   break-before: avoid; page-break-before: avoid;
 }}
 .cgv-p {{ margin: 0 0 3px; text-align: justify; }}
-.cgv-logo-wrap {{
-  margin-top: 10px; text-align: center;
-  padding-top: 8px; border-top: 1px solid #b8c0c9;
-}}
+{logo_css}
 </style></head><body>
 <div class="cgv-title">CONDITIONS GÉNÉRALES DE VENTE – EMERAUDE MOTEURS SYSTEMES</div>
 <div class="cgv-body">
 {body}
 </div>
-<div class="cgv-logo-wrap">{logo_html}</div>
+{logo_html}
 </body></html>"""
 
 
@@ -729,19 +1409,86 @@ def render_pdf(data, html_str, out_path, source_pdf=None, include_cgv=True):
     return out_path
 
 
-def process_file(in_path, out_dir=None, include_cgv=True):
-    """Traite un PDF -> chemin du PDF régénéré."""
-    in_path = Path(in_path)
-    data = parse_commande(str(in_path))
-    logo = extract_logo_datauri(str(in_path))
-    html_str = build_html(data, logo)
+def _validate_data(data, doc_type):
+    """Vérifie l'intégrité des données extraites. Retourne une liste d'anomalies."""
+    issues = []
+    entete = data.get("entete", {})
+    articles = data.get("articles", [])
+    totaux = data.get("totaux", [])
+    totaux_header = data.get("totaux_header", [])
 
-    num = _clean(data["entete"].get("N° Cde EMS", "")) or in_path.stem
+    # En-tête
+    if doc_type == "CF":
+        if not entete.get("N° Cde EMS"):
+            issues.append("N° Cde EMS absent de l'en-tête")
+        if not data.get("fournisseur"):
+            issues.append("Bloc fournisseur vide (adresse non extraite)")
+    elif doc_type == "DE":
+        if not entete.get("N° Devis EMS"):
+            issues.append("N° Devis EMS absent de l'en-tête")
+        if not data.get("client"):
+            issues.append("Bloc client vide (adresse non extraite)")
+    else:
+        if not entete.get("N° Cde EMS"):
+            issues.append("N° Cde EMS absent de l'en-tête")
+        if not data.get("client"):
+            issues.append("Bloc client vide (adresse non extraite)")
+
+    # Articles
+    if not articles:
+        issues.append("Aucun article extrait du tableau")
+    else:
+        sans_code = sum(1 for a in articles if not _clean(a.get("Code", "")))
+        sans_total = sum(1 for a in articles if not _clean(a.get("Total HT", "")))
+        if sans_code > len(articles) // 2:
+            issues.append(f"{sans_code}/{len(articles)} articles sans code article")
+        if sans_total > len(articles) // 2:
+            issues.append(f"{sans_total}/{len(articles)} articles sans Total HT")
+
+    # Totaux
+    if not totaux:
+        issues.append("Bloc totaux non extrait")
+    else:
+        for row in totaux:
+            tmap = dict(zip(totaux_header, row)) if totaux_header else {}
+            ttc = _clean(tmap.get("Total TTC", ""))
+            tht = _clean(tmap.get("Total HT", ""))
+            if not ttc and not tht:
+                issues.append("Ligne de totaux vide ou illisible")
+                break
+
+    return issues
+
+
+def process_file(in_path, out_dir=None, include_cgv=True):
+    """Traite un PDF -> chemin du PDF régénéré (auto-détection CC/CF/DE)."""
+    in_path = Path(in_path)
+    doc_type = detect_doc_type(str(in_path))
+    logo = extract_logo_datauri(str(in_path))
+
+    if doc_type == "CF":
+        data = parse_bon_fournisseur(str(in_path))
+        html_str = build_html_bon_fournisseur(data, logo)
+        num = _clean(data["entete"].get("N° Cde EMS", "")) or in_path.stem
+        suffix = "_commande_fournisseur_EMS.pdf"
+    elif doc_type == "DE":
+        data = parse_devis(str(in_path))
+        html_str = build_html_devis(data, logo)
+        num = _clean(data["entete"].get("N° Devis EMS", "")) or in_path.stem
+        suffix = "_devis_EMS.pdf"
+    else:
+        data = parse_commande(str(in_path))
+        html_str = build_html(data, logo)
+        num = _clean(data["entete"].get("N° Cde EMS", "")) or in_path.stem
+        suffix = "_accuse_EMS.pdf"
+
+    for issue in _validate_data(data, doc_type):
+        _logger.warning("[%s] %s : %s", doc_type, in_path.name, issue)
+
     safe = re.sub(r"[^\w\-]+", "_", num).strip("_") or in_path.stem
     out_dir = Path(out_dir) if out_dir else in_path.parent
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"{safe}_accuse_EMS.pdf"
-
+    out_path = out_dir / f"{safe}{suffix}"
     render_pdf(data, html_str, str(out_path), str(in_path), include_cgv)
     return str(out_path)
 
@@ -765,10 +1512,16 @@ def _read_server_url():
 
 
 def process_file_via_api(in_path, server_url, out_dir=None, include_cgv=True):
-    """Envoie le PDF au serveur EMS, récupère le PDF converti et le sauvegarde."""
+    """Envoie le PDF au serveur EMS, récupère le PDF converti et le sauvegarde.
+
+    NOTE : le type de document (CC/CF/DE) est détecté côté SERVEUR
+    (endpoint /pdf/convert), pas ici. L'exe client n'embarque pas pdfplumber
+    (build allégé) : appeler detect_doc_type() localement échouerait
+    systématiquement et retomberait sur "CC", envoyant tout au mauvais
+    endpoint (ex. un devis traité comme un accusé de réception)."""
     import requests
     in_path = Path(in_path)
-    url = server_url.rstrip("/") + "/pdf/accuse-reception"
+    url = server_url.rstrip("/") + "/pdf/convert"
     with open(in_path, "rb") as fh:
         resp = requests.post(
             url,
@@ -830,7 +1583,7 @@ def run_gui():
     from tkinter import filedialog, ttk
 
     root = tk.Tk()
-    root.title("EMS — Mise en page des accusés de réception")
+    root.title("EMS — Mise en page des documents commerciaux")
     root.geometry("760x560")
     root.minsize(680, 480)
 
@@ -842,7 +1595,7 @@ def run_gui():
     head.pack(fill="x")
     head.pack_propagate(False)
     tk.Frame(head, bg=ROUGE, width=5).pack(side="left", fill="y")
-    tk.Label(head, text="Accusés de réception — Mise en page format EMS", bg=BLEU,
+    tk.Label(head, text="Documents commerciaux EMS — Accusés · Devis · Bons fournisseur", bg=BLEU,
              fg="white", font=("Segoe UI", 13, "bold")).pack(side="left", padx=16, pady=14)
 
     body = tk.Frame(root, padx=14, pady=12)
@@ -929,8 +1682,16 @@ def run_gui():
         log.see(tk.END)
         log.config(state="disabled")
         root.update_idletasks()
-    log.tag_config("ok", foreground="#1A7F37")
-    log.tag_config("err", foreground="#B4202F")
+    log.tag_config("ok",   foreground="#1A7F37")
+    log.tag_config("err",  foreground="#B4202F")
+    log.tag_config("warn", foreground="#B45309")
+
+    # Handler logging -> widget texte GUI
+    class _GuiHandler(logging.Handler):
+        def emit(self, record):
+            logw(f"   ⚠ {record.getMessage()}", "warn")
+    _gui_handler = _GuiHandler(logging.WARNING)
+    _logger.addHandler(_gui_handler)
 
     last_out = {"dir": None}
 

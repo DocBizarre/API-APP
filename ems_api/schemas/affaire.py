@@ -59,6 +59,7 @@ class AffaireCreate(BaseModel):
     ref_interne:             str = ""
     num_commande_client:     str = ""
     charge_affaire:          str = ""
+    resp_technique:          str = ""
     date_debut:              str = ""
     date_fin_prevue:         str = ""
     date_cloture:            str = ""
@@ -78,6 +79,9 @@ class AffaireCreate(BaseModel):
     prix_transport:          str = ""
     num_suivi_transport:     str = ""
     instructions_transport:  str = ""
+    conditions_reglement:    str = ""
+    garanties:               str = ""
+    interlocuteurs_client:   str = "[]"
 
 
 class AffaireUpdate(BaseModel):
@@ -87,6 +91,7 @@ class AffaireUpdate(BaseModel):
     ref_interne:             Optional[str] = None
     num_commande_client:     Optional[str] = None
     charge_affaire:          Optional[str] = None
+    resp_technique:          Optional[str] = None
     date_debut:              Optional[str] = None
     date_fin_prevue:         Optional[str] = None
     date_cloture:            Optional[str] = None
@@ -106,6 +111,9 @@ class AffaireUpdate(BaseModel):
     prix_transport:          Optional[str] = None
     num_suivi_transport:     Optional[str] = None
     instructions_transport:  Optional[str] = None
+    conditions_reglement:    Optional[str] = None
+    garanties:               Optional[str] = None
+    interlocuteurs_client:   Optional[str] = None
 
 
 class AffaireOut(BaseModel):
@@ -117,6 +125,7 @@ class AffaireOut(BaseModel):
     ref_interne:             str
     num_commande_client:     str = ""
     charge_affaire:          str
+    resp_technique:          str = ""
     date_debut:              str
     date_fin_prevue:         str
     date_cloture:            str
@@ -136,8 +145,12 @@ class AffaireOut(BaseModel):
     prix_transport:          str = ""
     num_suivi_transport:     str = ""
     instructions_transport:  str = ""
+    conditions_reglement:    str = ""
+    garanties:               str = ""
+    interlocuteurs_client:   str = "[]"
     client_nom:              Optional[str] = ""
     nb_items:                int = 0
+    total_achats:            float = 0
     created_at:              Optional[datetime] = None
     updated_at:              Optional[datetime] = None
 

@@ -1,6 +1,6 @@
 {
-  "version": "1.8.0",
-  "url": "",
+  "version": "1.9.0",
+  "url": "http://192.168.1.10:8765/static/EMS_v1.9.0.zip",
   "notes": "Version initiale.",
   "required": false
 }

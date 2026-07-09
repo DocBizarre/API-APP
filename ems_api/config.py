@@ -22,6 +22,36 @@ def _detect_data_dir(base: Path) -> Path:
     return Path(os.environ.get("EMS_DATA_DIR", str(base / "data")))
 
 
+def _detect_affaires_dir(base: Path, data_dir: Path) -> Path:
+    """Lit affaires_dir depuis config.ini, sinon défaut data/dossiers/affaires."""
+    for ini in (base.parent / "config.ini", base / "config.ini"):
+        if ini.is_file():
+            try:
+                cfg = ConfigParser()
+                cfg.read(str(ini), encoding="utf-8")
+                d = cfg.get("files", "affaires_dir", fallback="").strip()
+                if d:
+                    return Path(d)
+            except Exception:
+                pass
+    return data_dir / "dossiers" / "affaires"
+
+
+def _detect_files_setting(base: Path, key: str, default: str = "") -> str:
+    """Lit une clé quelconque de la section [files] de config.ini."""
+    for ini in (base.parent / "config.ini", base / "config.ini"):
+        if ini.is_file():
+            try:
+                cfg = ConfigParser()
+                cfg.read(str(ini), encoding="utf-8")
+                v = cfg.get("files", key, fallback="").strip()
+                if v:
+                    return v
+            except Exception:
+                pass
+    return default
+
+
 class Settings:
     # ─── Chemins ─────────────────────────────────────────────────────────
     BASE_DIR: Path = Path(__file__).resolve().parent
@@ -30,6 +60,14 @@ class Settings:
     DOSSIERS_DIR: Path = DATA_DIR / "dossiers"
     GARANTIES_DIR: Path = DATA_DIR / "garanties"
     AMELIORATIONS_DIR: Path = DATA_DIR / "ameliorations"
+    AFFAIRES_DIR: Path = _detect_affaires_dir(BASE_DIR, DATA_DIR)
+
+    # ─── Restriction d'accès du sous-dossier COMMERCIAL (ACL Windows) ───
+    # Groupe AD (ex. "DOMAINE\EMS-Commercial") autorisé en lecture/écriture.
+    # Vide = aucune restriction n'est appliquée (comportement inchangé).
+    COMMERCIAL_GROUP: str = _detect_files_setting(BASE_DIR, "commercial_group", "")
+    # Trustee(s), séparés par des virgules, gardant le contrôle total (IT/admin).
+    COMMERCIAL_ADMINS: str = _detect_files_setting(BASE_DIR, "commercial_admins", "BUILTIN\\Administrators")
 
     # ─── Serveur ─────────────────────────────────────────────────────────
     HOST: str = os.environ.get("EMS_API_HOST", "0.0.0.0")
@@ -67,6 +105,10 @@ class Settings:
         for d in (cls.DATA_DIR, cls.DOSSIERS_DIR,
                   cls.GARANTIES_DIR, cls.AMELIORATIONS_DIR):
             d.mkdir(parents=True, exist_ok=True)
+        try:
+            cls.AFFAIRES_DIR.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
 
 
 settings = Settings()
