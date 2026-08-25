@@ -33,10 +33,25 @@ class BonCommandeLigneOut(BaseModel):
 class BonCommandeCreate(BaseModel):
     affaire_id:            Optional[str] = None
     fournisseur_nom:       str = ""
-    fournisseur_adresse:   str = ""
+    reference_fournisseur:   str = ""
+    reference_monstock:      str = ""
+    lien_monstock:           str = ""
+    fournisseur_rue:         str = ""
+    fournisseur_code_postal: str = ""
+    fournisseur_ville:       str = ""
+    fournisseur_pays:        str = "France"
     fournisseur_contact:   str = ""
     fournisseur_email:     str = ""
     fournisseur_tel:       str = ""
+    interlocuteurs_fournisseur: str = "[]"
+    livraison_nom:         str = ""
+    livraison_rue:         str = ""
+    livraison_code_postal: str = ""
+    livraison_ville:       str = ""
+    livraison_pays:        str = "France"
+    charge_commande_nom:   str = ""
+    charge_commande_email: str = ""
+    charge_commande_tel:   str = ""
     date_commande:         str = ""
     date_livraison_prevue: str = ""
     date_livraison_reelle: str = ""
@@ -45,16 +60,34 @@ class BonCommandeCreate(BaseModel):
     conditions:            str = ""
     notes:                 str = ""
     exonere_tva:           int = 0
+    frais_port:            float = 0.0
+    chapitre_cout:         str = ""
+    paiements:             str = "[]"
     lignes:                List[BonCommandeLigneIn] = []
 
 
 class BonCommandeUpdate(BaseModel):
     affaire_id:            Optional[str] = None
     fournisseur_nom:       Optional[str] = None
-    fournisseur_adresse:   Optional[str] = None
+    reference_fournisseur:   Optional[str] = None
+    reference_monstock:      Optional[str] = None
+    lien_monstock:           Optional[str] = None
+    fournisseur_rue:         Optional[str] = None
+    fournisseur_code_postal: Optional[str] = None
+    fournisseur_ville:       Optional[str] = None
+    fournisseur_pays:        Optional[str] = None
     fournisseur_contact:   Optional[str] = None
     fournisseur_email:     Optional[str] = None
     fournisseur_tel:       Optional[str] = None
+    interlocuteurs_fournisseur: Optional[str] = None
+    livraison_nom:         Optional[str] = None
+    livraison_rue:         Optional[str] = None
+    livraison_code_postal: Optional[str] = None
+    livraison_ville:       Optional[str] = None
+    livraison_pays:        Optional[str] = None
+    charge_commande_nom:   Optional[str] = None
+    charge_commande_email: Optional[str] = None
+    charge_commande_tel:   Optional[str] = None
     date_commande:         Optional[str] = None
     date_livraison_prevue: Optional[str] = None
     date_livraison_reelle: Optional[str] = None
@@ -63,6 +96,9 @@ class BonCommandeUpdate(BaseModel):
     conditions:            Optional[str] = None
     notes:                 Optional[str] = None
     exonere_tva:           Optional[int] = None
+    frais_port:            Optional[float] = None
+    chapitre_cout:         Optional[str] = None
+    paiements:             Optional[str] = None
     lignes:                Optional[List[BonCommandeLigneIn]] = None
 
 
@@ -73,10 +109,25 @@ class BonCommandeOut(BaseModel):
     affaire_nom:           Optional[str] = None
     num_bc:                str
     fournisseur_nom:       str = ""
-    fournisseur_adresse:   str = ""
+    reference_fournisseur:   str = ""
+    reference_monstock:      str = ""
+    lien_monstock:           str = ""
+    fournisseur_rue:         str = ""
+    fournisseur_code_postal: str = ""
+    fournisseur_ville:       str = ""
+    fournisseur_pays:        str = "France"
     fournisseur_contact:   str = ""
     fournisseur_email:     str = ""
     fournisseur_tel:       str = ""
+    interlocuteurs_fournisseur: str = "[]"
+    livraison_nom:         str = ""
+    livraison_rue:         str = ""
+    livraison_code_postal: str = ""
+    livraison_ville:       str = ""
+    livraison_pays:        str = "France"
+    charge_commande_nom:   str = ""
+    charge_commande_email: str = ""
+    charge_commande_tel:   str = ""
     date_commande:         str = ""
     date_livraison_prevue: str = ""
     date_livraison_reelle: str = ""
@@ -85,10 +136,14 @@ class BonCommandeOut(BaseModel):
     conditions:            str = ""
     notes:                 str = ""
     exonere_tva:           int = 0
+    frais_port:            float = 0.0
+    chapitre_cout:         str = ""
+    paiements:             str = "[]"
     date_generation:       Optional[datetime] = None
     pdf_path:              str = ""
     version:               int = 1
     lignes:                List[BonCommandeLigneOut] = []
+    total_lignes_ht:       float = 0
     total_ht:              float = 0
     total_ttc:             float = 0
     created_at:            Optional[datetime] = None

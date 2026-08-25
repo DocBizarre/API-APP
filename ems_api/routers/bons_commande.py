@@ -2,6 +2,7 @@
 from datetime import datetime
 from typing import List, Optional
 from uuid import uuid4
+import json as _json_mod
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -9,7 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from ..database import get_db
-from ..models.affaire import Affaire
+from ..models.affaire import Affaire, AffaireCoutLigne
 from ..models.piece import Piece
 from ..models.bon_commande import BonCommande, BonCommandeLigne
 from ..schemas.bon_commande import (
@@ -17,6 +18,8 @@ from ..schemas.bon_commande import (
 )
 from ..services.numerotation import next_num_bon_commande
 from .affaires import _get_dossier, _create_arborescence
+from .interventions import _upsert_contact
+from .fournisseurs import _upsert_fournisseur
 
 router = APIRouter(prefix="/bons-commande", tags=["bons-commande"])
 
@@ -48,7 +51,9 @@ def _to_out(bc: BonCommande) -> dict:
         d[c.name] = _coerce(c, getattr(bc, c.name))
     d["affaire_id"] = bc.affaire_id  # préserver None (non-lié), pas de coercition en ""
     d["lignes"] = [_ligne_to_out(l) for l in bc.lignes]
-    total_ht = sum(l.montant_ligne or 0 for l in bc.lignes)
+    total_lignes_ht = sum(l.montant_ligne or 0 for l in bc.lignes)
+    total_ht = total_lignes_ht + (bc.frais_port or 0)
+    d["total_lignes_ht"] = total_lignes_ht
     d["total_ht"] = total_ht
     d["total_ttc"] = total_ht if bc.exonere_tva else round(total_ht * 1.20, 2)
     d["affaire_num"] = bc.affaire.num_affaire if bc.affaire else None
@@ -61,6 +66,16 @@ def _get_bon(bc_id: str, db: Session) -> BonCommande:
     if not bc:
         raise HTTPException(404, "Bon de commande introuvable")
     return bc
+
+
+def _upsert_interlocuteurs_fournisseur(db: Session, interlocuteurs_json: str) -> None:
+    """Mémorise chaque interlocuteur fournisseur dans la table contacts (autocomplétion)."""
+    try:
+        interlocuteurs = _json_mod.loads(interlocuteurs_json or "[]")
+    except Exception:
+        interlocuteurs = []
+    for it in interlocuteurs:
+        _upsert_contact(db, it.get("nom", ""), it.get("email", ""), it.get("telephone", ""))
 
 
 def _check_affaire(affaire_id: Optional[str], db: Session) -> None:
@@ -88,6 +103,43 @@ def _recalc_lignes(bc: BonCommande, lignes_in: list, db: Session) -> None:
             montant_ligne=montant,
             ordre=ligne.ordre or i,
         ))
+
+
+def _sync_cout_ligne_from_bc(bc: BonCommande, db: Session) -> None:
+    """Synchronise le poste de bilan (P2) généré depuis ce bon de commande."""
+    existing = db.query(AffaireCoutLigne).filter(
+        AffaireCoutLigne.bon_commande_id == bc.id
+    ).first()
+    if bc.affaire_id:
+        # Le poste de bilan est créé dès qu'un achat est lié à l'affaire, même
+        # sans chapitre choisi : il apparaît alors comme "non affecté" dans le
+        # bilan, à assigner à un poste plutôt que de disparaître silencieusement.
+        montant = sum(l.montant_ligne or 0 for l in bc.lignes) + (bc.frais_port or 0)
+        libelle = f"BC {bc.num_bc}" + (f" — {bc.fournisseur_nom}" if bc.fournisseur_nom else "")
+        commentaire = f"Généré automatiquement depuis le bon de commande {bc.num_bc}."
+        if existing:
+            existing.affaire_id = bc.affaire_id
+            existing.categorie = bc.chapitre_cout or ""
+            existing.libelle = libelle
+            existing.stade = "P2"
+            existing.cout_prevu = 0
+            existing.cout_reel = montant
+            existing.commentaire = commentaire
+        else:
+            db.add(AffaireCoutLigne(
+                id=str(uuid4()),
+                affaire_id=bc.affaire_id,
+                bon_commande_id=bc.id,
+                categorie=bc.chapitre_cout or "",
+                libelle=libelle,
+                stade="P2",
+                cout_prevu=0,
+                cout_reel=montant,
+                commentaire=commentaire,
+                ordre=9999,
+            ))
+    elif existing:
+        db.delete(existing)
 
 
 @router.get("", response_model=List[BonCommandeOut])
@@ -128,10 +180,25 @@ def create_bon_commande(body: BonCommandeCreate, db: Session = Depends(get_db)):
         affaire_id=body.affaire_id or None,
         num_bc=next_num_bon_commande(db),
         fournisseur_nom=body.fournisseur_nom,
-        fournisseur_adresse=body.fournisseur_adresse,
+        reference_fournisseur=body.reference_fournisseur,
+        reference_monstock=body.reference_monstock,
+        lien_monstock=body.lien_monstock,
+        fournisseur_rue=body.fournisseur_rue,
+        fournisseur_code_postal=body.fournisseur_code_postal,
+        fournisseur_ville=body.fournisseur_ville,
+        fournisseur_pays=body.fournisseur_pays,
         fournisseur_contact=body.fournisseur_contact,
         fournisseur_email=body.fournisseur_email,
         fournisseur_tel=body.fournisseur_tel,
+        interlocuteurs_fournisseur=body.interlocuteurs_fournisseur,
+        livraison_nom=body.livraison_nom,
+        livraison_rue=body.livraison_rue,
+        livraison_code_postal=body.livraison_code_postal,
+        livraison_ville=body.livraison_ville,
+        livraison_pays=body.livraison_pays,
+        charge_commande_nom=body.charge_commande_nom,
+        charge_commande_email=body.charge_commande_email,
+        charge_commande_tel=body.charge_commande_tel,
         date_commande=body.date_commande,
         date_livraison_prevue=body.date_livraison_prevue,
         date_livraison_reelle=body.date_livraison_reelle,
@@ -140,12 +207,21 @@ def create_bon_commande(body: BonCommandeCreate, db: Session = Depends(get_db)):
         conditions=body.conditions,
         notes=body.notes,
         exonere_tva=body.exonere_tva,
+        frais_port=body.frais_port,
+        chapitre_cout=body.chapitre_cout,
+        paiements=body.paiements,
     )
     db.add(bc)
     db.flush()
     _recalc_lignes(bc, body.lignes, db)
+    _upsert_fournisseur(db, bc.fournisseur_nom, bc.fournisseur_contact, bc.fournisseur_email,
+                       bc.fournisseur_tel, bc.fournisseur_rue, bc.fournisseur_code_postal,
+                       bc.fournisseur_ville, bc.fournisseur_pays)
+    _upsert_interlocuteurs_fournisseur(db, bc.interlocuteurs_fournisseur)
     db.commit()
     db.refresh(bc)
+    _sync_cout_ligne_from_bc(bc, db)
+    db.commit()
     return _to_out(bc)
 
 
@@ -164,15 +240,22 @@ def update_bon_commande(bc_id: str, body: BonCommandeUpdate,
             setattr(bc, field, val)
     if lignes is not None:
         _recalc_lignes(bc, body.lignes, db)
+    _upsert_fournisseur(db, bc.fournisseur_nom, bc.fournisseur_contact, bc.fournisseur_email,
+                       bc.fournisseur_tel, bc.fournisseur_rue, bc.fournisseur_code_postal,
+                       bc.fournisseur_ville, bc.fournisseur_pays)
+    _upsert_interlocuteurs_fournisseur(db, bc.interlocuteurs_fournisseur)
     bc.version = (bc.version or 1) + 1
     db.commit()
     db.refresh(bc)
+    _sync_cout_ligne_from_bc(bc, db)
+    db.commit()
     return _to_out(bc)
 
 
 @router.delete("/{bc_id}", status_code=204)
 def delete_bon_commande(bc_id: str, db: Session = Depends(get_db)):
     bc = _get_bon(bc_id, db)
+    db.query(AffaireCoutLigne).filter(AffaireCoutLigne.bon_commande_id == bc_id).delete()
     db.delete(bc)
     db.commit()
 
