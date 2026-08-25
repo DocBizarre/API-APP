@@ -10,4 +10,5 @@ class Contact(Base):
     nom         = Column(String, nullable=False, unique=True, index=True)
     email       = Column(String, default="")
     telephone   = Column(String, default="")
+    entreprise  = Column(String, default="")
     usage_count = Column(Integer, default=1)
