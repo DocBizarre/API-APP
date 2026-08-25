@@ -643,7 +643,7 @@ class GarantiesApp(tk.Tk):
         r = self._sel()
         if not r:
             return
-        d = db.GARANTIE_DIR / r["num_ems"]
+        d = db.GARANTIE_DIR / r["num_ems"].upper()
         d.mkdir(parents=True, exist_ok=True)
         self._ouvrir(d)
 
