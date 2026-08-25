@@ -265,9 +265,10 @@ class UpdateDialog(tk.Toplevel):
         self._batch_path = None
 
         self.title("Mise à jour disponible")
-        self.geometry("520x380")
+        self.geometry("520x420")
         self.configure(bg=C["bg"])
-        self.resizable(False, False)
+        self.resizable(False, True)
+        self.minsize(520, 320)
         self.grab_set()
         if update_info.get("required", False):
             self.protocol("WM_DELETE_WINDOW", lambda: None)
@@ -281,6 +282,33 @@ class UpdateDialog(tk.Toplevel):
                  text=f"  Mise à jour  v{update_info.get('version', '?')}  disponible",
                  font=("Segoe UI", 13, "bold"),
                  bg=C["header"], fg="white").pack(side="left", padx=12)
+
+        # Boutons - empaquetes AVANT le corps (notes/progression) pour leur
+        # garantir une place meme si le contenu du corps deborde sur un
+        # ecran/DPI different (sinon body(expand=True) peut repousser bf
+        # hors de la fenetre et le bouton "Telecharger" disparait).
+        bf = tk.Frame(self, bg=C["bg"])
+        bf.pack(side="bottom", fill="x", padx=22, pady=12)
+
+        self._btn_download = tk.Button(
+            bf, text="⬇  Télécharger et installer",
+            font=("Segoe UI", 9, "bold"),
+            bg="#1e7e3e", fg="white", relief="flat", padx=14, pady=6,
+            cursor="hand2", command=self._start_download)
+        self._btn_download.pack(side="left")
+
+        self._btn_apply = tk.Button(
+            bf, text="▶  Relancer et appliquer",
+            font=("Segoe UI", 9, "bold"),
+            bg="#0056b3", fg="white", relief="flat", padx=14, pady=6,
+            cursor="hand2", command=self._apply)
+        self._btn_apply.pack(side="left", padx=8)
+        self._btn_apply.pack_forget()
+
+        if not update_info.get("required", False):
+            tk.Button(bf, text="Plus tard", font=("Segoe UI", 9),
+                      bg="#888", fg="white", relief="flat", padx=12, pady=6,
+                      cursor="hand2", command=self.destroy).pack(side="right")
 
         body = tk.Frame(self, bg=C["bg"])
         body.pack(fill="both", expand=True, padx=22, pady=14)
@@ -312,30 +340,6 @@ class UpdateDialog(tk.Toplevel):
                                      maximum=100, length=460)
         self._bar.pack(fill="x", pady=(2, 0))
         self._bar.pack_forget()  # cachée jusqu'au téléchargement
-
-        # Boutons
-        bf = tk.Frame(self, bg=C["bg"])
-        bf.pack(side="bottom", fill="x", padx=22, pady=12)
-
-        self._btn_download = tk.Button(
-            bf, text="⬇  Télécharger et installer",
-            font=("Segoe UI", 9, "bold"),
-            bg="#1e7e3e", fg="white", relief="flat", padx=14, pady=6,
-            cursor="hand2", command=self._start_download)
-        self._btn_download.pack(side="left")
-
-        self._btn_apply = tk.Button(
-            bf, text="▶  Relancer et appliquer",
-            font=("Segoe UI", 9, "bold"),
-            bg="#0056b3", fg="white", relief="flat", padx=14, pady=6,
-            cursor="hand2", command=self._apply)
-        self._btn_apply.pack(side="left", padx=8)
-        self._btn_apply.pack_forget()
-
-        if not update_info.get("required", False):
-            tk.Button(bf, text="Plus tard", font=("Segoe UI", 9),
-                      bg="#888", fg="white", relief="flat", padx=12, pady=6,
-                      cursor="hand2", command=self.destroy).pack(side="right")
 
     def _start_download(self):
         self._btn_download.config(state="disabled")
