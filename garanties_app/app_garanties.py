@@ -1169,15 +1169,16 @@ class MoteurDialog(tk.Toplevel):
     FIELDS = [
         ("num_serie",         "N° Série *"),
         ("navire",            "Navire / Site"),
+        ("navire_immatriculation", "Immatriculation navire"),
+        ("navire_port_attache",    "Port d'attache"),
         ("machine",           "Machine"),
-        ("type_moteur",       "Type moteur / inverseur"),
         ("marque",            "Marque"),
+        ("type_moteur",       "Type moteur / inverseur"),
         ("ref_constructeur",  "Réf. Constructeur"),
-        ("cylindree",         "Cylindrée"),
-        ("famille",           "Famille"),
         ("application",       "Application"),
         ("typologie",         "Typologie"),
-        ("collection",        "Collection"),
+        ("puissance_rpm",     "Puissance/RPM"),
+        ("puissance_pme_rpm", "Puissance PME/RPM"),
         ("code_affaire",      "Code Affaire"),
         ("date_mise_service", "Mise en service"),
         ("duree_garantie",    "Garantie (mois)"),
@@ -1193,6 +1194,7 @@ class MoteurDialog(tk.Toplevel):
         self.configure(bg=C["bg"])
         self.grab_set()
         self._clients = list(db.get_clients())
+        self._navires = db.get_navires()
         self.client_var = tk.StringVar()
         if moteur and moteur.get("client_id"):
             c = next((x for x in self._clients
@@ -1230,6 +1232,16 @@ class MoteurDialog(tk.Toplevel):
             if key == "date_mise_service":
                 DateEntry(f, textvariable=self.v[key], width=32).grid(
                     row=i, column=1, pady=4, sticky="w")
+            elif key == "navire":
+                row_n = tk.Frame(f, bg=C["bg"])
+                row_n.grid(row=i, column=1, pady=4, sticky="w")
+                self._navire_combo = SearchableCombobox(
+                    row_n, textvariable=self.v["navire"],
+                    values=sorted({n["nom"] for n in self._navires if n.get("nom")}),
+                    width=34)
+                self._navire_combo.pack(side="left")
+                self._navire_combo.bind_selected(self._on_navire_field_changed)
+                self._navire_combo.entry.bind("<FocusOut>", self._on_navire_field_changed, add="+")
             else:
                 ttk.Entry(f, textvariable=self.v[key], width=34).grid(
                     row=i, column=1, pady=4, sticky="w")
@@ -1238,6 +1250,21 @@ class MoteurDialog(tk.Toplevel):
         mk_btn(bf, "💾 Enregistrer", self._save).pack(side="left", padx=8)
         mk_btn(bf, "Annuler", self.destroy,
                color=C["btn3"]).pack(side="left", padx=8)
+
+    def _on_navire_field_changed(self, *_):
+        """Précomplète immatriculation / port d'attache depuis le registre
+        Navire quand le nom saisi correspond à un navire déjà connu."""
+        nom = self.v["navire"].get().strip()
+        if not nom:
+            return
+        nav = next((n for n in self._navires
+                    if (n.get("nom") or "").strip().lower() == nom.lower()), None)
+        if not nav:
+            return
+        if not self.v["navire_immatriculation"].get().strip() and nav.get("immatriculation"):
+            self.v["navire_immatriculation"].set(nav["immatriculation"])
+        if not self.v["navire_port_attache"].get().strip() and nav.get("port_attache"):
+            self.v["navire_port_attache"].set(nav["port_attache"])
 
     def _nouveau_client(self):
         def _after(nom=None):
