@@ -468,6 +468,7 @@ tbody td{padding:8px 13px;color:var(--text-1);font-size:13px}
     <div class="sb-item" data-page="interventions"        onclick="nav(this)"><span class="ico">🔧</span>Interventions</div>
     <div class="sb-item" data-page="moteurs"              onclick="nav(this)"><span class="ico">⚙️</span>Moteurs</div>
     <div class="sb-item" data-page="clients"              onclick="nav(this)"><span class="ico">👥</span>Clients</div>
+    <div class="sb-item" data-page="affaires"              onclick="nav(this)"><span class="ico">🗂️</span>Affaires</div>
     <div class="sb-sec">Suivi</div>
     <div class="sb-item" data-page="garanties"            onclick="nav(this)"><span class="ico">🛡️</span>Garanties</div>
     <div class="sb-item" data-page="ameliorations"        onclick="nav(this)"><span class="ico">💡</span>Améliorations</div>
@@ -558,9 +559,11 @@ tbody td{padding:8px 13px;color:var(--text-1);font-size:13px}
     </div>
     <div class="kpi-grid" id="kpi-statuts"></div>
     <div class="kpi-grid" id="kpi-parc"></div>
+    <div class="kpi-grid" id="kpi-affaires"></div>
     <div class="dash-grid g2"  id="dr1" style="margin-bottom:14px"></div>
     <div class="dash-grid g3"  id="dr2" style="margin-bottom:14px"></div>
-    <div class="dash-grid g12" id="dr3"></div>
+    <div class="dash-grid g12" id="dr3" style="margin-bottom:14px"></div>
+    <div class="dash-grid g2"  id="dr4"></div>
   </div>
 
   <!-- ══ INTERVENTIONS ══ -->
@@ -651,12 +654,9 @@ tbody td{padding:8px 13px;color:var(--text-1);font-size:13px}
         <div class="fgroup"><label>Recherche libre</label><input type="text" id="fm-q" placeholder="N° série, navire, réf…"></div>
         <div class="fgroup"><label>Client</label><select id="fm-client"></select></div>
         <div class="fgroup"><label>Marque</label><select id="fm-marque"></select></div>
-        <div class="fgroup"><label>Famille</label><select id="fm-famille"></select></div>
         <div class="fgroup"><label>Type moteur</label><select id="fm-type"></select></div>
         <div class="fgroup"><label>Application</label><select id="fm-app"></select></div>
         <div class="fgroup"><label>Typologie</label><select id="fm-typo"></select></div>
-        <div class="fgroup"><label>Collection</label><select id="fm-coll"></select></div>
-        <div class="fgroup"><label>Cylindrée</label><select id="fm-cyl"></select></div>
         <div class="fgroup"><label>Type client</label><select id="fm-tcli"></select></div>
         <div class="fgroup"><label>Code affaire</label><input type="text" id="fm-code" placeholder="Code affaire…"></div>
         <div class="fgroup"><label>Navire / Machine</label><input type="text" id="fm-navire" placeholder="Nom navire…"></div>
@@ -681,10 +681,10 @@ tbody td{padding:8px 13px;color:var(--text-1);font-size:13px}
         <th onclick="srt('moteurs','client_nom')">Client</th>
         <th onclick="srt('moteurs','navire')">Navire / Machine</th>
         <th onclick="srt('moteurs','marque')">Marque</th>
-        <th onclick="srt('moteurs','famille')">Famille</th>
         <th onclick="srt('moteurs','type_moteur')">Type</th>
         <th onclick="srt('moteurs','application')">Application</th>
-        <th onclick="srt('moteurs','cylindree')">Cylindrée</th>
+        <th onclick="srt('moteurs','puissance_rpm')">Puissance/RPM</th>
+        <th onclick="srt('moteurs','puissance_pme_rpm')">Puissance PME/RPM</th>
         <th onclick="srt('moteurs','ref_constructeur')">Réf. Constr.</th>
         <th onclick="srt('moteurs','code_affaire')">Code affaire</th>
         <th onclick="srt('moteurs','date_mise_service')">Mise en service</th>
@@ -736,6 +736,71 @@ tbody td{padding:8px 13px;color:var(--text-1);font-size:13px}
       </tr></thead>
       <tbody id="tb-clients"></tbody>
     </table></div><div class="pag" id="pag-clients"></div></div>
+  </div>
+
+  <!-- ══ AFFAIRES ══ -->
+  <div id="page-affaires" class="page">
+    <div class="page-header">
+      <div class="page-header-left">
+        <div class="page-header-title"><span class="ph-icon">🗂️</span>Affaires</div>
+        <div class="page-header-sub">Suivi de projets — budgets, délais et avancement</div>
+      </div>
+      <div class="page-header-actions">
+        <button class="btn btn-ghost btn-sm" onclick="resetFP('affaires')">↺ Réinitialiser</button>
+        <button class="btn btn-success btn-sm" onclick="exportCSV('affaires')">⬇ CSV</button>
+      </div>
+    </div>
+    <div class="fp" id="fp-affaires">
+      <div class="fp-head open" onclick="togFP('affaires')">
+        <div class="fp-htitle">🔍 Filtres <span class="fc-badge" id="fc-affaires"></span></div>
+        <span id="fpa-affaires" style="color:var(--text-3);font-size:12px">▲</span>
+      </div>
+      <div class="fp-body" id="fpb-affaires">
+        <div class="fgroup"><label>Recherche libre</label><input type="text" id="faf-q" placeholder="N° affaire, projet, client…"></div>
+        <div class="fgroup"><label>Statut</label><select id="faf-statut"><option value="">Tous</option><option>En cours</option><option>En attente</option><option>À facturer</option><option>Facturé</option><option>Clos</option><option>Annulé</option></select></div>
+        <div class="fgroup"><label>Complexité</label><select id="faf-complexite"><option value="">Toutes</option><option value="A">A</option><option value="B">B</option><option value="C">C</option></select></div>
+        <div class="fgroup"><label>Client</label><select id="faf-client"></select></div>
+        <div class="fgroup"><label>Chargé d'affaire</label><select id="faf-charge"></select></div>
+        <div class="fgroup"><label>Resp. technique</label><select id="faf-resp"></select></div>
+        <div class="fgroup"><label>En retard</label><select id="faf-retard"><option value="">Toutes</option><option value="1">Oui</option><option value="0">Non</option></select></div>
+        <div class="fgroup"><label>Début — Du</label><input type="date" id="faf-from"></div>
+        <div class="fgroup"><label>Début — Au</label><input type="date" id="faf-to"></div>
+      </div>
+      <div class="chips" id="ch-affaires"></div>
+      <div class="saved-filters-row" id="sfr-affaires">
+        <span class="saved-filters-label">💾 Enregistrés :</span>
+        <div id="sf-list-affaires" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        <button class="btn btn-ghost btn-sm" onclick="saveFilter('affaires')" style="margin-left:auto">+ Sauvegarder</button>
+      </div>
+      <div class="fp-foot">
+        <button class="btn btn-ghost btn-sm" onclick="resetFP('affaires')">↺ Réinitialiser</button>
+        <button class="btn btn-success btn-sm" onclick="exportCSV('affaires')">⬇ CSV</button>
+        <span class="fp-count" id="cnt-affaires"></span>
+      </div>
+    </div>
+    <div class="kpi-grid" id="kpi-aff-stats" style="margin-bottom:14px"></div>
+    <div class="dash-grid g3" id="aff-charts" style="margin-bottom:14px"></div>
+    <div class="tc">
+      <div class="tscroll">
+        <table>
+          <thead><tr>
+            <th onclick="srt('affaires','num_affaire')">N° Affaire</th>
+            <th onclick="srt('affaires','client_nom')">Client</th>
+            <th onclick="srt('affaires','nom_projet')">Projet</th>
+            <th onclick="srt('affaires','complexite')">Complex.</th>
+            <th onclick="srt('affaires','statut')">Statut</th>
+            <th onclick="srt('affaires','charge_affaire')">Chargé d'affaire</th>
+            <th onclick="srt('affaires','date_debut')">Début</th>
+            <th onclick="srt('affaires','date_fin_prevue')">Fin prévue</th>
+            <th onclick="srt('affaires','prix_ht')">Prix HT</th>
+            <th>Avancement</th>
+            <th style="width:28px"></th>
+          </tr></thead>
+          <tbody id="tb-affaires"></tbody>
+        </table>
+      </div>
+      <div class="pag" id="pag-affaires"></div>
+    </div>
   </div>
 
   <!-- ══ GARANTIES ══ -->
@@ -966,11 +1031,17 @@ const ST={
   interventions:{raw:[],filtered:[],page:1,col:'date_creation',dir:-1,ps:50},
   moteurs:      {raw:[],filtered:[],page:1,col:'num_serie',     dir: 1,ps:50},
   clients:      {raw:[],filtered:[],page:1,col:'nom',           dir: 1,ps:50},
+  affaires:     {raw:[],filtered:[],page:1,col:'date_debut',    dir:-1,ps:50},
   garanties:    {raw:[],filtered:[],page:1,col:'date_ouverture',dir:-1,ps:50},
   ameliorations:{raw:[],filtered:[],page:1,col:'created_at',    dir:-1,ps:50},
   techniciens:  {raw:[],filtered:[],page:1,col:'nb_interventions',dir:-1,ps:50},
 };
-const FPO={interventions:true,moteurs:true,clients:true,garanties:true,ameliorations:true};
+const FPO={interventions:true,moteurs:true,clients:true,affaires:true,garanties:true,ameliorations:true};
+// ══ Affaires — référentiel statuts/complexité (aligné sur suivi_affaires.html) ══
+const AFF_STATUTS=['En cours','En attente','À facturer','Facturé','Clos','Annulé'];
+const AFF_STATUT_COLORS={'En cours':'#2563eb','En attente':'#d97706','À facturer':'#7c3aed','Facturé':'#0d9488','Clos':'#059669','Annulé':'#9ca3af'};
+const AFF_STATUT_BADGE={'En cours':'ba','En attente':'bx','À facturer':'bv','Facturé':'bb','Clos':'bg','Annulé':'br'};
+const AFF_COMPLEX_BADGE={'A':'bg','B':'ba','C':'br'};
 
 // Saved filters — stored in sessionStorage
 let _savedFilters = JSON.parse(sessionStorage.getItem('ems_sf')||'{}');
@@ -1048,8 +1119,9 @@ function bootAll(){
   _popDashYears();
   buildDash();
   buildInt();  bindFP('interventions',fInt,['fi-q','fi-from','fi-to'],['fi-statut','fi-urgence','fi-type','fi-tech','fi-client','fi-lieu','fi-classif','fi-ncli','fi-ntech']);
-  buildMot();  bindFP('moteurs',fMot,['fm-q','fm-code','fm-navire','fm-misfrom','fm-misto'],['fm-client','fm-marque','fm-famille','fm-type','fm-app','fm-typo','fm-coll','fm-cyl','fm-tcli']);
+  buildMot();  bindFP('moteurs',fMot,['fm-q','fm-code','fm-navire','fm-misfrom','fm-misto'],['fm-client','fm-marque','fm-type','fm-app','fm-typo','fm-tcli']);
   buildCli();  bindFP('clients',fCli,['fc-q'],['fc-hint','fc-hmot']);
+  buildAff();  bindFP('affaires',fAff,['faf-q','faf-from','faf-to'],['faf-statut','faf-complexite','faf-client','faf-charge','faf-resp','faf-retard']);
   buildGar();  bindFP('garanties',fGar,['fg-q','fg-from','fg-to'],['fg-statut','fg-attrib','fg-client']);
   buildAml();  bindFP('ameliorations',fAml,['fa-q'],['fa-statut','fa-prio','fa-client']);
   buildTec();
@@ -1058,6 +1130,7 @@ function bootAll(){
   buildAlerts();
   renderSavedFilters('interventions');
   renderSavedFilters('moteurs');
+  renderSavedFilters('affaires');
 }
 
 function bindFP(name,fn,inputs,selects){
@@ -1082,6 +1155,8 @@ function globalSearch(v){
   q(`SELECT nom,email FROM clients WHERE nom LIKE ? OR email LIKE ? OR contact LIKE ? LIMIT 5`,[`%${v}%`,`%${v}%`,`%${v}%`]).forEach(r=>results.push({ico:'👥',main:r.nom,sub:r.email||'',page:'clients'}));
   // Search moteurs
   q(`SELECT num_serie,marque,type_moteur FROM moteurs WHERE num_serie LIKE ? OR marque LIKE ? OR navire LIKE ? LIMIT 5`,[`%${v}%`,`%${v}%`,`%${v}%`]).forEach(r=>results.push({ico:'⚙️',main:r.num_serie,sub:`${r.marque||''} ${r.type_moteur||''}`.trim(),page:'moteurs'}));
+  // Search affaires
+  if(tbl('affaires')) q(`SELECT num_affaire,nom_projet,statut FROM affaires WHERE num_affaire LIKE ? OR nom_projet LIKE ? LIMIT 5`,[`%${v}%`,`%${v}%`]).forEach(r=>results.push({ico:'🗂️',main:r.num_affaire,sub:`${r.nom_projet||''} · ${r.statut||''}`.trim(),page:'affaires'}));
 
   if(!results.length){box.innerHTML='<div class="gsr-empty">Aucun résultat</div>';box.classList.add('open');return;}
   const grouped={};
@@ -1095,7 +1170,7 @@ function gsrGo(page,val){
   const navEl=document.querySelector(`.sb-item[data-page="${page}"]`);
   if(navEl)nav(navEl);
   // set search box of that page
-  const searchMap={interventions:'fi-q',moteurs:'fm-q',clients:'fc-q'};
+  const searchMap={interventions:'fi-q',moteurs:'fm-q',clients:'fc-q',affaires:'faf-q'};
   const sid=searchMap[page];
   if(sid){
     const el=document.getElementById(sid);
@@ -1145,6 +1220,12 @@ function buildAlerts(){
   const factOld=_ints30.filter(r=>r.statut==='À facturer'&&toISO(r.date_creation)<d30&&toISO(r.date_creation)!='');
   const fact=[{n:factOld.length}];
   if(fact[0]?.n>0) alerts.push({level:'info',ico:'💰',txt:`${fact[0].n} bon${fact[0].n>1?'s':''} <strong>À facturer</strong> depuis plus de 30 jours`,link:'Voir',page:'interventions',filter:{id:'fi-statut',val:'À facturer'}});
+
+  // Affaires en retard sur l'échéance prévue (si table existe)
+  if(tbl('affaires')){
+    const affLate=q(`SELECT num_affaire FROM affaires WHERE date_fin_prevue IS NOT NULL AND date_fin_prevue!='' AND statut NOT IN ('Clos','Annulé')`).filter(r=>toISO(r.date_fin_prevue)<_localISO(new Date()));
+    if(affLate.length) alerts.push({level:'warn',ico:'🗂️',txt:`${affLate.length} affaire${affLate.length>1?'s':''} <strong>en retard</strong> sur l'échéance prévue`,link:'Voir',page:'affaires',filter:{id:'faf-retard',val:'1'}});
+  }
 
   // Garanties sans date de clôture (si table existe)
   if(tbl('garanties')){
@@ -1210,7 +1291,7 @@ function closeBanner(){
 // ══════════════════════════════════════════════════════════════════
 //  NAVIGATION
 // ══════════════════════════════════════════════════════════════════
-const PTITLES={dashboard:['Vue d\'ensemble','Tableau de bord'],interventions:['Interventions','Bons'],moteurs:['Moteurs','Parc moteurs'],clients:['Clients','Parc clients'],garanties:['Garanties','Dossiers'],ameliorations:['Améliorations','Tickets'],croise:['Analyse croisée','Pivot'],techniciens:['Techniciens','Équipe'],timeline:['Timeline','Chronologie'],alertes:['Alertes','Centre d\'alertes']};
+const PTITLES={dashboard:['Vue d\'ensemble','Tableau de bord'],interventions:['Interventions','Bons'],moteurs:['Moteurs','Parc moteurs'],clients:['Clients','Parc clients'],affaires:['Affaires','Suivi de projets'],garanties:['Garanties','Dossiers'],ameliorations:['Améliorations','Tickets'],croise:['Analyse croisée','Pivot'],techniciens:['Techniciens','Équipe'],timeline:['Timeline','Chronologie'],alertes:['Alertes','Centre d\'alertes']};
 function nav(el){
   document.querySelectorAll('.sb-item').forEach(n=>n.classList.remove('active'));
   el.classList.add('active');
@@ -1246,8 +1327,8 @@ function togFP(name){
 // ══════════════════════════════════════════════════════════════════
 //  CHIPS
 // ══════════════════════════════════════════════════════════════════
-const CHIPMAP={'fi-q':'Recherche','fi-statut':'Statut','fi-urgence':'Urgence','fi-type':'Type','fi-tech':'Technicien','fi-client':'Client','fi-lieu':'Lieu','fi-classif':'Classif.','fi-ncli':'Notif.cli','fi-ntech':'Notif.tec','fi-from':'Du','fi-to':'Au','fm-q':'Recherche','fm-client':'Client','fm-marque':'Marque','fm-famille':'Famille','fm-type':'Type','fm-app':'Application','fm-typo':'Typo.','fm-coll':'Collection','fm-cyl':'Cylindrée','fm-tcli':'TypeCli','fm-code':'Code','fm-navire':'Navire','fm-misfrom':'MES Du','fm-misto':'MES Au','fc-q':'Recherche','fc-hint':'Interventions','fc-hmot':'Moteurs','fg-q':'Recherche','fg-statut':'Statut','fg-attrib':'Attribution','fg-client':'Client','fg-from':'Du','fg-to':'Au','fa-q':'Recherche','fa-statut':'Statut','fa-prio':'Priorité','fa-client':'Client','ft-q':'Recherche'};
-const FP_IDS={interventions:['fi-q','fi-statut','fi-urgence','fi-type','fi-tech','fi-client','fi-lieu','fi-classif','fi-ncli','fi-ntech','fi-from','fi-to'],moteurs:['fm-q','fm-client','fm-marque','fm-famille','fm-type','fm-app','fm-typo','fm-coll','fm-cyl','fm-tcli','fm-code','fm-navire','fm-misfrom','fm-misto'],clients:['fc-q','fc-hint','fc-hmot'],garanties:['fg-q','fg-statut','fg-attrib','fg-client','fg-from','fg-to'],ameliorations:['fa-q','fa-statut','fa-prio','fa-client'],techniciens:['ft-q']};
+const CHIPMAP={'fi-q':'Recherche','fi-statut':'Statut','fi-urgence':'Urgence','fi-type':'Type','fi-tech':'Technicien','fi-client':'Client','fi-lieu':'Lieu','fi-classif':'Classif.','fi-ncli':'Notif.cli','fi-ntech':'Notif.tec','fi-from':'Du','fi-to':'Au','fm-q':'Recherche','fm-client':'Client','fm-marque':'Marque','fm-type':'Type','fm-app':'Application','fm-typo':'Typo.','fm-tcli':'TypeCli','fm-code':'Code','fm-navire':'Navire','fm-misfrom':'MES Du','fm-misto':'MES Au','fc-q':'Recherche','fc-hint':'Interventions','fc-hmot':'Moteurs','faf-q':'Recherche','faf-statut':'Statut','faf-complexite':'Complex.','faf-client':'Client','faf-charge':'Chargé','faf-resp':'Resp. tech.','faf-retard':'Retard','faf-from':'Début Du','faf-to':'Début Au','fg-q':'Recherche','fg-statut':'Statut','fg-attrib':'Attribution','fg-client':'Client','fg-from':'Du','fg-to':'Au','fa-q':'Recherche','fa-statut':'Statut','fa-prio':'Priorité','fa-client':'Client','ft-q':'Recherche'};
+const FP_IDS={interventions:['fi-q','fi-statut','fi-urgence','fi-type','fi-tech','fi-client','fi-lieu','fi-classif','fi-ncli','fi-ntech','fi-from','fi-to'],moteurs:['fm-q','fm-client','fm-marque','fm-type','fm-app','fm-typo','fm-tcli','fm-code','fm-navire','fm-misfrom','fm-misto'],clients:['fc-q','fc-hint','fc-hmot'],affaires:['faf-q','faf-statut','faf-complexite','faf-client','faf-charge','faf-resp','faf-retard','faf-from','faf-to'],garanties:['fg-q','fg-statut','fg-attrib','fg-client','fg-from','fg-to'],ameliorations:['fa-q','fa-statut','fa-prio','fa-client'],techniciens:['ft-q']};
 function chips(name){
   const ids=FP_IDS[name]||[];
   const cont=document.getElementById('ch-'+name);if(!cont)return;
@@ -1259,13 +1340,13 @@ function chips(name){
 function clearChip(id,name){
   const el=document.getElementById(id);if(el)el.value='';
   ST[name].page=1;
-  const fns={interventions:fInt,moteurs:fMot,clients:fCli,garanties:fGar,ameliorations:fAml,techniciens:fTec};
+  const fns={interventions:fInt,moteurs:fMot,clients:fCli,affaires:fAff,garanties:fGar,ameliorations:fAml,techniciens:fTec};
   fns[name]?.();chips(name);
 }
 function resetFP(name){
   (FP_IDS[name]||[]).forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   ST[name].page=1;
-  const fns={interventions:fInt,moteurs:fMot,clients:fCli,garanties:fGar,ameliorations:fAml,techniciens:fTec};
+  const fns={interventions:fInt,moteurs:fMot,clients:fCli,affaires:fAff,garanties:fGar,ameliorations:fAml,techniciens:fTec};
   fns[name]?.();chips(name);toast('Filtres réinitialisés');
 }
 
@@ -1290,7 +1371,7 @@ function loadSavedFilter(name,idx){
   resetFP(name);
   Object.entries(sf.state).forEach(([id,val])=>{const e=document.getElementById(id);if(e)e.value=val;});
   ST[name].page=1;
-  const fns={interventions:fInt,moteurs:fMot,clients:fCli,garanties:fGar,ameliorations:fAml};
+  const fns={interventions:fInt,moteurs:fMot,clients:fCli,affaires:fAff,garanties:fGar,ameliorations:fAml};
   fns[name]?.();chips(name);
   toast(`Filtre "${sf.label}" appliqué`);
 }
@@ -1408,6 +1489,32 @@ function buildDash(){
     </div>`).join('');
   animateCounters(kpiParcEl);
 
+  // ══ Affaires (si table présente dans la base) ══
+  const kpiAffEl=document.getElementById('kpi-affaires');
+  let affAll=[];
+  if(tbl('affaires')){
+    affAll=q(`SELECT statut,date_debut,date_fin_prevue,prix_ht FROM affaires`).filter(r=>matchPeriod(r.date_debut));
+    const todayISO=_localISO(new Date());
+    const nAff=affAll.length;
+    const enCoursAff=affAll.filter(r=>r.statut==='En cours').length;
+    const retardAff=affAll.filter(r=>r.date_fin_prevue&&toISO(r.date_fin_prevue)<todayISO&&!['Clos','Annulé'].includes(r.statut)).length;
+    const caTot=affAll.reduce((s,r)=>s+(parseFloat(r.prix_ht)||0),0);
+    kpiAffEl.innerHTML='<div class="kpi-section-label">🗂️ Affaires</div>'+[
+      {lbl:'Total affaires',val:nAff,ico:'📁',cls:'blue', foot:periodeTxt,cur:false},
+      {lbl:'En cours',       val:enCoursAff,ico:'🔄',cls:'amber',foot:'affaires actives',cur:false},
+      {lbl:'En retard',      val:retardAff,ico:'⏰',cls:retardAff>0?'red':'green',foot:'échéance dépassée',cur:false},
+      {lbl:'CA (Prix HT)',   val:caTot,ico:'💰',cls:'teal', foot:'total période',cur:true},
+    ].map(k=>`
+      <div class="kpi ${k.cls}">
+        <div class="kpi-top"><div class="kpi-label">${k.lbl}</div><div class="kpi-icon">${k.ico}</div></div>
+        <div class="kpi-num"${k.cur?'':` data-count="${k.val}"`}>${k.cur?Math.round(k.val).toLocaleString('fr-FR')+' €':'0'}</div>
+        <div class="kpi-foot">${k.foot}</div>
+      </div>`).join('');
+    animateCounters(kpiAffEl);
+  } else {
+    kpiAffEl.innerHTML='';
+  }
+
   const isDark=document.documentElement.dataset.theme==='dark';
   const gridColor=isDark?'rgba(255,255,255,.06)':'rgba(0,0,0,.04)';
   const tickColor=isDark?'#4a5568':'#7a8fa8';
@@ -1461,6 +1568,21 @@ function buildDash(){
     const cols=['#1d6ef5','#7048e8','#0c8599','#2f9e44','#f08c00','#e03131','#1d6ef5','#7048e8','#0c8599','#2f9e44'];
     r3.insertAdjacentHTML('beforeend',`<div class="cc"><div class="cc-head"><div><div class="cc-title">Parc par marque</div><div class="cc-sub">Nombre de moteurs</div></div></div><div class="cc-body"><canvas id="ch-marq"></canvas></div></div>`);
     _C.marq=new Chart(document.getElementById('ch-marq'),{type:'bar',data:{labels:byMarque.map(r=>r.marque),datasets:[{data:byMarque.map(r=>r.n),backgroundColor:cols,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0,color:tickColor},grid:{color:gridColor}},x:{ticks:{color:tickColor},grid:{display:false}}}}});
+  }
+
+  const r4=document.getElementById('dr4');r4.innerHTML='';
+  if(tbl('affaires')){
+    const _bMapAff={};
+    affAll.forEach(r=>{const b=dateToBucket(r.date_debut,gran);if(b)_bMapAff[b]=(_bMapAff[b]||0)+1;});
+    const byBucketAff=_bucketRange(gran,yearSel,fromSel,toSel).map(b=>({b,n:_bMapAff[b]||0}));
+    if(byBucketAff.length){
+      r4.insertAdjacentHTML('beforeend',`<div class="cc"><div class="cc-head"><div><div class="cc-title">Affaires ouvertes</div><div class="cc-sub">Début d'affaire — ${esc(chartSub)}</div></div></div><div class="cc-body"><canvas id="ch-affmonths"></canvas></div></div>`);
+      _C.affmonths=new Chart(document.getElementById('ch-affmonths'),{type:'bar',data:{labels:byBucketAff.map(r=>fmtBucket(r.b,gran)),datasets:[{data:byBucketAff.map(r=>r.n),backgroundColor:'rgba(12,133,153,.22)',borderColor:'rgba(12,133,153,.9)',borderWidth:2,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0,color:tickColor},grid:{color:gridColor}},x:{ticks:{color:tickColor,maxRotation:45,minRotation:30},grid:{display:false}}}}});
+    }
+    const affStatCount={};AFF_STATUTS.forEach(s=>affStatCount[s]=0);
+    affAll.forEach(r=>{if(r.statut in affStatCount)affStatCount[r.statut]++;});
+    r4.insertAdjacentHTML('beforeend',`<div class="cc"><div class="cc-head"><div><div class="cc-title">Statuts des affaires</div><div class="cc-sub">Répartition</div></div></div><div class="cc-body"><canvas id="ch-affstat"></canvas></div></div>`);
+    _C.affstat=new Chart(document.getElementById('ch-affstat'),{type:'doughnut',data:{labels:AFF_STATUTS,datasets:[{data:AFF_STATUTS.map(s=>affStatCount[s]),backgroundColor:AFF_STATUTS.map(s=>AFF_STATUT_COLORS[s]),borderWidth:3,borderColor:isDark?'#1c2230':'#fff',hoverOffset:4}]},options:{responsive:true,cutout:'68%',plugins:{legend:{position:'bottom',labels:{padding:10,font:{size:11},color:isDark?'#a0aec0':'#3d4f6b'}}}}});
   }
 }
 function killCharts(){Object.values(_C).forEach(c=>c.destroy());_C={};}
@@ -1699,14 +1821,14 @@ function togDetail(id,btn){const r=document.getElementById(id);if(!r)return;cons
 // ══════════════════════════════════════════════════════════════════
 function buildMot(){
   ST.moteurs.raw=q(`SELECT m.*,c.nom client_nom,COUNT(i.id) nb_interventions FROM moteurs m LEFT JOIN clients c ON m.client_id=c.id LEFT JOIN interventions i ON i.moteur_id=m.id GROUP BY m.id ORDER BY m.num_serie`);
-  popSel('fm-client',distinct('nom','clients'));popSel('fm-marque',distinct('marque','moteurs'));popSel('fm-famille',distinct('famille','moteurs'));popSel('fm-type',distinct('type_moteur','moteurs'));popSel('fm-app',distinct('application','moteurs'));popSel('fm-typo',distinct('typologie','moteurs'));popSel('fm-coll',distinct('collection','moteurs'));popSel('fm-cyl',distinct('cylindree','moteurs'));popSel('fm-tcli',distinct('type_client','moteurs'));
+  popSel('fm-client',distinct('nom','clients'));popSel('fm-marque',distinct('marque','moteurs'));popSel('fm-type',distinct('type_moteur','moteurs'));popSel('fm-app',distinct('application','moteurs'));popSel('fm-typo',distinct('typologie','moteurs'));popSel('fm-tcli',distinct('type_client','moteurs'));
   fMot();
 }
 function fMot(){
-  const sq=gv('fm-q').toLowerCase(),cl=gv('fm-client'),ma=gv('fm-marque'),fa=gv('fm-famille'),tp=gv('fm-type'),ap=gv('fm-app'),ty=gv('fm-typo'),co=gv('fm-coll'),cy=gv('fm-cyl'),tc=gv('fm-tcli'),cd=gv('fm-code').toLowerCase(),nv=gv('fm-navire').toLowerCase(),mf=gv('fm-misfrom'),mt=gv('fm-misto');
+  const sq=gv('fm-q').toLowerCase(),cl=gv('fm-client'),ma=gv('fm-marque'),tp=gv('fm-type'),ap=gv('fm-app'),ty=gv('fm-typo'),tc=gv('fm-tcli'),cd=gv('fm-code').toLowerCase(),nv=gv('fm-navire').toLowerCase(),mf=gv('fm-misfrom'),mt=gv('fm-misto');
   ST.moteurs.filtered=ST.moteurs.raw.filter(r=>{
-    if(sq&&!`${r.num_serie} ${r.navire} ${r.machine} ${r.marque} ${r.type_moteur} ${r.ref_constructeur} ${r.code_affaire} ${r.famille} ${r.application}`.toLowerCase().includes(sq))return false;
-    if(cl&&r.client_nom!==cl)return false;if(ma&&r.marque!==ma)return false;if(fa&&r.famille!==fa)return false;if(tp&&r.type_moteur!==tp)return false;if(ap&&r.application!==ap)return false;if(ty&&r.typologie!==ty)return false;if(co&&r.collection!==co)return false;if(cy&&r.cylindree!==cy)return false;if(tc&&r.type_client!==tc)return false;
+    if(sq&&!`${r.num_serie} ${r.navire} ${r.machine} ${r.marque} ${r.type_moteur} ${r.ref_constructeur} ${r.code_affaire} ${r.application}`.toLowerCase().includes(sq))return false;
+    if(cl&&r.client_nom!==cl)return false;if(ma&&r.marque!==ma)return false;if(tp&&r.type_moteur!==tp)return false;if(ap&&r.application!==ap)return false;if(ty&&r.typologie!==ty)return false;if(tc&&r.type_client!==tc)return false;
     if(cd&&!(r.code_affaire||'').toLowerCase().includes(cd))return false;
     if(nv&&!`${r.navire} ${r.machine}`.toLowerCase().includes(nv))return false;
     if(mf&&(r.date_mise_service||'')<mf)return false;if(mt&&(r.date_mise_service||'')>mt+'z')return false;
@@ -1714,7 +1836,7 @@ function fMot(){
   });
   rTbl('moteurs');setCnt('cnt-moteurs',ST.moteurs.filtered.length,ST.moteurs.raw.length);
 }
-function rMot(r){return`<tr><td class="mono"><strong>${esc(r.num_serie)}</strong></td><td>${esc(r.client_nom||'—')}</td><td>${esc([r.navire,r.machine].filter(Boolean).join(' / ')||'—')}</td><td>${esc(r.marque||'—')}</td><td>${esc(r.famille||'—')}</td><td>${esc(r.type_moteur||'—')}</td><td>${esc(r.application||'—')}</td><td>${esc(r.cylindree||'—')}</td><td class="mono">${esc(r.ref_constructeur||'—')}</td><td class="mono">${esc(r.code_affaire||'—')}</td><td>${esc(r.date_mise_service||'—')}</td><td>${r.nb_interventions||0}</td></tr>`;}
+function rMot(r){return`<tr><td class="mono"><strong>${esc(r.num_serie)}</strong></td><td>${esc(r.client_nom||'—')}</td><td>${esc([r.navire,r.machine].filter(Boolean).join(' / ')||'—')}</td><td>${esc(r.marque||'—')}</td><td>${esc(r.type_moteur||'—')}</td><td>${esc(r.application||'—')}</td><td>${esc(r.puissance_rpm||'—')}</td><td>${esc(r.puissance_pme_rpm||'—')}</td><td class="mono">${esc(r.ref_constructeur||'—')}</td><td class="mono">${esc(r.code_affaire||'—')}</td><td>${esc(r.date_mise_service||'—')}</td><td>${r.nb_interventions||0}</td></tr>`;}
 
 // ══════════════════════════════════════════════════════════════════
 //  CLIENTS
@@ -1722,6 +1844,149 @@ function rMot(r){return`<tr><td class="mono"><strong>${esc(r.num_serie)}</strong
 function buildCli(){ST.clients.raw=q(`SELECT c.*,COUNT(DISTINCT i.id) nb_interventions,COUNT(DISTINCT m.id) nb_moteurs FROM clients c LEFT JOIN interventions i ON i.client_id=c.id LEFT JOIN moteurs m ON m.client_id=c.id GROUP BY c.id ORDER BY c.nom`);fCli();}
 function fCli(){const s=gv('fc-q').toLowerCase(),hi=gv('fc-hint'),hm=gv('fc-hmot');ST.clients.filtered=ST.clients.raw.filter(r=>{if(s&&!`${r.nom} ${r.contact} ${r.email} ${r.telephone} ${r.adresse}`.toLowerCase().includes(s))return false;if(hi==='1'&&!r.nb_interventions)return false;if(hi==='0'&&r.nb_interventions)return false;if(hm==='1'&&!r.nb_moteurs)return false;if(hm==='0'&&r.nb_moteurs)return false;return true;});rTbl('clients');setCnt('cnt-clients',ST.clients.filtered.length,ST.clients.raw.length);}
 function rCli(r){return`<tr><td><strong>${esc(r.nom)}</strong></td><td>${esc(r.contact||'—')}</td><td>${r.email?`<a href="mailto:${esc(r.email)}" style="color:var(--blue)">${esc(r.email)}</a>`:'—'}</td><td>${esc(r.telephone||'—')}</td><td>${esc(r.adresse||'—')}</td><td>${r.nb_interventions||0}</td><td>${r.nb_moteurs||0}</td><td>${fmt(r.created_at)}</td></tr>`;}
+
+// ══════════════════════════════════════════════════════════════════
+//  AFFAIRES
+// ══════════════════════════════════════════════════════════════════
+function buildAff(){
+  if(!tbl('affaires')){ST.affaires.raw=[];rTbl('affaires');buildAffStats();return;}
+  ST.affaires.raw=q(`SELECT a.*,c.nom client_nom,
+      (SELECT COUNT(*) FROM affaire_items ai WHERE ai.affaire_id=a.id) nb_items,
+      (SELECT COUNT(*) FROM affaire_items ai WHERE ai.affaire_id=a.id AND ai.statut='Terminé') nb_items_termine,
+      (SELECT COALESCE(SUM(cout_prevu),0) FROM affaire_couts ac WHERE ac.affaire_id=a.id) budget_prevu,
+      (SELECT COALESCE(SUM(cout_reel),0) FROM affaire_couts ac WHERE ac.affaire_id=a.id) budget_reel
+    FROM affaires a LEFT JOIN clients c ON a.client_id=c.id
+    ORDER BY a.date_debut DESC`);
+  popSel('faf-client',distinct('nom','clients'));
+  popSel('faf-charge',[...new Set(ST.affaires.raw.map(r=>r.charge_affaire).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr')));
+  popSel('faf-resp',   [...new Set(ST.affaires.raw.map(r=>r.resp_technique).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr')));
+  fAff();
+}
+function fAff(){
+  const s=gv('faf-q').toLowerCase(),st=gv('faf-statut'),cx=gv('faf-complexite'),cl=gv('faf-client'),ch=gv('faf-charge'),rp=gv('faf-resp'),rt=gv('faf-retard'),fr=gv('faf-from'),to=gv('faf-to');
+  const todayISO=_localISO(new Date());
+  const isLate=r=>!!(r.date_fin_prevue&&toISO(r.date_fin_prevue)<todayISO&&!['Clos','Annulé'].includes(r.statut));
+  ST.affaires.filtered=ST.affaires.raw.filter(r=>{
+    if(s&&!`${r.num_affaire} ${r.nom_projet} ${r.client_nom} ${r.navire_machine}`.toLowerCase().includes(s))return false;
+    if(st&&r.statut!==st)return false;
+    if(cx&&r.complexite!==cx)return false;
+    if(cl&&r.client_nom!==cl)return false;
+    if(ch&&r.charge_affaire!==ch)return false;
+    if(rp&&r.resp_technique!==rp)return false;
+    if(rt==='1'&&!isLate(r))return false;
+    if(rt==='0'&&isLate(r))return false;
+    if(fr&&toISO(r.date_debut)<fr)return false;
+    if(to&&toISO(r.date_debut)>to)return false;
+    return true;
+  });
+  rTbl('affaires');
+  setCnt('cnt-affaires',ST.affaires.filtered.length,ST.affaires.raw.length);
+  buildAffStats();
+}
+function rAff(r){
+  const todayISO=_localISO(new Date());
+  const late=!!(r.date_fin_prevue&&toISO(r.date_fin_prevue)<todayISO&&!['Clos','Annulé'].includes(r.statut));
+  const sB=AFF_STATUT_BADGE[r.statut]||'bx';
+  const cB=AFF_COMPLEX_BADGE[r.complexite]||'bx';
+  const pct=r.nb_items>0?Math.round(r.nb_items_termine/r.nb_items*100):0;
+  const did=`dr-aff-${String(r.id).replace(/\W/g,'_')}`;
+  return`<tr>
+    <td class="mono">${esc(r.num_affaire)}</td>
+    <td>${esc(r.client_nom||'—')}</td>
+    <td>${esc(r.nom_projet||'—')}</td>
+    <td><span class="badge ${cB}">${esc(r.complexite||'—')}</span></td>
+    <td><span class="badge ${sB}">${esc(r.statut||'—')}</span></td>
+    <td>${esc(r.charge_affaire||'—')}</td>
+    <td>${esc(r.date_debut||'—')}</td>
+    <td>${late?`<span class="badge br" title="En retard">⏰ ${esc(r.date_fin_prevue)}</span>`:esc(r.date_fin_prevue||'—')}</td>
+    <td>${r.prix_ht?Math.round(parseFloat(r.prix_ht)||0).toLocaleString('fr-FR')+' €':'—'}</td>
+    <td>${r.nb_items>0?`<div class="sbar"><div class="sbar-bg"><div class="sbar-fg" style="width:${pct}%;background:${pct===100?'var(--green)':'var(--blue)'}"></div></div></div><span style="font-size:11px;color:var(--text-3)">${pct}%</span>`:'—'}</td>
+    <td><button class="btn btn-ghost btn-sm btn-icon" onclick="togDetail('${did}',this)">+</button></td>
+  </tr>
+  <tr class="drow" id="${did}" style="display:none">
+    <td colspan="11" class="dcell">
+      <div class="dinner">
+        <div class="dfield"><label>Navire / Machine</label><span>${esc(r.navire_machine||'—')}</span></div>
+        <div class="dfield"><label>Resp. technique</label><span>${esc(r.resp_technique||'—')}</span></div>
+        <div class="dfield"><label>Réf. interne</label><span>${esc(r.ref_interne||'—')}</span></div>
+        <div class="dfield"><label>N° commande client</label><span>${esc(r.num_commande_client||'—')}</span></div>
+        <div class="dfield"><label>Début FAT</label><span>${esc(r.date_fat||'—')}</span></div>
+        <div class="dfield"><label>Fin FAT</label><span>${esc(r.date_fin_fat||'—')}</span></div>
+        <div class="dfield"><label>Clôture</label><span>${esc(r.date_cloture||'—')}</span></div>
+        <div class="dfield"><label>Budget prévu</label><span>${Math.round(r.budget_prevu||0).toLocaleString('fr-FR')} €</span></div>
+        <div class="dfield"><label>Budget réel</label><span>${Math.round(r.budget_reel||0).toLocaleString('fr-FR')} €</span></div>
+        <div class="dfield"><label>Écart budgétaire</label><span>${_fmtEcart((r.budget_reel||0)-(r.budget_prevu||0))}</span></div>
+        <div class="dfield"><label>Avancement items</label><span>${r.nb_items_termine||0} / ${r.nb_items||0} terminé(s)</span></div>
+      </div>
+    </td>
+  </tr>`;
+}
+function _fmtEcart(v){
+  const n=Math.round(v||0);
+  const sign=n>0?'+':'';
+  const col=n>0?'var(--red)':n<0?'var(--green)':'var(--text-2)';
+  return`<span style="color:${col};font-weight:600">${sign}${n.toLocaleString('fr-FR')} €</span>`;
+}
+
+// Mini-tableau de bord dédié aux affaires (KPI + graphiques), recalculé sur ST.affaires.filtered
+let _CAff={};
+function killAffCharts(){Object.values(_CAff).forEach(c=>c.destroy());_CAff={};}
+function buildAffStats(){
+  killAffCharts();
+  const kpiEl=document.getElementById('kpi-aff-stats'),chartsEl=document.getElementById('aff-charts');
+  if(!kpiEl||!chartsEl)return;
+  const data=ST.affaires.filtered||[];
+  if(!data.length){
+    kpiEl.innerHTML='';
+    chartsEl.innerHTML=db?`<div class="empty-s"><div class="ei">🗂️</div><p>Aucune affaire pour ces critères</p></div>`:'';
+    return;
+  }
+  const todayISO=_localISO(new Date());
+  const nTot=data.length;
+  const nEnCours=data.filter(r=>r.statut==='En cours').length;
+  const nRetard=data.filter(r=>r.date_fin_prevue&&toISO(r.date_fin_prevue)<todayISO&&!['Clos','Annulé'].includes(r.statut)).length;
+  const caTot=data.reduce((s,r)=>s+(parseFloat(r.prix_ht)||0),0);
+  const budgetPrevu=data.reduce((s,r)=>s+(r.budget_prevu||0),0);
+  const budgetReel=data.reduce((s,r)=>s+(r.budget_reel||0),0);
+  kpiEl.innerHTML=[
+    {lbl:'Affaires',    val:nTot,     ico:'📁',cls:'blue'},
+    {lbl:'En cours',    val:nEnCours, ico:'🔄',cls:'amber'},
+    {lbl:'En retard',   val:nRetard,  ico:'⏰',cls:nRetard>0?'red':'green'},
+    {lbl:'CA Prix HT',  val:caTot,    ico:'💰',cls:'teal',  cur:true},
+    {lbl:'Budget prévu',val:budgetPrevu,ico:'📐',cls:'violet',cur:true},
+    {lbl:'Budget réel', val:budgetReel, ico:'📊',cls:budgetReel>budgetPrevu?'red':'green',cur:true},
+  ].map(k=>`
+    <div class="kpi ${k.cls}">
+      <div class="kpi-top"><div class="kpi-label">${k.lbl}</div><div class="kpi-icon">${k.ico}</div></div>
+      <div class="kpi-num"${k.cur?'':` data-count="${k.val}"`}>${k.cur?Math.round(k.val).toLocaleString('fr-FR')+' €':'0'}</div>
+    </div>`).join('');
+  animateCounters(kpiEl);
+
+  const isDark=document.documentElement.dataset.theme==='dark';
+  chartsEl.innerHTML=`
+    <div class="cc"><div class="cc-head"><div><div class="cc-title">Statuts</div><div class="cc-sub">Répartition</div></div></div><div class="cc-body"><canvas id="ch-aff-statut"></canvas></div></div>
+    <div class="cc"><div class="cc-head"><div><div class="cc-title">Complexité</div><div class="cc-sub">A / B / C</div></div></div><div class="cc-body"><canvas id="ch-aff-cplx"></canvas></div></div>
+    <div class="cc"><div class="cc-head"><div><div class="cc-title">Top clients</div><div class="cc-sub">Par chiffre d'affaires (Prix HT)</div></div></div><div class="slist" id="aff-top-clients"></div></div>`;
+
+  const stCount={};AFF_STATUTS.forEach(s=>stCount[s]=0);
+  data.forEach(r=>{if(r.statut in stCount)stCount[r.statut]++;});
+  _CAff.statut=new Chart(document.getElementById('ch-aff-statut'),{type:'doughnut',data:{labels:AFF_STATUTS,datasets:[{data:AFF_STATUTS.map(s=>stCount[s]),backgroundColor:AFF_STATUTS.map(s=>AFF_STATUT_COLORS[s]),borderWidth:3,borderColor:isDark?'#1c2230':'#fff',hoverOffset:4}]},options:{responsive:true,cutout:'68%',plugins:{legend:{position:'bottom',labels:{padding:8,font:{size:10},color:isDark?'#a0aec0':'#3d4f6b'}}}}});
+
+  const cxCount={A:0,B:0,C:0};
+  data.forEach(r=>{if(r.complexite in cxCount)cxCount[r.complexite]++;});
+  _CAff.cplx=new Chart(document.getElementById('ch-aff-cplx'),{type:'doughnut',data:{labels:['A','B','C'],datasets:[{data:[cxCount.A,cxCount.B,cxCount.C],backgroundColor:['#059669','#d97706','#dc2626'],borderWidth:3,borderColor:isDark?'#1c2230':'#fff',hoverOffset:4}]},options:{responsive:true,cutout:'68%',plugins:{legend:{position:'bottom',labels:{padding:8,font:{size:10},color:isDark?'#a0aec0':'#3d4f6b'}}}}});
+
+  const cMap={};
+  data.forEach(r=>{const n=r.client_nom||'—';cMap[n]=(cMap[n]||0)+(parseFloat(r.prix_ht)||0);});
+  const topC=Object.entries(cMap).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const tcEl=document.getElementById('aff-top-clients');
+  if(topC.length){
+    const maxC=topC[0][1];
+    tcEl.innerHTML=topC.map(([n,v],i)=>`<div class="srow"><div class="srank${i<3?' top':''}">${i+1}</div><div class="sname" title="${esc(n)}">${esc(n)}</div><div class="sbar"><div class="sbar-bg"><div class="sbar-fg" style="width:${Math.round(v/maxC*100)}%;background:var(--teal)"></div></div></div><div class="scount">${Math.round(v).toLocaleString('fr-FR')} €</div></div>`).join('');
+  } else {
+    tcEl.innerHTML=`<div class="empty-s"><div class="ei">💰</div><p>Aucun montant renseigné</p></div>`;
+  }
+}
 
 // ══════════════════════════════════════════════════════════════════
 //  GARANTIES
@@ -1785,7 +2050,7 @@ function rTec(r){
 // ══════════════════════════════════════════════════════════════════
 //  TABLE ENGINE
 // ══════════════════════════════════════════════════════════════════
-const REND={interventions:rInt,moteurs:rMot,clients:rCli,garanties:rGar,ameliorations:rAml,techniciens:rTec};
+const REND={interventions:rInt,moteurs:rMot,clients:rCli,affaires:rAff,garanties:rGar,ameliorations:rAml,techniciens:rTec};
 function rTbl(name){
   const s=ST[name];
   const data=sortArr(s.filtered,s.col,s.dir);
