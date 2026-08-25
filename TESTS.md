@@ -328,6 +328,19 @@
 | 8.7 | Lancer EMS BI depuis le launcher | App BI s'ouvre + navigateur | |
 | 8.8 | Fermer une app lancée → launcher toujours actif | Pas de crash du launcher | |
 
+### 8.9 Mise à jour automatique (updater)
+
+| # | Scénario | Attendu | Résultat |
+|---|---|---|---|
+| 8.9.1 | `python -m pytest ems_api/tests/test_updates.py shared/tests/test_updater.py` | Tous les tests passent | |
+| 8.9.2 | `updates.json` serveur pointe vers une version > `shared/version.py` du poste | Badge "↑ vX.Y.Z disponible" visible en haut du launcher (après ~2s) | |
+| 8.9.3 | Clic sur le badge → dialogue de mise à jour | Notes de version affichées, bouton "Télécharger et installer" actif | |
+| 8.9.4 | Télécharger et installer | Barre de progression avance, bouton "Relancer et appliquer" apparaît à la fin | |
+| 8.9.5 | Relancer et appliquer | Le launcher se ferme, une fenêtre console applique la mise à jour puis relance `EMS_Launcher.exe` | |
+| 8.9.6 | Après application, titre du launcher | Affiche la nouvelle version (`shared/version.py` mis à jour dans les fichiers copiés) | |
+| 8.9.7 | `updates.json` avec `"required": true` | Le dialogue s'ouvre automatiquement au démarrage et ne peut pas être fermé sans mettre à jour (bouton "Plus tard" absent, croix désactivée) | |
+| 8.9.8 | Serveur de mise à jour injoignable (arrêter l'API ou couper le réseau) | Le launcher démarre normalement, aucun badge, aucune erreur visible | |
+
 ---
 
 ## 9. Tests d'intégration cross-app

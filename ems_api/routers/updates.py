@@ -34,7 +34,7 @@ def get_latest():
     if not _MANIFEST.is_file():
         raise HTTPException(status_code=404, detail="Manifest de mise à jour introuvable.")
     try:
-        return UpdateManifest(**json.loads(_MANIFEST.read_text(encoding="utf-8")))
+        return UpdateManifest(**json.loads(_MANIFEST.read_text(encoding="utf-8-sig")))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 

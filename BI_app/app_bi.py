@@ -29,8 +29,16 @@ from urllib.error import URLError, HTTPError
 _HERE       = Path(__file__).resolve().parent
 _BI_HTML    = _HERE / "ems_bi.html"
 _PORT_START = 17430
-_TITLE      = "EMS - Business Intelligence"
 _DEFAULT_API = "http://192.168.1.47:8765"
+
+for _p in (_HERE, _HERE.parent):
+    if (_p / "shared").is_dir() and str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
+try:
+    from shared.version import __version__
+    _TITLE = f"EMS - Business Intelligence  v{__version__}"
+except ImportError:
+    _TITLE = "EMS - Business Intelligence"
 
 
 def _read_api_url() -> str:

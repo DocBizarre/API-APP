@@ -36,7 +36,8 @@ for p in (_ROOT, _HERE):
 try:
     from ems_client import api as db
     from shared import amelioration_generator as amgen
-    from shared.bon_generator import apply_icon
+    from shared.bon_generator import apply_icon, ouvrir_fichier
+    from shared.version import __version__
 except ImportError as e:
     import tkinter as _tk
     from tkinter import messagebox as _mb
@@ -514,19 +515,20 @@ class AmeliorationsFrame(tk.Frame):
         r = self._sel()
         if not r:
             return
-        from amelioration_generator import sauvegarder_fiche
         a = db.get_amelioration(amelio_id=r["id"])
-        path = sauvegarder_fiche(a)
+        path = amgen.sauvegarder_fiche(a)
         ouvrir_fichier(path)
 
     def _dossier(self):
         r = self._sel()
         if not r:
             return
-        from amelioration_generator import AMELIO_DIR
-        d = AMELIO_DIR / r["num_ticket"]
-        d.mkdir(parents=True, exist_ok=True)
-        ouvrir_fichier(d)
+        d = amgen.AMELIO_DIR / r["num_ticket"].upper()
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            ouvrir_fichier(d)
+        except OSError as e:
+            messagebox.showerror("Dossier", f"Impossible d'ouvrir le dossier :\n{d}\n\n{e}")
 
     def _supprimer(self):
         r = self._sel()
@@ -674,9 +676,8 @@ class AmeliorationDialog(tk.Toplevel):
             self.on_save()
 
         if generer:
-            from amelioration_generator import sauvegarder_fiche
             a = db.get_amelioration(amelio_id=self.amelio_id)
-            path = sauvegarder_fiche(a)
+            path = amgen.sauvegarder_fiche(a)
             messagebox.showinfo(
                 "Fiche générée",
                 f"✅ {num}\nFiche enregistrée dans :\n{path}")
@@ -698,7 +699,7 @@ class AmeliorationApp(tk.Tk):
         super().__init__()
         self.withdraw()
         apply_icon(self)
-        self.title("EMS – Amélioration continue")
+        self.title(f"EMS – Amélioration continue  v{__version__}")
         self.geometry("1100x720")
         self.minsize(880, 540)
         self.configure(bg=C["bg"])

@@ -44,6 +44,7 @@ try:
     from shared import garantie_generator as gargen
     from shared import mailer
     from shared.bon_generator import apply_icon
+    from shared.version import __version__
 except ImportError as e:
     import tkinter as _tk
     from tkinter import messagebox as _mb
@@ -422,7 +423,7 @@ class GarantiesApp(tk.Tk):
         self.withdraw()
         apply_icon(self)
         self._logo = self._init_logo()
-        self.title("EMS – Gestion des Garanties")
+        self.title(f"EMS – Gestion des Garanties  v{__version__}")
         self.geometry("1180x760")
         self.minsize(960, 480)
         self.configure(bg=C["bg"])

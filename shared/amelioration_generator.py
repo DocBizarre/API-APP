@@ -11,21 +11,31 @@ from .bon_generator import _esc, _logo_data_uri, ouvrir_fichier
 import sys as _sys
 
 def _get_amelio_root() -> Path:
+    """Dossier racine des fiches amélioration : config.ini [files] ameliorations_root,
+    sinon derive de dossiers_root, sinon defaut local. Protege par try/except pour
+    qu'une indisponibilite du lecteur reseau configure ne casse pas l'import du
+    module (sinon le bouton "Dossier" de l'app amelioration reste silencieusement
+    sans effet)."""
     from configparser import ConfigParser
     base = (Path(_sys.executable).parent if getattr(_sys, "frozen", False)
             else Path(__file__).resolve().parent.parent)
     for cfg in (base / "config.ini",
                 Path(__file__).resolve().parent.parent / "config.ini"):
         if cfg.is_file():
-            cp = ConfigParser()
-            cp.read(cfg, encoding="utf-8")
-            v = cp.get("files", "ameliorations_root", fallback="").strip()
-            if v:
-                p = Path(v); p.mkdir(parents=True, exist_ok=True); return p
-            v = cp.get("files", "dossiers_root", fallback="").strip()
-            if v:
-                p = Path(v).parent / "ameliorations"
-                p.mkdir(parents=True, exist_ok=True); return p
+            try:
+                cp = ConfigParser()
+                cp.read(cfg, encoding="utf-8")
+                v = cp.get("files", "ameliorations_root", fallback="").strip()
+                if not v:
+                    dossiers_root = cp.get("files", "dossiers_root", fallback="").strip()
+                    if dossiers_root:
+                        v = str(Path(dossiers_root).parent / "ameliorations")
+                if v:
+                    p = Path(v)
+                    p.mkdir(parents=True, exist_ok=True)
+                    return p
+            except OSError:
+                pass
             break
     p = base / "ameliorations"
     p.mkdir(parents=True, exist_ok=True)

@@ -96,7 +96,10 @@ $manifest = [ordered]@{
 } | ConvertTo-Json
 
 $manifestPath = "$SHARE_PATH\ems_api\data\updates.json"
-Set-Content -Path $manifestPath -Value $manifest -Encoding UTF8
+# Set-Content -Encoding UTF8 ajoute un BOM en PowerShell 5.1, que
+# ems_api/routers/updates.py (json.loads en utf-8 strict) ne sait pas
+# decoder -> /updates/latest renvoie 500. Ecriture sans BOM :
+[System.IO.File]::WriteAllText($manifestPath, $manifest, (New-Object System.Text.UTF8Encoding $false))
 
 Write-Ok "updates.json mis a jour"
 

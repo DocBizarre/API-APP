@@ -37,6 +37,7 @@ for parent in (_HERE, _HERE.parent):
 try:
     from ems_client import api as db
     from shared.bon_generator import apply_icon
+    from shared.version import __version__
 except ImportError as e:
     _r = tk.Tk(); _r.withdraw()
     messagebox.showerror("Dépendance manquante",
@@ -174,7 +175,7 @@ class PiecesApp(tk.Tk):
         super().__init__()
         self.withdraw()
         apply_icon(self)
-        self.title("EMS — Pièces détachées")
+        self.title(f"EMS — Pièces détachées  v{__version__}")
         self.geometry("1100x650")
         self.configure(bg=C["bg"])
         self._init_styles()

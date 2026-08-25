@@ -955,11 +955,11 @@ def _data_dir(name: str) -> _Path:
     p.mkdir(parents=True, exist_ok=True)
     return p
 
-def _garanties_dir() -> _Path:
-    """Retourne le dossier racine des garanties : config.ini [files] garanties_root,
-    sinon derive de dossiers_root (comme shared/garantie_generator.py), sinon defaut
-    local. Evite que ce module pointe vers un dossier different de celui utilise
-    pour generer/enregistrer les fiches garantie."""
+def _config_dir(section_key: str, dossiers_root_subdir: str, local_name: str) -> _Path:
+    """Retourne un dossier racine de stockage : config.ini [files] <section_key>,
+    sinon derive de dossiers_root, sinon defaut local <local_name>. Evite que ce
+    module pointe vers un dossier different de celui utilise par les generateurs
+    de fiches (shared/garantie_generator.py, shared/amelioration_generator.py)."""
     import sys as _sys
     from configparser import ConfigParser
     base = _Path(_sys.executable).parent if getattr(_sys, "frozen", False) \
@@ -970,11 +970,11 @@ def _garanties_dir() -> _Path:
             try:
                 cp = ConfigParser()
                 cp.read(candidate, encoding="utf-8")
-                root = cp.get("files", "garanties_root", fallback="").strip()
+                root = cp.get("files", section_key, fallback="").strip()
                 if not root:
                     dossiers_root = cp.get("files", "dossiers_root", fallback="").strip()
                     if dossiers_root:
-                        root = str(_Path(dossiers_root).parent / "garanties")
+                        root = str(_Path(dossiers_root).parent / dossiers_root_subdir)
                 if root:
                     p = _Path(root)
                     p.mkdir(parents=True, exist_ok=True)
@@ -982,10 +982,10 @@ def _garanties_dir() -> _Path:
             except Exception:
                 pass
             break
-    return _data_dir("garanties")
+    return _data_dir(local_name)
 
-GARANTIE_DIR = _garanties_dir()
-AMELIO_DIR   = _data_dir("ameliorations")
+GARANTIE_DIR = _config_dir("garanties_root", "garanties", "garanties")
+AMELIO_DIR   = _config_dir("ameliorations_root", "ameliorations", "ameliorations")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
