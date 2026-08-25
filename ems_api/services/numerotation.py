@@ -14,6 +14,7 @@ Concurrence :
   processus. Si la DB est migrée vers PostgreSQL, remplacer le verrou par un
   SELECT FOR UPDATE sur la ligne HWM en config.
 """
+import re
 import threading
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -23,6 +24,7 @@ from ..models.garantie import Garantie
 from ..models.amelioration import Amelioration
 from ..models.affaire import Affaire
 from ..models.bon_commande import BonCommande
+from ..models.devis import Devis
 
 # Serialize sequence generation within a single process (SQLite safety).
 _num_lock = threading.Lock()
@@ -91,6 +93,19 @@ def _prochain_numero_locked(db: Session, model, colonne: str, type_prefix: str,
     return new_num_str
 
 
+def code_from_num_affaire(num_affaire: str) -> str:
+    """Extrait le code affaire court AAAANNNN (ex. "20260013") d'un num_affaire.
+
+    Le num_affaire complet porte un préfixe variable selon l'origine
+    (AMOT20260013, AFF-2026-0009, ...) ; le champ moteurs.code_affaire ne
+    stocke que la partie numérique AAAANNNN, format legacy hérité des
+    imports CSV. Repli sur la chaîne d'origine si elle ne contient pas
+    8 chiffres exploitables.
+    """
+    digits = re.sub(r"\D", "", num_affaire or "")
+    return digits[-8:] if len(digits) >= 8 else (num_affaire or "")
+
+
 def next_num_bon(db: Session, device_prefix: str = "") -> str:
     """Génère le prochain numéro de bon : BON-AAAA-XXXX (ou BON-T1-AAAA-XXXX)."""
     return _prochain_numero(db, Intervention, "num_bon", "BON", device_prefix)
@@ -109,6 +124,11 @@ def next_num_amelioration(db: Session, device_prefix: str = "") -> str:
 def next_num_bon_commande(db: Session, device_prefix: str = "") -> str:
     """Génère le prochain numéro de bon de commande : BC-AAAA-XXXX."""
     return _prochain_numero(db, BonCommande, "num_bc", "BC", device_prefix)
+
+
+def next_num_devis(db: Session, device_prefix: str = "") -> str:
+    """Génère le prochain numéro de devis : DEV-AAAA-XXXX."""
+    return _prochain_numero(db, Devis, "num_devis", "DEV", device_prefix)
 
 
 def next_num_affaire(db: Session, device_prefix: str = "") -> str:

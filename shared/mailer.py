@@ -403,6 +403,26 @@ www.emeraudemoteurs.com
 """
 
 
+TEMPLATE_DEVIS = """Bonjour{contact_line},
+
+Nous vous confirmons la bonne prise en compte de votre demande d'intervention.
+
+Vous trouverez ci-joint notre devis n° {num_devis} correspondant a votre demande.
+{equipements_block}
+Objet : {objet}
+Validite du devis : {date_validite}
+
+N'hesitez pas a nous contacter pour toute question ou pour valider ce devis.
+
+Cordialement,
+
+L'equipe EMS - Emeraude Moteurs Systemes
+9 Rue d'Armorique - 35540 Miniac Morvan
+Tel : 02.99.19.01.99
+www.emeraudemoteurs.com
+"""
+
+
 def _safe(d, key, default=""):
     """Acces tolerant pour dict ou sqlite3.Row."""
     if d is None:
@@ -684,6 +704,39 @@ def email_cloture(inv, client, moteur, technicien_emails=None, bon_path=""):
     pj_auto = _ouvrir_brouillon(to=to_str, cc=cc_str, subject=subject, body=body,
                                attachment_path=bon_path)
     return to_str, pj_auto
+
+
+def email_devis(devis, client, moteur=None, pdf_path=""):
+    """
+    Ouvre le client mail avec un brouillon a destination du destinataire du
+    devis (le contact choisi sur le devis — client ou utilisateur moteur —,
+    ou a defaut le contact renseigne sur la fiche client), confirmant la
+    prise en compte de la demande d'intervention et joignant le devis chiffre.
+    """
+    nom     = _safe(client, "nom")
+    dest_nom   = _safe(devis, "destinataire_nom").strip()
+    dest_email = _safe(devis, "destinataire_email").strip()
+    contact = dest_nom or _safe(client, "contact").strip() or nom
+    email   = dest_email or _safe(client, "email")
+
+    contact_line = f" {contact}" if contact else ""
+    num_devis    = _safe(devis, "num_devis")
+
+    extras            = _extra_moteurs(devis)
+    equipements_block = _equipements_client(moteur, extras)
+
+    subject = f"[EMS] Devis {num_devis} - Prise en compte de votre demande"
+    body = TEMPLATE_DEVIS.format(
+        contact_line=contact_line,
+        num_devis=num_devis,
+        equipements_block=equipements_block,
+        objet=_safe(devis, "objet") or "-",
+        date_validite=_safe(devis, "date_validite") or "-",
+    )
+
+    pj_auto = _ouvrir_brouillon(to=email, cc="", subject=subject, body=body,
+                               attachment_path=pdf_path)
+    return email, pj_auto
 
 
 # ─── Templates garantie ──────────────────────────────────────────────────────

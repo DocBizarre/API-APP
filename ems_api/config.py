@@ -87,16 +87,27 @@ class Settings:
     AUTH_ENABLED: bool = bool(API_KEY)
 
     # ─── Entreprise (utilisé par le générateur de bons HTML/PDF) ────────
+    # Champs marqués "[•]" : mentions légales obligatoires sur un devis (forme
+    # juridique + capital, RCS/RM, assurance RC pro) pas encore renseignées —
+    # à compléter avec les vraies valeurs avant envoi de devis à un client.
     ENTREPRISE = {
-        "nom": "Emeraude Moteurs Systèmes",
+        "nom": "EMERAUDE MOTEURS SYSTÈMES",
+        "forme_juridique": "SARL",
+        "capital": "50 000",
         "adresse_1": "9 Rue d'Armorique – 35540 Miniac Morvan",
         "adresse_2": "",
         "tel": "02.99.19.01.99",
         "fax": "",
         "email": "service.technique@emeraudemoteurs.com",
-        "siret": "431 976 729 00027",
+        "siret": "431 976 729 00035",
+        "rcs_ville": "Saint-Malo",
+        "rcs_numero": "431 976 729",
         "tva": "FR 14 431 976 729",
         "site": "www.emeraudemoteurs.com",
+        "iban": "[•]",
+        "assurance_rc_assureur": "[•]",
+        "assurance_rc_police": "[•]",
+        "assurance_rc_couverture": "[•]",
     }
 
     @classmethod
