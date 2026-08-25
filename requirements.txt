@@ -4,6 +4,7 @@ uvicorn[standard]>=0.27
 sqlalchemy>=2.0
 pydantic>=2.5
 pydantic-settings>=2.0
+phonenumbers>=8.13
 
 # ─── Client HTTP (ems_client/) ────────────────────────────────────────────────
 requests>=2.31
