@@ -123,14 +123,22 @@ def delete_piece(piece_id: str, db: Session = Depends(get_db)):
 def bulk_import(data: PieceBulkImport, db: Session = Depends(get_db)):
     """
     Import en masse de pièces (depuis CSV ou Excel côté client).
-    Gère les doublons : par défaut ignore (skip_doublons=True),
-    sinon met à jour les références existantes.
+    Gère les doublons : par défaut ignore (skip_doublons=True) — dans ce
+    mode, les champs déjà remplis ne sont jamais écrasés mais les champs
+    restés vides (libellé, marque, notes, prix d'achat, prix de vente) sont complétés
+    à partir du fichier si une valeur y est présente.
+    Si skip_doublons=False, les références existantes sont mises à jour
+    (le fichier importé l'emporte quand une valeur est fournie).
     """
     res = PieceImportResult(importees=0, mises_a_jour=0,
-                              ignorees=0, erreurs=0, details_erreurs=[])
+                              ignorees=0, completees=0,
+                              erreurs=0, details_erreurs=[])
 
-    # Précharger toutes les références existantes pour gain de perf
-    existing_refs = {r[0] for r in db.query(Piece.reference).all()}
+    # Précharger toutes les pièces existantes (par référence) pour gain de
+    # perf et pour pouvoir retrouver, sans requêter la DB, les pièces créées
+    # plus tôt dans cette même importation (cas des doublons intra-fichier,
+    # pas encore flush/committées).
+    pieces_by_ref = {p.reference: p for p in db.query(Piece).all()}
 
     for i, piece_data in enumerate(data.pieces, 1):
         ref = (piece_data.reference or "").strip()
@@ -140,24 +148,48 @@ def bulk_import(data: PieceBulkImport, db: Session = Depends(get_db)):
                 res.details_erreurs.append(f"Ligne {i} : référence vide")
             continue
 
-        if ref in existing_refs:
+        if ref in pieces_by_ref:
+            p = pieces_by_ref[ref]
             if data.skip_doublons:
+                # Doublon ignoré : on ne l'écrase pas, mais on complète les
+                # champs restés vides avec les infos du fichier importé.
+                completee = False
+                if not p.libelle and piece_data.libelle:
+                    p.libelle = piece_data.libelle
+                    completee = True
+                if not p.marque and piece_data.marque:
+                    p.marque = piece_data.marque
+                    completee = True
+                if not p.notes and piece_data.notes:
+                    p.notes = piece_data.notes
+                    completee = True
+                if not p.prix_vente and piece_data.prix_vente:
+                    p.prix_vente = piece_data.prix_vente
+                    completee = True
+                if not p.prix_achat and piece_data.prix_achat:
+                    p.prix_achat = piece_data.prix_achat
+                    completee = True
                 res.ignorees += 1
+                if completee:
+                    res.completees += 1
             else:
                 # Mise à jour
-                p = db.query(Piece).filter(Piece.reference == ref).first()
-                p.libelle = piece_data.libelle or p.libelle
-                p.marque  = piece_data.marque  or p.marque
-                p.notes   = piece_data.notes   or p.notes
+                p.libelle    = piece_data.libelle    or p.libelle
+                p.marque     = piece_data.marque     or p.marque
+                p.notes      = piece_data.notes      or p.notes
+                p.prix_vente = piece_data.prix_vente or p.prix_vente
+                p.prix_achat = piece_data.prix_achat or p.prix_achat
                 res.mises_a_jour += 1
         else:
             p = Piece(id=str(uuid4()),
                        reference=ref,
                        libelle=piece_data.libelle or "",
                        marque=piece_data.marque or "",
-                       notes=piece_data.notes or "")
+                       notes=piece_data.notes or "",
+                       prix_vente=piece_data.prix_vente or 0,
+                       prix_achat=piece_data.prix_achat or 0)
             db.add(p)
-            existing_refs.add(ref)
+            pieces_by_ref[ref] = p
             res.importees += 1
 
         # Commit par lots pour ne pas exploser la mémoire

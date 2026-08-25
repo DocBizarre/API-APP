@@ -11,6 +11,7 @@ class PieceCreate(BaseModel):
     marque:     str = ""
     notes:      str = ""
     prix_achat: float = 0
+    prix_vente: float = 0
 
 
 class PieceUpdate(BaseModel):
@@ -19,6 +20,7 @@ class PieceUpdate(BaseModel):
     marque:     Optional[str] = None
     notes:      Optional[str] = None
     prix_achat: Optional[float] = None
+    prix_vente: Optional[float] = None
 
 
 class PieceOut(BaseModel):
@@ -28,6 +30,7 @@ class PieceOut(BaseModel):
     marque:     str
     notes:      str
     prix_achat: float = 0
+    prix_vente: float = 0
     version:    int = 1
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -46,5 +49,6 @@ class PieceImportResult(BaseModel):
     importees: int      # nouvelles pièces ajoutées
     mises_a_jour: int   # pièces existantes mises à jour
     ignorees: int       # doublons ignorés
+    completees: int = 0  # doublons ignorés mais complétés (champs vides remplis)
     erreurs: int        # lignes invalides
     details_erreurs: list[str] = []

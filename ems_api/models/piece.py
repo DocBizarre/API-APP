@@ -12,6 +12,7 @@ class Piece(Base):
     marque     = Column(String, default="", index=True)
     notes      = Column(String, default="")
     prix_achat = Column(Float, default=0.0)
+    prix_vente = Column(Float, default=0.0)
 
     version    = Column(Integer, default=1)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
