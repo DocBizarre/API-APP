@@ -10,9 +10,13 @@ from .piece import Piece
 from .affaire import Affaire, AffaireItem
 from .contact import Contact
 from .bon_commande import BonCommande, BonCommandeLigne
+from .fournisseur import Fournisseur
+from .devis import Devis, DevisLigne
+from .navire import Navire
 
 __all__ = ["Client", "Moteur", "Intervention",
            "Garantie", "Amelioration", "Technicien",
            "TypeIntervention", "StatutGarantie", "Config",
            "Piece", "Affaire", "AffaireItem", "Contact",
-           "BonCommande", "BonCommandeLigne"]
+           "BonCommande", "BonCommandeLigne", "Fournisseur",
+           "Devis", "DevisLigne", "Navire"]
