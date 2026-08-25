@@ -44,7 +44,7 @@ from .routers import (
        interventions, garanties, ameliorations, documents,
        types_intervention, types_moteur, statuts_garantie, stats_config, pieces, sync, admin,
        pdf_export, marques, affaires, contacts, updates, accuse_reception,
-       bons_commande, modeles_chapitre,
+       bons_commande, modeles_chapitre, fournisseurs, devis, navires,
    )
 
 
@@ -79,6 +79,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
 
 
@@ -131,7 +132,10 @@ app.include_router(pdf_export.router, dependencies=deps)
 app.include_router(pdf_export.router_render, dependencies=deps)
 app.include_router(affaires.router, dependencies=deps)
 app.include_router(bons_commande.router, dependencies=deps)
+app.include_router(devis.router, dependencies=deps)
 app.include_router(contacts.router, dependencies=deps)
+app.include_router(fournisseurs.router, dependencies=deps)
+app.include_router(navires.router, dependencies=deps)
 app.include_router(accuse_reception.router, dependencies=deps)
 app.include_router(modeles_chapitre.router, dependencies=deps)
 # /updates sans authentification : tous les clients du réseau doivent y accéder
