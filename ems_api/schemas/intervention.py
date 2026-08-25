@@ -124,8 +124,13 @@ class InterventionOut(BaseModel):
     # Champs enrichis (ajoutés par _to_out dans le router)
     client_nom:             Optional[str] = None
     moteur_serie:           Optional[str] = None
+    # Lien vers le devis d'origine (si ce bon a été créé par transformation d'un devis)
+    devis_id:               Optional[str] = None
+    num_devis:              Optional[str] = None
     # Champs additionnels utilisés par le code Tkinter
     navire:                 str = ""
+    navire_immatriculation: str = ""
+    navire_port_attache:    str = ""
     num_serie:              str = ""
     marque:                 str = ""
     machine:                str = ""

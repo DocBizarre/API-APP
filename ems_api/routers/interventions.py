@@ -22,6 +22,7 @@ from ..schemas.intervention import (
     InterventionCreate, InterventionUpdate, InterventionOut, SignatureIn,
 )
 from ..services.numerotation import next_num_bon
+from ..services.phone import format_telephone
 
 
 # Heure Paris — zoneinfo gere l'heure d'ete/hiver. Necessite le paquet
@@ -37,12 +38,20 @@ except Exception:
 router = APIRouter(prefix="/interventions", tags=["interventions"])
 
 
-def _upsert_contact(db: Session, nom: str, email: str, telephone: str):
+def _upsert_contact(db: Session, nom: str, email: str, telephone: str,
+                    entreprise: str = ""):
     """Mémorise ou met à jour un contact dans la table contacts (fail-safe).
     Utilise un savepoint pour ne pas annuler la transaction parente en cas d'erreur."""
     nom = (nom or "").strip()
+    entreprise = (entreprise or "").strip()
     if not nom:
         return
+    try:
+        telephone = format_telephone(telephone)
+    except ValueError:
+        # Numéro saisi non reconnu (typo, format libre...) : on mémorise quand
+        # même le contact, simplement sans téléphone plutôt que de bloquer.
+        telephone = ""
     try:
         with db.begin_nested():
             existing = db.query(Contact).filter(Contact.nom == nom).first()
@@ -52,12 +61,15 @@ def _upsert_contact(db: Session, nom: str, email: str, telephone: str):
                     existing.email = email
                 if telephone and not existing.telephone:
                     existing.telephone = telephone
+                if entreprise and not existing.entreprise:
+                    existing.entreprise = entreprise
             else:
                 db.add(Contact(
                     id=str(uuid4()),
                     nom=nom,
                     email=(email or "").strip(),
                     telephone=(telephone or "").strip(),
+                    entreprise=entreprise,
                     usage_count=1,
                 ))
     except Exception:
@@ -71,6 +83,7 @@ def _upsert_contact(db: Session, nom: str, email: str, telephone: str):
 _EAGER = (
     selectinload(Intervention.client),
     selectinload(Intervention.moteur),
+    selectinload(Intervention.devis),
 )
 
 
@@ -94,12 +107,16 @@ def _to_out(inv: Intervention) -> dict:
     d["moteur_serie"] = inv.moteur.num_serie if inv.moteur else ""
     # Champs additionnels attendus par le code Tkinter
     d["navire"] = inv.moteur.navire if inv.moteur else ""
+    d["navire_immatriculation"] = inv.moteur.navire_immatriculation if inv.moteur else ""
+    d["navire_port_attache"] = inv.moteur.navire_port_attache if inv.moteur else ""
     d["num_serie"] = inv.moteur.num_serie if inv.moteur else ""
     d["marque"] = inv.moteur.marque if inv.moteur else ""
     d["machine"] = inv.moteur.machine if inv.moteur else ""
     d["type_moteur"] = inv.moteur.type_moteur if inv.moteur else ""
     d["date_mise_service"] = inv.moteur.date_mise_service if inv.moteur else ""
     d["ref_constructeur"] = inv.moteur.ref_constructeur if inv.moteur else ""
+    d["devis_id"] = inv.devis.id if inv.devis else None
+    d["num_devis"] = inv.devis.num_devis if inv.devis else None
     return d
 
 
@@ -248,12 +265,18 @@ def create_intervention(data: InterventionCreate, db: Session = Depends(get_db))
         payload["num_bon"] = next_num_bon(db, settings.DEVICE_PREFIX)
     inv = Intervention(id=str(uuid4()), **payload)
     db.add(inv)
+    client_nom = ""
+    if payload.get("client_id"):
+        client = db.query(Client).filter(Client.id == payload["client_id"]).first()
+        client_nom = client.nom if client else ""
     _upsert_contact(db, payload.get("nom_signataire", ""),
                     payload.get("email_signataire", ""),
-                    payload.get("telephone_signataire", ""))
+                    payload.get("telephone_signataire", ""),
+                    entreprise=client_nom)
     _upsert_contact(db, payload.get("nom_demandeur", ""),
                     payload.get("email_demandeur", ""),
-                    payload.get("telephone_demandeur", ""))
+                    payload.get("telephone_demandeur", ""),
+                    entreprise=client_nom)
     db.commit()
     db.refresh(inv)
     return _to_out(inv)
@@ -270,12 +293,18 @@ def update_intervention(inv_id: str, data: InterventionUpdate,
         setattr(inv, field, value)
     # Incrémenter la version pour la détection de conflit lors de la synchro
     inv.version = (inv.version or 0) + 1
+    client_nom = ""
+    if inv.client_id:
+        client = db.query(Client).filter(Client.id == inv.client_id).first()
+        client_nom = client.nom if client else ""
     _upsert_contact(db, updated.get("nom_signataire", inv.nom_signataire),
                     updated.get("email_signataire", inv.email_signataire),
-                    updated.get("telephone_signataire", inv.telephone_signataire))
+                    updated.get("telephone_signataire", inv.telephone_signataire),
+                    entreprise=client_nom)
     _upsert_contact(db, updated.get("nom_demandeur", inv.nom_demandeur),
                     updated.get("email_demandeur", inv.email_demandeur),
-                    updated.get("telephone_demandeur", inv.telephone_demandeur))
+                    updated.get("telephone_demandeur", inv.telephone_demandeur),
+                    entreprise=client_nom)
     db.commit()
     db.refresh(inv)
     return _to_out(inv)

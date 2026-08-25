@@ -84,3 +84,4 @@ class Intervention(Base):
 
     client = relationship("Client", back_populates="interventions")
     moteur = relationship("Moteur", back_populates="interventions")
+    devis  = relationship("Devis", back_populates="intervention", uselist=False)
