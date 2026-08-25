@@ -73,7 +73,7 @@ class EMSClient:
 
     def __init__(self, base_url: Optional[str] = None,
                  api_key: Optional[str] = None,
-                 timeout: float = 5.0):
+                 timeout: float = 15.0):
         self.base_url = (base_url
                          or _read_ini_server_url()
                          or os.environ.get("EMS_API_URL",
@@ -84,10 +84,10 @@ class EMSClient:
         if self.api_key:
             self._session.headers["X-API-Key"] = self.api_key
 
-    def _request(self, method: str, path: str, **kw) -> Any:
+    def _request(self, method: str, path: str, timeout: Optional[float] = None, **kw) -> Any:
         url = f"{self.base_url}{path}"
         try:
-            r = self._session.request(method, url, timeout=self.timeout, **kw)
+            r = self._session.request(method, url, timeout=timeout or self.timeout, **kw)
         except requests.RequestException as e:
             raise APIError(f"Connexion a l'API impossible : {e}") from e
         if r.status_code == 204:
@@ -106,7 +106,8 @@ class EMSClient:
         return self._request("GET", path,
                               params={k: v for k, v in params.items()
                                       if v is not None and v != ""})
-    def post(self, path, json):   return self._request("POST", path, json=json)
+    def post(self, path, json, timeout=None):
+        return self._request("POST", path, json=json, timeout=timeout)
     def put(self, path, json):    return self._request("PUT", path, json=json)
     def delete(self, path):       return self._request("DELETE", path)
 
@@ -229,6 +230,29 @@ def get_contacts(search: str = "") -> List[Dict]:
     return _client.get("/contacts", search=search)
 
 
+def get_contact(contact_id: str) -> Optional[Dict]:
+    if not contact_id:
+        return None
+    try:
+        return _client.get(f"/contacts/{contact_id}")
+    except APIError as e:
+        if e.status_code == 404:
+            return None
+        raise
+
+
+def upsert_contact(data: Dict, contact_id: Optional[str] = None) -> str:
+    """Si contact_id fourni -> PUT ; sinon POST (upsert par nom)."""
+    if contact_id:
+        _client.put(f"/contacts/{contact_id}", json=data)
+        return contact_id
+    return _client.post("/contacts", json=data)["id"]
+
+
+def delete_contact(contact_id: str) -> None:
+    _client.delete(f"/contacts/{contact_id}")
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 #   Clients
 # ═══════════════════════════════════════════════════════════════════════════
@@ -274,6 +298,47 @@ def update_client(client_id: str, data: Dict) -> Dict:
 
 def delete_client(client_id: str) -> None:
     _client.delete(f"/clients/{client_id}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#   Navires (registre auto-alimenté, cf. Fournisseurs)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def get_navires(search: str = "") -> List[Dict]:
+    return _client.get("/navires", search=search)
+
+
+def get_navire(navire_id: str) -> Optional[Dict]:
+    if not navire_id:
+        return None
+    try:
+        return _client.get(f"/navires/{navire_id}")
+    except APIError as e:
+        if e.status_code == 404:
+            return None
+        raise
+
+
+def find_navire_by_nom(nom: str) -> Optional[Dict]:
+    if not nom:
+        return None
+    return _client.get(f"/navires/by-nom/{nom}")
+
+
+def upsert_navire(data: Dict, navire_id: Optional[str] = None) -> str:
+    """Si navire_id fourni -> PUT ; sinon POST (upsert par nom)."""
+    if navire_id:
+        _client.put(f"/navires/{navire_id}", json=data)
+        return navire_id
+    return _client.post("/navires", json=data)["id"]
+
+
+def update_navire(navire_id: str, data: Dict) -> Dict:
+    return _client.put(f"/navires/{navire_id}", json=data)
+
+
+def delete_navire(navire_id: str) -> None:
+    _client.delete(f"/navires/{navire_id}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -576,6 +641,62 @@ def mark_notifie(inv_id: str, kind: str) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+#   Devis
+# ═══════════════════════════════════════════════════════════════════════════
+
+def get_devis_liste(statut: Optional[str] = None,
+                     client_id: Optional[str] = None,
+                     search: str = "") -> List[Dict]:
+    if statut in ("Tous", "tous", ""):
+        statut = None
+    return _client.get("/devis", statut=statut, client_id=client_id, search=search)
+
+
+def get_devis(devis_id: str) -> Optional[Dict]:
+    try:
+        return _client.get(f"/devis/{devis_id}")
+    except APIError as e:
+        if e.status_code == 404:
+            return None
+        raise
+
+
+def get_devis_statuts() -> List[str]:
+    return _client.get("/devis/statuts")
+
+
+def create_devis(data: Dict) -> Tuple[str, str]:
+    r = _client.post("/devis", json=data)
+    return r["id"], r["num_devis"]
+
+
+def update_devis(devis_id: str, data: Dict) -> Dict:
+    return _client.put(f"/devis/{devis_id}", json=data)
+
+
+def delete_devis(devis_id: str) -> None:
+    _client.delete(f"/devis/{devis_id}")
+
+
+def transformer_devis(devis_id: str) -> Dict:
+    """Transforme un devis 'Accepté' en bon d'intervention.
+    Retourne {"devis": {...}, "intervention_id": str, "num_bon": str}."""
+    return _client.post(f"/devis/{devis_id}/transformer", json={})
+
+
+def telecharger_pdf_devis(devis_id: str, dest_path) -> _Path:
+    """Télécharge le PDF du devis et l'écrit tel quel sur disque.
+    Passe par _client._session directement (déjà configurée avec le
+    header X-API-Key) plutôt que par _client.get()/_request(), qui
+    tente r.json() puis r.text et corromprait les octets binaires du PDF."""
+    dest = _Path(dest_path)
+    r = _client._session.get(f"{_client.base_url}/devis/{devis_id}/pdf", timeout=60)
+    r.raise_for_status()
+    dest.write_bytes(r.content)
+    return dest
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 #   Garanties
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -759,9 +880,12 @@ def delete_piece(piece_id: str) -> None:
 def bulk_import_pieces(pieces: List[Dict],
                          skip_doublons: bool = True) -> Dict:
     """Import en masse. Retourne {importees, mises_a_jour, ignorees, erreurs, details_erreurs}."""
+    # Timeout généreux : un import de plusieurs milliers de pièces peut
+    # largement dépasser le timeout par défaut (5s) du client.
     return _client.post("/pieces/bulk",
                          json={"pieces": pieces,
-                               "skip_doublons": skip_doublons})
+                               "skip_doublons": skip_doublons},
+                         timeout=120)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -831,7 +955,36 @@ def _data_dir(name: str) -> _Path:
     p.mkdir(parents=True, exist_ok=True)
     return p
 
-GARANTIE_DIR = _data_dir("garanties")
+def _garanties_dir() -> _Path:
+    """Retourne le dossier racine des garanties : config.ini [files] garanties_root,
+    sinon derive de dossiers_root (comme shared/garantie_generator.py), sinon defaut
+    local. Evite que ce module pointe vers un dossier different de celui utilise
+    pour generer/enregistrer les fiches garantie."""
+    import sys as _sys
+    from configparser import ConfigParser
+    base = _Path(_sys.executable).parent if getattr(_sys, "frozen", False) \
+        else _Path(__file__).resolve().parent.parent
+    for candidate in (base / "config.ini",
+                       _Path(__file__).resolve().parent.parent / "config.ini"):
+        if candidate.is_file():
+            try:
+                cp = ConfigParser()
+                cp.read(candidate, encoding="utf-8")
+                root = cp.get("files", "garanties_root", fallback="").strip()
+                if not root:
+                    dossiers_root = cp.get("files", "dossiers_root", fallback="").strip()
+                    if dossiers_root:
+                        root = str(_Path(dossiers_root).parent / "garanties")
+                if root:
+                    p = _Path(root)
+                    p.mkdir(parents=True, exist_ok=True)
+                    return p
+            except Exception:
+                pass
+            break
+    return _data_dir("garanties")
+
+GARANTIE_DIR = _garanties_dir()
 AMELIO_DIR   = _data_dir("ameliorations")
 
 
