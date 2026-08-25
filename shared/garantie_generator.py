@@ -385,9 +385,9 @@ def sauvegarder_fiche(g: Dict) -> Path:
     nom_dossier = (_safe(g, "num_ems") or
                     _safe(g, "id") or
                     datetime.now().strftime("garantie_%Y%m%d_%H%M%S"))
-    # Nettoyer le nom (pas de caracteres interdits sous Windows)
+    # Nettoyer le nom (pas de caracteres interdits sous Windows) et le mettre en majuscules
     nom_dossier = "".join(c for c in nom_dossier
-                            if c.isalnum() or c in "-_")
+                            if c.isalnum() or c in "-_").upper()
 
     dossier = _DOSSIERS_BASE / nom_dossier
     dossier.mkdir(parents=True, exist_ok=True)

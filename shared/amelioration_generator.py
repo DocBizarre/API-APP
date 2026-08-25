@@ -173,7 +173,7 @@ td {{ border:1px solid #b8c0c9; padding:7px 10px; font-size:10.5px;
 
 def sauvegarder_fiche(amelio):
     """Génère la fiche HTML dans le dossier du ticket et retourne le chemin."""
-    num = _g(amelio, "num_ticket")
+    num = _g(amelio, "num_ticket").upper()
     dossier = AMELIO_DIR / num
     dossier.mkdir(parents=True, exist_ok=True)
     path = dossier / f"{num}.html"
