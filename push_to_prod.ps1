@@ -127,8 +127,12 @@ foreach ($folder in $folders) {
     }
     
     # /MIR = mirror (synchro), /XD exclut les dossiers cache,
-    # /XF exclut les bases et logs (ne JAMAIS ecraser la DB de prod)
-    $result = robocopy $src $dst /MIR /XD __pycache__ .venv /XF *.db *.log *.db-journal /NJH /NJS /NDL /NFL /NC /NS
+    # /XF exclut les bases et logs (ne JAMAIS ecraser la DB de prod, y compris
+    # les fichiers annexes du mode WAL -shm/-wal qui restent ouverts par le
+    # service EMS_API tant qu'il tourne : sans cette exclusion, robocopy reste
+    # bloque a retenter indefiniment sur un fichier verrouille - /R:3 /W:5
+    # fait echouer rapidement au lieu de boucler des heures en silence)
+    $result = robocopy $src $dst /MIR /XD __pycache__ .venv /XF *.db *.log *.db-journal *.db-shm *.db-wal /R:3 /W:5 /NJH /NJS /NDL /NFL /NC /NS
     
     # Robocopy renvoie 0-7 = succes, 8+ = erreur
     if ($LASTEXITCODE -ge 8) {
