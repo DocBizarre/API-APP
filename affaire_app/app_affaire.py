@@ -38,7 +38,7 @@ _COMMERCIAL_ADMINS: str = "BUILTIN\\Administrators"
 
 
 def _read_config():
-    """Retourne (api_url, dossiers_root, commercial_group, commercial_admins) depuis config.ini."""
+    """Retourne (api_url, affaires_dir, commercial_group, commercial_admins) depuis config.ini."""
     base = Path(sys.executable).parent if getattr(sys, "frozen", False) \
         else Path(__file__).resolve().parent.parent
     for ini in (base / "config.ini", Path(__file__).resolve().parent.parent / "config.ini"):
@@ -47,7 +47,7 @@ def _read_config():
                 cfg = ConfigParser()
                 cfg.read(ini, encoding="utf-8")
                 url = cfg.get("server", "url", fallback="").strip()
-                root = cfg.get("files", "dossiers_root", fallback="").strip()
+                root = cfg.get("files", "affaires_dir", fallback="").strip()
                 group = cfg.get("files", "commercial_group", fallback="").strip()
                 admins = cfg.get("files", "commercial_admins", fallback="").strip() or "BUILTIN\\Administrators"
                 if url:
@@ -218,7 +218,7 @@ def main():
     else:
         base = Path(__file__).resolve().parent.parent
 
-    api_url, dossiers_root, _COMMERCIAL_GROUP, _COMMERCIAL_ADMINS = _read_config()
+    api_url, affaires_dir, _COMMERCIAL_GROUP, _COMMERCIAL_ADMINS = _read_config()
 
     # Lier le serveur local sur un port libre avant de patcher le HTML.
     _server = HTTPServer(("127.0.0.1", 0), _LocalHandler)
@@ -239,9 +239,14 @@ def main():
             f"const LOCAL_PORT = {local_port};",
             content,
         )
+        # repl passé comme fonction : re.sub ne doit pas réinterpréter les
+        # backslashes du chemin Windows (sinon "Z:\\AFFAIRES" issu de
+        # json.dumps est recollapsé en "Z:\AFFAIRES", un échappement JS
+        # invalide que le navigateur ignore silencieusement -> backslash perdu).
+        _dossiers_root_repl = f"const DOSSIERS_ROOT = {json.dumps(affaires_dir)};"
         content = re.sub(
             r"const DOSSIERS_ROOT = (?:'[^']*'|\"[^\"]*\");",
-            f"const DOSSIERS_ROOT = {json.dumps(dossiers_root)};",
+            lambda _m: _dossiers_root_repl,
             content,
         )
         html.write_text(content, encoding="utf-8")
