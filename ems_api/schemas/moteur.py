@@ -10,14 +10,15 @@ class MoteurCreate(BaseModel):
     num_serie:          str
     parent_moteur_id:   Optional[str] = None
     navire:             str = ""
+    navire_immatriculation: str = ""
+    navire_port_attache:    str = ""
     machine:            str = ""
-    type_moteur:        str = ""
     marque:             str = ""
-    famille:            str = ""
-    cylindree:          str = ""
+    type_moteur:        str = ""
     application:        str = ""
     typologie:          str = ""
-    collection:         str = ""
+    puissance_rpm:      str = ""
+    puissance_pme_rpm:  str = ""
     ref_constructeur:   str = ""
     code_affaire:                str = ""
     type_client:                 str = ""
@@ -34,14 +35,15 @@ class MoteurUpdate(BaseModel):
     num_serie:          Optional[str] = None
     parent_moteur_id:   Optional[str] = None
     navire:             Optional[str] = None
+    navire_immatriculation: Optional[str] = None
+    navire_port_attache:    Optional[str] = None
     machine:            Optional[str] = None
-    type_moteur:        Optional[str] = None
     marque:             Optional[str] = None
-    famille:            Optional[str] = None
-    cylindree:          Optional[str] = None
+    type_moteur:        Optional[str] = None
     application:        Optional[str] = None
     typologie:          Optional[str] = None
-    collection:         Optional[str] = None
+    puissance_rpm:      Optional[str] = None
+    puissance_pme_rpm:  Optional[str] = None
     ref_constructeur:   Optional[str] = None
     code_affaire:                Optional[str] = None
     type_client:                 Optional[str] = None
@@ -59,14 +61,15 @@ class MoteurOut(BaseModel):
     parent_moteur_id:   Optional[str] = None
     num_serie:          str
     navire:             str
+    navire_immatriculation: str = ""
+    navire_port_attache:    str = ""
     machine:            str
-    type_moteur:        str
     marque:             str
-    famille:            str
-    cylindree:          str
+    type_moteur:        str
     application:        str
     typologie:          str
-    collection:         str
+    puissance_rpm:      str = ""
+    puissance_pme_rpm:  str = ""
     ref_constructeur:   str
     code_affaire:                str
     type_client:                 str
@@ -79,6 +82,7 @@ class MoteurOut(BaseModel):
     # Champs enrichis (ajoutés par _to_out dans le router)
     client_nom:           Optional[str] = ""
     nb_sous_ensembles:    int = 0
+    affaire_liee:         bool = False
     version:              int = 1
     created_at:           Optional[datetime] = None
     updated_at:           Optional[datetime] = None

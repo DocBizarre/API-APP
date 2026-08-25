@@ -8,8 +8,10 @@ from sqlalchemy import or_
 from pydantic import BaseModel
 
 from ..database import get_db
-from ..models import Moteur, Client
+from ..models import Moteur, Client, Affaire, AffaireItem
 from ..schemas.moteur import MoteurCreate, MoteurUpdate, MoteurOut
+from ..services.numerotation import code_from_num_affaire
+from .navires import _upsert_navire
 
 
 # ── Schémas allégés pour les sous-ensembles ──────────────────────────────────
@@ -48,7 +50,7 @@ def _se_to_out(m: Moteur) -> dict:
 router = APIRouter(prefix="/moteurs", tags=["moteurs"])
 
 
-def _to_out(m: Moteur) -> dict:
+def _to_out(m: Moteur, affaire_liee: bool = False) -> dict:
     """Sérialise un moteur en garantissant TOUS les champs (jamais None)."""
     d = {}
     for c in m.__table__.columns:
@@ -59,7 +61,64 @@ def _to_out(m: Moteur) -> dict:
         d[c.name] = val
     d["client_nom"] = m.client.nom if m.client else ""
     d["nb_sous_ensembles"] = len(m.sous_ensembles)
+    d["affaire_liee"] = affaire_liee
     return d
+
+
+def _resolve_affaires_liees(db: Session, moteurs: List[Moteur]) -> dict:
+    """Rattache chaque moteur à son affaire, corrige code_affaire si besoin.
+
+    Deux sources, dans l'ordre de confiance :
+    1. lien "réel" : le moteur est référencé (par n° de série) comme chapitre
+       d'une affaire — c'est ce lien qui fait foi.
+    2. lien déclaratif : le champ code_affaire du moteur correspond au code
+       court AAAANNNN (cf. code_from_num_affaire) d'une affaire existante,
+       ou à son ref_interne.
+    Si un lien réel est trouvé et que code_affaire est vide ou périmé, il est
+    corrigé automatiquement (toujours stocké sous forme AAAANNNN, pas le
+    num_affaire complet). Retourne {moteur_id: bool(lié)}.
+    """
+    if not moteurs:
+        return {}
+
+    series = [m.num_serie for m in moteurs if m.num_serie]
+    by_serie = {}
+    if series:
+        rows = (db.query(AffaireItem.num_serie, Affaire)
+                  .join(Affaire, Affaire.id == AffaireItem.affaire_id)
+                  .filter(AffaireItem.num_serie.in_(series))
+                  .order_by(AffaireItem.updated_at.desc())
+                  .all())
+        for ns, aff in rows:
+            by_serie.setdefault(ns, aff)
+
+    codes = {m.code_affaire for m in moteurs if m.code_affaire}
+    by_code = {}
+    if codes:
+        # Pas d'index sur le code court : on compare en Python après avoir
+        # chargé les affaires candidates (par ref_interne exact, ou toutes
+        # pour dériver leur code AAAANNNN).
+        for aff in db.query(Affaire).all():
+            c = code_from_num_affaire(aff.num_affaire)
+            if c in codes:
+                by_code[c] = aff
+            if aff.ref_interne in codes:
+                by_code[aff.ref_interne] = aff
+
+    result = {}
+    dirty = False
+    for m in moteurs:
+        aff = by_serie.get(m.num_serie) or \
+            (by_code.get(m.code_affaire) if m.code_affaire else None)
+        if aff:
+            code = code_from_num_affaire(aff.num_affaire)
+            if m.code_affaire != code:
+                m.code_affaire = code
+                dirty = True
+        result[m.id] = bool(aff)
+    if dirty:
+        db.commit()
+    return result
 
 
 @router.get("", response_model=List[MoteurOut])
@@ -75,9 +134,10 @@ def list_moteurs(
         joinedload(Moteur.sous_ensembles),
     )
     if parent_id:
-        return [_to_out(m) for m in
-                q.filter(Moteur.parent_moteur_id == parent_id)
-                 .order_by(Moteur.num_serie).all()]
+        moteurs = (q.filter(Moteur.parent_moteur_id == parent_id)
+                    .order_by(Moteur.num_serie).all())
+        liens = _resolve_affaires_liees(db, moteurs)
+        return [_to_out(m, liens[m.id]) for m in moteurs]
     # Recherche principale : uniquement les moteurs racine, les
     # sous-ensembles se déroulent via la flèche dans la liste.
     q = q.filter(Moteur.parent_moteur_id.is_(None))
@@ -95,7 +155,9 @@ def list_moteurs(
                     Moteur.ref_constructeur.ilike(like),
                     Moteur.code_affaire.ilike(like),
                     Client.nom.ilike(like)))
-    return [_to_out(m) for m in q.order_by(Moteur.num_serie).all()]
+    moteurs = q.order_by(Moteur.num_serie).all()
+    liens = _resolve_affaires_liees(db, moteurs)
+    return [_to_out(m, liens[m.id]) for m in moteurs]
 
 
 @router.get("/garantie-expirante", response_model=List[MoteurOut])
@@ -125,7 +187,10 @@ def list_moteurs_garantie_expirante(
 @router.get("/by-serie/{num_serie}", response_model=Optional[MoteurOut])
 def find_by_serie(num_serie: str, db: Session = Depends(get_db)):
     m = db.query(Moteur).filter(Moteur.num_serie == num_serie).first()
-    return _to_out(m) if m else None
+    if not m:
+        return None
+    liens = _resolve_affaires_liees(db, [m])
+    return _to_out(m, liens[m.id])
 
 
 @router.get("/{moteur_id}", response_model=MoteurOut)
@@ -133,7 +198,8 @@ def get_moteur(moteur_id: str, db: Session = Depends(get_db)):
     m = db.query(Moteur).filter(Moteur.id == moteur_id).first()
     if not m:
         raise HTTPException(404, f"Moteur {moteur_id} introuvable")
-    return _to_out(m)
+    liens = _resolve_affaires_liees(db, [m])
+    return _to_out(m, liens[m.id])
 
 
 @router.post("", response_model=MoteurOut, status_code=status.HTTP_201_CREATED)
@@ -145,11 +211,15 @@ def create_moteur(data: MoteurCreate, db: Session = Depends(get_db)):
     if existing:
         for field, value in data.model_dump(exclude_unset=True).items():
             setattr(existing, field, value)
+        _upsert_navire(db, existing.navire, existing.navire_immatriculation,
+                      existing.navire_port_attache, existing.client_id)
         db.commit()
         db.refresh(existing)
         return _to_out(existing)
     m = Moteur(id=str(uuid4()), **data.model_dump())
     db.add(m)
+    _upsert_navire(db, m.navire, m.navire_immatriculation,
+                  m.navire_port_attache, m.client_id)
     db.commit()
     db.refresh(m)
     return _to_out(m)
@@ -163,6 +233,10 @@ def update_moteur(moteur_id: str, data: MoteurUpdate,
         raise HTTPException(404, f"Moteur {moteur_id} introuvable")
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(m, field, value)
+    if data.navire is not None or data.navire_immatriculation is not None \
+            or data.navire_port_attache is not None:
+        _upsert_navire(db, m.navire, m.navire_immatriculation,
+                      m.navire_port_attache, m.client_id)
     m.version = (m.version or 0) + 1
     db.commit()
     db.refresh(m)
