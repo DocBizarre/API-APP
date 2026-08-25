@@ -522,11 +522,23 @@ class Launcher(tk.Tk):
                   cursor="hand2", activebackground="#013a7a",
                   command=self._ouvrir_params).pack(side="right", padx=16)
 
+        self._refresh_btn = tk.Button(
+            head, text="🔄", font=("Segoe UI", 11),
+            bg=C["header"], fg="white", relief="flat", bd=0,
+            cursor="hand2", activebackground="#013a7a",
+            command=self._check_update_bg)
+        if _HAS_UPDATER:
+            self._refresh_btn.pack(side="right", padx=(0, 2))
+
         self._update_badge = tk.Label(
             head, text="", font=("Segoe UI", 8, "bold"),
             bg="#1e7e3e", fg="white", cursor="hand2",
             padx=8, pady=4)
+        self._check_status = tk.Label(
+            head, text="", font=("Segoe UI", 8),
+            bg=C["header"], padx=4)
         self._update_info = None
+        self._check_in_progress = False
 
         logo = _charger_logo()
         if logo is not None:
@@ -591,6 +603,13 @@ class Launcher(tk.Tk):
 
     def _check_update_bg(self):
         """Lance la vérification de mise à jour dans un thread background."""
+        if self._check_in_progress or not _HAS_UPDATER:
+            return
+        self._check_in_progress = True
+        self._refresh_btn.config(state="disabled")
+        self._update_badge.pack_forget()
+        self._set_check_status("🔄 Vérification des mises à jour…", "#aac4e8")
+
         import threading
         def _run():
             try:
@@ -598,13 +617,31 @@ class Launcher(tk.Tk):
                 api_url = sync_config.server_url()
             except Exception:
                 api_url = "http://127.0.0.1:8765"
-            info = _updater.check_for_update(api_url, __version__)
+            joignable, info = _updater.probe_server(api_url, __version__)
             if info:
                 self.after(0, lambda: self._show_update_badge(info))
+            else:
+                self.after(0, lambda: self._show_check_result(joignable))
         threading.Thread(target=_run, daemon=True).start()
+
+    def _set_check_status(self, text: str, fg: str):
+        self._check_status.config(text=text, fg=fg)
+        self._check_status.pack(side="right", padx=(0, 8))
+
+    def _show_check_result(self, joignable: bool):
+        self._check_in_progress = False
+        self._refresh_btn.config(state="normal")
+        if joignable:
+            self._set_check_status(f"✓ À jour (v{__version__})", "#8fd19e")
+        else:
+            self._set_check_status("⚠ Vérification impossible — serveur injoignable", "#e8a33d")
+        self.after(4000, self._check_status.pack_forget)
 
     def _show_update_badge(self, info: dict):
         """Affiche le badge de mise à jour dans l'en-tête."""
+        self._check_in_progress = False
+        self._refresh_btn.config(state="normal")
+        self._check_status.pack_forget()
         self._update_info = info
         v = info.get("version", "?")
         self._update_badge.config(text=f"↑ v{v} disponible")

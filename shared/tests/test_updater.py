@@ -93,6 +93,69 @@ def test_check_for_update_hits_expected_url(monkeypatch):
     assert seen["timeout"] == 5
 
 
+# ─── probe_server ────────────────────────────────────────────────────────────
+
+def test_probe_server_reachable_with_update(monkeypatch):
+    monkeypatch.setattr(updater, "_HAS_REQUESTS", True)
+    fake = _FakeResponse(ok=True, payload={"version": "1.9.5", "url": "http://x/y.zip"})
+    monkeypatch.setattr(updater._requests, "get", lambda url, timeout: fake)
+
+    joignable, info = updater.probe_server("http://server:8765", "1.9.0")
+    assert joignable is True
+    assert info == {"version": "1.9.5", "url": "http://x/y.zip"}
+
+
+def test_probe_server_reachable_up_to_date(monkeypatch):
+    monkeypatch.setattr(updater, "_HAS_REQUESTS", True)
+    fake = _FakeResponse(ok=True, payload={"version": "1.9.0"})
+    monkeypatch.setattr(updater._requests, "get", lambda url, timeout: fake)
+
+    joignable, info = updater.probe_server("http://server:8765", "1.9.0")
+    assert joignable is True
+    assert info is None
+
+
+def test_probe_server_reachable_but_bad_response(monkeypatch):
+    monkeypatch.setattr(updater, "_HAS_REQUESTS", True)
+    monkeypatch.setattr(updater._requests, "get", lambda url, timeout: _FakeResponse(ok=False))
+
+    joignable, info = updater.probe_server("http://server:8765", "1.9.0")
+    assert joignable is True
+    assert info is None
+
+
+def test_probe_server_unreachable_on_exception(monkeypatch):
+    monkeypatch.setattr(updater, "_HAS_REQUESTS", True)
+
+    def _raise(*a, **k):
+        raise ConnectionError("timeout")
+
+    monkeypatch.setattr(updater._requests, "get", _raise)
+    joignable, info = updater.probe_server("http://server:8765", "1.9.0")
+    assert joignable is False
+    assert info is None
+
+
+def test_probe_server_unreachable_without_requests(monkeypatch):
+    monkeypatch.setattr(updater, "_HAS_REQUESTS", False)
+    joignable, info = updater.probe_server("http://server:8765", "1.9.0")
+    assert joignable is False
+    assert info is None
+
+
+def test_probe_server_uses_longer_timeout(monkeypatch):
+    monkeypatch.setattr(updater, "_HAS_REQUESTS", True)
+    seen = {}
+
+    def _get(url, timeout):
+        seen["timeout"] = timeout
+        return _FakeResponse(ok=True, payload={"version": "0.0.0"})
+
+    monkeypatch.setattr(updater._requests, "get", _get)
+    updater.probe_server("http://server:8765", "1.9.0")
+    assert seen["timeout"] == 8
+
+
 # ─── _worker (téléchargement + extraction + script) ────────────────────────────
 
 def _make_zip_bytes() -> bytes:

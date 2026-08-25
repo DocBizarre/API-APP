@@ -56,6 +56,32 @@ def check_for_update(api_url: str, current_version: str) -> Optional[dict]:
     return None
 
 
+def probe_server(api_url: str, current_version: str) -> tuple[bool, Optional[dict]]:
+    """
+    Comme check_for_update, mais en un seul appel reseau et en distinguant
+    "serveur injoignable" de "pas de mise a jour disponible" - utile pour
+    afficher un vrai statut a l'utilisateur (au lieu d'enchainer deux appels
+    courts qui peuvent chacun timeout sur un reseau lent/proxy d'entreprise,
+    donnant un faux "injoignable" alors que le serveur repond).
+
+    Retourne (joignable, update_info) :
+      joignable    True des que le serveur a repondu, quel que soit le contenu
+      update_info  dict si une version plus recente est disponible, sinon None
+    """
+    if not _HAS_REQUESTS:
+        return False, None
+    try:
+        r = _requests.get(f"{api_url.rstrip('/')}/updates/latest", timeout=8)
+        if not r.ok:
+            return True, None
+        data = r.json()
+        if _ver(data.get("version", "0")) > _ver(current_version):
+            return True, data
+        return True, None
+    except Exception:
+        return False, None
+
+
 # ─── Téléchargement & application ────────────────────────────────────────────
 
 def download_and_apply(
