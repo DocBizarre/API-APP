@@ -19,11 +19,18 @@ __pycache__/
 ems_api/data/ems.db
 ems_api/data/ems.log
 ems_api/data/dossiers/
+ems_api/data/backups/
 ems_project/data/ems.db
 *.log
 
 # Scripts et dossiers de vérification/debug
 verify_tmp/
+
+# Builds de test locaux (exécutables compilés)
+EMS TEST/
+
+# Rapports/logs générés par les scripts util/UTILDOSSEIR
+util/UTILDOSSEIR/*.csv
 
 # Config locale (contient IP du serveur)
 # config.ini (racine) est versionné intentionnellement (template)
