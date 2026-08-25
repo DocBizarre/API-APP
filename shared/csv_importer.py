@@ -18,21 +18,25 @@ DEFAULT_MAPPING = {
     "type_client":       ["Type Client", "Type client", "Catégorie client"],
     # Moteur — champs principaux
     "navire":            ["Machine / Engin", "Machine/Engin", "Navire", "Engin", "Site"],
+    "navire_immatriculation": ["Immatriculation", "Immatriculation navire", "N° immatriculation"],
+    "navire_port_attache":    ["Port d'attache", "Port attache", "Port"],
     "num_serie":         ["N° Série", "N° Serie", "Numéro de série", "Num série", "N°Série"],
-    "num_moteur":        ["N° Moteur", "Numéro moteur"],
-    "cylindree":         ["Cylindrée", "Cylindree", "Cyl."],
-    "famille":           ["Famille"],
     "ref_constructeur":  ["Ref Constructeur", "Réf. Constructeur", "Ref constructeur"],
     "application":       ["Application"],
-    "type_moteur":       ["Type"],
+    "type_moteur":       ["Type", "Type moteur", "Type moteur / inverseur"],
     "typologie":         ["Typologie"],
     "marque":            ["Marque"],
-    "collection":        ["Collection"],
     "code_affaire":      ["Code Affaire", "Code affaire", "N° Affaire"],
-    # Moteur — champs supplémentaires (ajoutables manuellement dans l'UI)
     "machine":           ["Machine", "Type machine", "Modèle"],
     "date_mise_service": ["Date mise en service", "Mise en service", "Date MES", "MES"],
     "duree_garantie":    ["Durée garantie", "Garantie (mois)", "Garantie mois", "Garantie"],
+    "puissance_rpm":     ["Puissance/RPM", "Puissance RPM", "Puissance"],
+    "puissance_pme_rpm": ["Puissance PME/RPM", "Puissance PME RPM", "Puissance PME"],
+    # Moteur — champs client utilisateur final (ajoutables manuellement dans l'UI)
+    "client_utilisateur_nom":     ["Client utilisateur", "Utilisateur final"],
+    "client_utilisateur_email":   ["Email utilisateur", "Email utilisateur final"],
+    "client_utilisateur_tel":     ["Tél. utilisateur", "Téléphone utilisateur"],
+    "client_utilisateur_adresse": ["Adresse utilisateur", "Adresse utilisateur final"],
 }
 
 
@@ -186,57 +190,44 @@ def import_rows(path, mapping, delimiter, encoding,
             continue
         series_vues.add(num_serie)
 
-        # Récupérer ou créer le client
-        client_id = ""
-        if nom_client:
-            nom_norm = nom_client.strip().lower()
-            if nom_norm in clients_cache:
-                client_id = clients_cache[nom_norm]
-            else:
-                existant = db.find_client_by_nom(nom_client)
-                if existant:
-                    client_id = existant["id"]
-                    stats["clients_existants"] += 1
-                else:
-                    if not dry_run:
-                        client_id = db.upsert_client({
-                            "nom": nom_client.strip(),
-                            "contact": "", "email": "",
-                            "telephone": "", "adresse": "",
-                        })
-                    else:
-                        client_id = f"DRY-{nom_norm}"
-                    stats["clients_crees"] += 1
-                clients_cache[nom_norm] = client_id
-
-        # Préparer les données moteur
-        moteur_data = {
-            "client_id":        client_id,
-            "num_serie":        num_serie,
-            "navire":           _cell(row, mapping.get("navire")),
-            "machine":          (_cell(row, mapping.get("machine"))
-                                 or _cell(row, mapping.get("ref_constructeur"))
-                                 or _cell(row, mapping.get("type_moteur"))),
-            "type_moteur":      _cell(row, mapping.get("type_moteur")),
-            "date_mise_service":_cell(row, mapping.get("date_mise_service")),
-            "duree_garantie":   _cell(row, mapping.get("duree_garantie")),
-            "cylindree":        _cell(row, mapping.get("cylindree")),
-            "famille":          _cell(row, mapping.get("famille")),
-            "marque":           _cell(row, mapping.get("marque")),
-            "application":      _cell(row, mapping.get("application")),
-            "typologie":        _cell(row, mapping.get("typologie")),
-            "collection":       _cell(row, mapping.get("collection")),
-            "ref_constructeur": _cell(row, mapping.get("ref_constructeur")),
-            "code_affaire":     _cell(row, mapping.get("code_affaire")),
-            "type_client":      _cell(row, mapping.get("type_client")),
-        }
-
-        # Existe déjà en base ? → mise à jour, sinon création
+        # Récupérer ou créer le client + créer/mettre à jour le moteur.
+        # Tout est dans le même bloc try/except : une erreur sur UNE ligne
+        # (client ou moteur) ne doit pas interrompre le traitement des
+        # lignes suivantes.
         try:
+            client_id = ""
+            if nom_client:
+                nom_norm = nom_client.strip().lower()
+                if nom_norm in clients_cache:
+                    client_id = clients_cache[nom_norm]
+                else:
+                    existant = db.find_client_by_nom(nom_client)
+                    if existant:
+                        client_id = existant["id"]
+                        stats["clients_existants"] += 1
+                    else:
+                        if not dry_run:
+                            client_id = db.upsert_client({
+                                "nom": nom_client.strip(),
+                                "contact": "", "email": "",
+                                "telephone": "", "adresse": "",
+                            })
+                        else:
+                            client_id = f"DRY-{nom_norm}"
+                        stats["clients_crees"] += 1
+                    clients_cache[nom_norm] = client_id
+
+            moteur_data = _build_moteur_data(row, mapping, client_id, num_serie)
+
             existant = db.find_moteur_by_serie(num_serie)
             if existant:
                 if not dry_run:
-                    db.upsert_moteur(moteur_data, moteur_id=existant["id"])
+                    # Mise à jour partielle : une colonne absente/vide dans CE
+                    # CSV ne doit pas effacer une valeur déjà en base (ex :
+                    # réimport d'un fichier "navires" sans colonne client, qui
+                    # écraserait sinon le client_id de tous les moteurs).
+                    update_data = {k: v for k, v in moteur_data.items() if v}
+                    db.upsert_moteur(update_data, moteur_id=existant["id"])
                 stats["moteurs_mis_a_jour"] += 1
             else:
                 if not dry_run:
@@ -246,3 +237,31 @@ def import_rows(path, mapping, delimiter, encoding,
             stats["erreurs"].append((i, str(e)))
 
     return stats
+
+
+def _build_moteur_data(row, mapping, client_id, num_serie):
+    return {
+        "client_id":        client_id,
+        "num_serie":        num_serie,
+        "navire":           _cell(row, mapping.get("navire")),
+        "navire_immatriculation": _cell(row, mapping.get("navire_immatriculation")),
+        "navire_port_attache":    _cell(row, mapping.get("navire_port_attache")),
+        "machine":          (_cell(row, mapping.get("machine"))
+                             or _cell(row, mapping.get("ref_constructeur"))
+                             or _cell(row, mapping.get("type_moteur"))),
+        "type_moteur":      _cell(row, mapping.get("type_moteur")),
+        "date_mise_service":_cell(row, mapping.get("date_mise_service")),
+        "duree_garantie":   _cell(row, mapping.get("duree_garantie")),
+        "marque":           _cell(row, mapping.get("marque")),
+        "application":      _cell(row, mapping.get("application")),
+        "typologie":        _cell(row, mapping.get("typologie")),
+        "puissance_rpm":    _cell(row, mapping.get("puissance_rpm")),
+        "puissance_pme_rpm": _cell(row, mapping.get("puissance_pme_rpm")),
+        "ref_constructeur": _cell(row, mapping.get("ref_constructeur")),
+        "code_affaire":     _cell(row, mapping.get("code_affaire")),
+        "type_client":      _cell(row, mapping.get("type_client")),
+        "client_utilisateur_nom":     _cell(row, mapping.get("client_utilisateur_nom")),
+        "client_utilisateur_email":   _cell(row, mapping.get("client_utilisateur_email")),
+        "client_utilisateur_tel":     _cell(row, mapping.get("client_utilisateur_tel")),
+        "client_utilisateur_adresse": _cell(row, mapping.get("client_utilisateur_adresse")),
+    }
