@@ -49,7 +49,7 @@ def _get_dossiers_root() -> Path:
                 pass
             break
 
-    p = base_default / "dossiers"
+    p = base_default / "DOSSIER-INTERVENTION-DEVIS"
     p.mkdir(parents=True, exist_ok=True)
     return p
 
@@ -229,65 +229,96 @@ def _bloc_annexe_photos(photos_paths):
 
 
 def _bloc_cgv():
-    """Génère la page Conditions Générales de Vente + logo partenaires."""
+    """Génère les 2 pages de Conditions Générales de Prestations de Services
+    et d'Interventions (bon d'intervention = rapport de services, pas une
+    vente de matériel) + logo partenaires en bas de la dernière page.
+
+    Le texte est réparti en 2 blocs équilibrés (Articles 1-7 / Articles
+    8-14, ~52 % / ~48 % du texte), chacun sur sa propre page (page-break
+    avant chaque .cgv-page) : ça évite de laisser le rendu déborder de façon
+    imprévisible selon la police/les colonnes, et ça garde le logo ancré au
+    bas de la page 2 uniquement (cf. .cgv-logo-wrap / @page cgv-conditions)."""
     logo_uri = _logo_cgv_data_uri()
     logo_html = (f'<img src="{logo_uri}" alt="EMS – Emeraude Moteurs Systemes" '
-                 f'style="max-width:340px;max-height:190px;">'
+                 f'style="max-width:260px;max-height:130px;">'
                  if logo_uri else "")
     return f"""
 <div class="cgv-page">
-  <div class="cgv-title">CONDITIONS GÉNÉRALES DE VENTE – EMERAUDE MOTEURS SYSTEMES</div>
+  <div class="cgv-title">CONDITIONS GÉNÉRALES DE PRESTATIONS DE SERVICES ET D'INTERVENTIONS – EMERAUDE MOTEURS SYSTEMES</div>
   <div class="cgv-body">
-  <p class="cgv-p">Le fait pour nos clients de passer commande à EMERAUDE MOTEURS SYSTEMES implique, en l'absence de contrat particulier ou d'un accord écrit valant contrat entre nos clients et EMERAUDE MOTEURS SYSTEMES, l'acceptation de nos conditions générales de vente ci-dessous énoncées.</p>
+  <p class="cgv-p" style="font-style:italic;color:#6b7785">Version 2026.01 – Applicable à compter du 10/08/2026</p>
 
-  <div class="cgv-section">A • OFFRES</div>
-  <div class="cgv-sub">1 • Matériels</div>
-  <p class="cgv-p cgv-indent">a) <em>Caractéristiques</em> : les caractéristiques des produits proposés à la vente par EMERAUDE MOTEURS SYSTEMES lui sont communiquées par ses fournisseurs au moyen de documents mis à disposition. EMERAUDE MOTEURS SYSTEMES n'ayant pas compétence de contrôle de ceux-ci, ne peut donc pas être tenue pour responsable en cas d'erreur ou d'information erronée qui se serait introduite dans les documents techniques ou commerciaux des fabricants ou de ses propres documents.</p>
-  <p class="cgv-p cgv-indent">b) <em>Spécifications</em> : de même, EMERAUDE MOTEURS SYSTEMES ne peut pas être tenu pour responsable des conséquences qui pourraient survenir dans le cas de changements dans les spécifications des produits ou matériels qu'elle commercialise.</p>
-  <div class="cgv-sub">2 • Prix</div>
-  <p class="cgv-p">Les prix donnés par EMERAUDE MOTEURS SYSTEMES dans ses offres ou ses tarifs peuvent avoir pour bases des éléments de calcul dont les valeurs sont du ressort des autorités politiques, administratives, ou monétaires, donnant alors le caractère de force majeure autorisant EMERAUDE MOTEURS SYSTEMES à réajuster éventuellement ses offres et ses tarifs.</p>
-  <div class="cgv-sub">3 • Délais</div>
-  <p class="cgv-p">Sauf pour les marchandises disponibles sur stock et dans la limite de validité spécifiée dans nos offres, les délais indiqués dans celles-ci ne valent que pour information, les délais réels étant ceux confirmés par les fournisseurs d'EMERAUDE MOTEURS SYSTEMES le jour de réception de nos commandes, auxquels s'ajoutent les délais des transporteurs et affréteurs.</p>
+  <div class="cgv-section">Article 1 – Champ d'application – Hiérarchie contractuelle</div>
+  <p class="cgv-p">Les présentes conditions générales de prestations de services (les « Conditions Services ») s'appliquent à toutes les prestations de services réalisées par EMERAUDE MOTEURS SYSTEMES (« EMS ») au profit de ses clients professionnels (le « Client ») : diagnostic, dépannage, réparation, révision, entretien, maintenance préventive ou corrective, installation, mise en service, réglage et essais de moteurs, équipements et systèmes, que ces prestations soient réalisées dans les ateliers d'EMS ou sur site (y compris, le cas échéant, à bord de navires ou sur les installations du Client).</p>
+  <p class="cgv-p">Toute demande d'intervention, acceptation de devis ou signature d'un ordre d'intervention emporte adhésion pleine et entière du Client aux présentes.</p>
+  <p class="cgv-p">La relation contractuelle entre EMS et le Client est régie, par ordre de priorité décroissant, par les documents suivants : le devis, l'ordre d'intervention et, le cas échéant, les conditions particulières expressément acceptées par EMS ; les présentes Conditions Services, pour l'ensemble des prestations de diagnostic, dépannage, réparation, révision, entretien, maintenance, installation, mise en service, réglage et essais ; les Conditions Générales de Vente d'EMS, pour la fourniture des pièces, matériels, ingrédients et consommables utilisés ou vendus dans le cadre de l'intervention.</p>
+  <p class="cgv-p">En cas de contradiction entre plusieurs documents contractuels, le document de rang supérieur prévaut. Les Conditions Services prévalent sur les Conditions Générales de Vente pour tout ce qui concerne l'exécution des prestations, tandis que les Conditions Générales de Vente demeurent applicables à la vente et à la fourniture des pièces et matériels. Aucun document, condition générale ou condition particulière émanant du Client ne fait partie du contrat, sauf acceptation expresse et écrite d'EMS.</p>
 
-  <div class="cgv-section">B • COMMANDES</div>
-  <p class="cgv-p">Pour des raisons d'efficacité et de rapidité dans l'exécution des commandes de nos clients, seules les commandes dont les délais atteignent ou dépassent 8 jours ouvrables seront confirmées par EMERAUDE MOTEURS SYSTEMES. Pour certains matériels devant faire l'objet d'une homologation technique après installation, EMERAUDE MOTEURS SYSTEMES se réserve le droit de ne pas accepter de commande de ces matériels sans garantie satisfaisante d'obtention de cette homologation. Pour toutes opérations commerciales, EMERAUDE MOTEURS SYSTEMES se réserve le droit de refuser de livrer, sauf contre paiement avant expédition ou garantie satisfaisante.</p>
+  <div class="cgv-section">Article 2 – Devis, ordres d'intervention et diagnostic</div>
+  <p class="cgv-p">Les interventions font l'objet, selon leur nature et leur urgence, d'un devis préalable ou d'un ordre d'intervention signé par le Client. Sauf stipulation contraire, les devis sont valables trente (30) jours et sont établis sur la base des informations communiquées par le Client et, le cas échéant, d'un examen sommaire du matériel.</p>
+  <p class="cgv-p">Lorsque l'établissement du devis nécessite un démontage, une expertise ou un diagnostic, ces opérations sont facturées au tarif en vigueur, même si le devis n'est pas suivi d'une commande. En cas d'acceptation du devis, le coût du diagnostic pourra être déduit du montant de l'intervention si le devis le prévoit. Si, en cours d'intervention, des travaux supplémentaires non prévisibles s'avèrent nécessaires, EMS en informe le Client et recueille son accord (écrit, ou verbal confirmé par écrit) avant de les exécuter, sauf urgence tenant à la sécurité des personnes ou des biens.</p>
+  <p class="cgv-p">À défaut d'acceptation du devis dans le délai de validité, ou en cas de refus des travaux, le matériel démonté pour diagnostic est restitué en l'état, remonté sommairement sans garantie de fonctionnement, les frais de diagnostic et de remontage restant dus.</p>
 
-  <div class="cgv-section">C • LIVRAISONS</div>
-  <div class="cgv-sub">1 • Délais</div>
-  <p class="cgv-p">Sauf stipulation contraire de nos clients clairement exprimée au moment de la commande, nos livraisons sont faites au fur et à mesure des disponibilités des matériels. EMERAUDE MOTEURS SYSTEMES ne peut être tenue pour responsable des retards ou de la non-exécution de ses livraisons du fait du mauvais temps, de grèves ou autres conflits du travail, du fait du prince, ou du cas de force majeure.</p>
-  <div class="cgv-sub">2 • Risques</div>
-  <p class="cgv-p">Nos marchandises, même expédiées franco de port, voyagent aux risques et périls du destinataire qui devra faire toutes réserves auprès du transporteur, seul responsable en cas de retard, vol, perte, avarie, c'est-à-dire de la bonne exécution de la prestation.</p>
-  <div class="cgv-sub">3 • Emballages</div>
-  <p class="cgv-p">Sauf stipulation contraire, nos emballages ne sont pas consignés et ne doivent donc pas nous être retournés, ni ne peuvent faire l'objet d'avoir ou de remise. Dans le cas d'un emballage consigné, celui-ci doit nous être retourné franco de port dans les 15 jours qui suivent la livraison. Passé ce délai, il sera facturé au prix indiqué sur le bordereau de consignation accompagnant la facture du matériel.</p>
-  <div class="cgv-sub">4 • Réclamation</div>
-  <p class="cgv-p">Pour être recevable, toute réclamation devra nous être adressée dans les 48 heures à réception des marchandises. La transformation, la modification de quelque manière que ce soit, ou la revente de marchandises livrées vaut renonciation à tout recours à l'encontre d'EMERAUDE MOTEURS SYSTEMES pour quelque raison que ce soit.</p>
+  <div class="cgv-section">Article 3 – Prix et facturation des interventions</div>
+  <div class="cgv-sub">3.1 Tarifs</div>
+  <p class="cgv-p">Les prestations sont facturées, selon le cas, au forfait défini au devis ou en régie, sur la base des taux et forfaits figurant au tableau des coûts des prestations annexé aux présentes (l'« Annexe Tarifaire »), du temps passé (y compris temps de trajet), des frais de déplacement, de séjour et de transport, ainsi que des pièces, ingrédients et consommables utilisés. L'Annexe Tarifaire est révisée périodiquement par EMS, en principe une à deux fois par an. Les tarifs applicables sont ceux de l'Annexe Tarifaire en vigueur à la date de la demande d'intervention ou, pour les interventions faisant l'objet d'un devis, ceux du devis accepté pendant sa durée de validité.</p>
+  <div class="cgv-sub">3.2 Majorations</div>
+  <p class="cgv-p">Les interventions effectuées à la demande du Client en dehors des horaires normaux d'ouverture d'EMS, en urgence, de nuit, le samedi, le dimanche ou un jour férié, font l'objet des majorations prévues à l'Annexe Tarifaire.</p>
+  <div class="cgv-sub">3.3 Temps d'attente et annulation</div>
+  <p class="cgv-p">Tout temps d'attente imputable au Client (matériel inaccessible, non consigné, absence d'interlocuteur, autorisations manquantes) est facturé au taux horaire en vigueur. Toute intervention annulée ou reportée par le Client moins de quarante-huit (48) heures ouvrées avant la date convenue pourra donner lieu à la facturation des frais engagés et d'une indemnité forfaitaire de 150 € ou égale à 10 % du montant du devis.</p>
 
-  <div class="cgv-section">D • FACTURATION</div>
-  <p class="cgv-p">La livraison des marchandises objet des commandes de nos clients déclenche l'édition de nos factures, qui sont établies suivant nos Conditions Générales de Vente objet des présentes, et les accords conclus avec nos clients préalablement à la commande. Les conditions de règlement figurant sur nos factures sont donc réputées non négociables.</p>
+  <div class="cgv-section">Article 4 – Obligations du Client</div>
+  <p class="cgv-p">Le Client s'engage à : (i) communiquer à EMS, préalablement à l'intervention, toutes informations utiles sur le matériel (historique, pannes, modifications, documentation technique) et sur les conditions d'accès et de sécurité du site ; (ii) assurer un libre accès au matériel, le rendre disponible, accessible, propre, dégagé et, le cas échéant, consigné (électriquement, mécaniquement, hydrauliquement) conformément à la réglementation ; (iii) fournir les moyens d'accès, de levage et de manutention appropriés lorsque l'intervention le nécessite, ces moyens demeurant sous sa responsabilité ; (iv) respecter et faire respecter les règles d'hygiène et de sécurité applicables sur son site et établir avec EMS, lorsque la réglementation l'exige, un plan de prévention (articles R.4512-6 et suivants du Code du travail) ; (v) désigner un interlocuteur habilité présent ou joignable pendant l'intervention. Tout retard, surcoût ou impossibilité d'exécution résultant du non-respect de ces obligations est à la charge du Client. EMS pourra suspendre ou refuser toute intervention si les conditions de sécurité ne sont pas réunies, sans que sa responsabilité puisse être engagée.</p>
 
-  <div class="cgv-section">E • PAIEMENT</div>
-  <div class="cgv-sub">1 • Modalités de paiement</div>
-  <p class="cgv-p">Nos marchandises sont payables à l'échéance figurant sur nos factures, entendue comme date de décaissement chez l'acheteur. Il convient donc que l'acheteur prenne de lui-même ses dispositions pour nous faire parvenir son règlement en temps et en heure pour respecter cette date. C'est entre autre le cas des traites émises par nos soins qui doivent nous être retournées dûment acceptées dans les 48 heures ouvrables, comme stipulé par l'article 135 du code du commerce.</p>
-  <div class="cgv-sub">2 • Paiement anticipé</div>
-  <p class="cgv-p">Le paiement anticipé de nos factures, après accord de notre part, donnera lieu à un escompte au taux de 0.5 % par période entière d'un mois. L'obtention et le montant de cet acompte ne seront effectifs qu'après constat de la date réelle de règlement. En cas d'escompte pour paiement comptant ou anticipé, celui-ci fera l'objet soit d'une note de crédit, soit d'un crédit sur le compte du client, les deux cas étant assujettis au régime normal de la T.V.A.</p>
-  <div class="cgv-sub">3 • Retard ou défaut de paiement</div>
-  <p class="cgv-p">Tout retard de paiement entraînera : l'exigibilité immédiate de toutes les sommes restant dû quel que soit le mode et la date de règlement prévu. Le paiement d'un intérêt de retard, par périodes d'un mois entier, égal à une fois et demie l'intérêt légal en vigueur sans pouvoir dépasser le taux de l'usure, auquel s'ajoutera une indemnité de gestion légale à 15 % des sommes dues plafonnées à 70 euros. Cet intérêt, calculé à dater du premier jour de retard, est mis en œuvre dès réception d'une mise en demeure envoyée par lettre recommandée avec accusé de réception, et exigible dès l'émission de la facture de cet intérêt. Dans le cas où les sommes dues sont versées après la date de règlement mentionnée sur la facture, une indemnité forfaitaire pour frais de recouvrement d'un montant de 40 euros sera due en plus des pénalités de retard.</p>
-  <div class="cgv-sub">4 • Compensation des effets de commerce</div>
-  <p class="cgv-p">Sauf convention écrite contraire signée par le responsable financier d'EMERAUDE MOTEURS SYSTEMES, le client accepte expressément que la compensation puisse être effectuée à tout moment pour les créances et les dettes réciproques échues et exigibles dès que nous lui en notifierons l'information.</p>
+  <div class="cgv-section">Article 5 – Exécution des prestations</div>
+  <p class="cgv-p">EMS exécute les prestations conformément aux règles de l'art et est tenue, sauf stipulation expresse contraire, à une obligation de moyens. Les délais d'intervention sont communiqués à titre indicatif ; leur dépassement ne peut donner lieu ni à pénalité, ni à indemnité, ni à annulation de la commande, sauf accord écrit contraire. EMS est libre du choix de ses intervenants et peut sous-traiter tout ou partie des prestations sous sa responsabilité. Les essais et mises en service sont réalisés en présence du Client ou de son représentant ; à défaut, ils sont réputés effectués contradictoirement.</p>
 
-  <div class="cgv-section">F • RÉSERVE DE PROPRIÉTÉ</div>
-  <div class="cgv-sub">1 • Transfert de propriété</div>
-  <p class="cgv-p">Conformément au texte de loi n° 80.335 du 12 mai 1980 relative à la clause de réserve de propriété, les marchandises livrées restent la propriété d'EMERAUDE MOTEURS SYSTEMES jusqu'au complet paiement de leur prix principal et accessoires, paiement qui fera foi du transfert de propriété de ces marchandises d'EMERAUDE MOTEURS SYSTEMES à son client. Par contre, les risques de ces marchandises passent à la charge du client dès leur livraison. L'acheteur peut cependant revendre ou transformer ces marchandises dans le cadre de ses activités normales. Cette autorisation de revente est automatiquement retirée en cas de cessation de paiement de l'acheteur.</p>
-  <div class="cgv-sub">2 • Saisie</div>
-  <p class="cgv-p">En cas de saisie opérée par des tiers sur des marchandises livrées et facturées par EMERAUDE MOTEURS SYSTEMES mais non encore payées, l'acheteur est tenu d'en informer immédiatement EMERAUDE MOTEURS SYSTEMES.</p>
-  <div class="cgv-sub">3 • Acomptes</div>
-  <p class="cgv-p">EMERAUDE MOTEURS SYSTEMES se réserve le droit de conserver tout acompte, avoir, trop perçus, ou autre somme qui viendrait à se trouver dans sa comptabilité au crédit de son client se trouvant en défaut de paiement, ces sommes seraient alors déduites du règlement final à l'exception des éventuels intérêts et pénalités de retard.</p>
+  <div class="cgv-section">Article 6 – Interventions à bord de navires – Garde juridique du navire</div>
+  <p class="cgv-p">Lorsque l'intervention est réalisée à bord d'un navire, quel que soit le lieu où celui-ci se trouve (à quai, au mouillage, en cale sèche, sur terre-plein ou en cours d'essais en mer), le navire, ses apparaux, ses équipements et sa cargaison demeurent, pendant toute la durée de l'intervention, la propriété exclusive du Client et restent placés sous sa garde juridique, sa direction et sa responsabilité, ainsi que, le cas échéant, sous l'autorité de son capitaine. L'intervention d'EMS, qui porte exclusivement sur les moteurs, équipements et systèmes objets de la commande, n'emporte en aucun cas transfert de la garde du navire au sens de l'article 1242 du Code civil, ni constitution d'un dépôt, y compris lorsque l'intervention se déroule en l'absence du Client, de son équipage ou de tout représentant à bord.</p>
+  <p class="cgv-p">Le Client, en sa qualité de propriétaire ou d'armateur, conserve à sa charge : la sécurité et le maintien en état du navire, l'obtention des autorisations nécessaires auprès des autorités portuaires ou maritimes, ainsi que l'assurance du navire (corps et machines) et de sa responsabilité civile, pendant toute la durée de l'intervention. Les essais à quai et en mer sont réalisés sous la seule autorité, direction et responsabilité du Client et de son capitaine, le personnel d'EMS présent à bord n'intervenant qu'en qualité d'exécutant technique des travaux commandés. Le Client renonce, et se porte fort de la renonciation de ses assureurs, à tout recours contre EMS et ses assureurs pour les dommages subis par le navire qui ne résulteraient pas directement d'une faute prouvée d'EMS dans l'exécution des travaux commandés.</p>
 
-  <div class="cgv-section">G • GARANTIES</div>
-  <p class="cgv-p">Tout défaut de matière ou de vice de fabrication reconnue dans nos fournitures ne peut donner lieu qu'au remplacement pur et simple des pièces défectueuses par les services techniques correspondant au constructeur des matériels et aux frais de montage et démontage du moteur. La durée de cette garantie est de 12 mois à compter de la date d'achat. La garantie ne s'applique qu'au matériel distribué par EMERAUDE MOTEURS SYSTEMES. Tout retour de moteurs ou de pièces détachées doit être effectué en port payé par l'acheteur. La garantie est refusée par EMERAUDE MOTEURS SYSTEMES dans les cas suivants : lorsque les pièces d'origine auront été remplacées par des pièces ne provenant pas d'EMERAUDE MOTEURS SYSTEMES ; en cas de modification du matériel ; lorsque les avaries seront dues à une mauvaise utilisation du moteur, à un gasoil non conforme ou pollué, à un défaut de montage et/ou au non-respect des préconisations d'installations, à tout évènement extérieur (engagement d'hélice, projection d'eau de mer, travaux de soudure…), au non-respect des conditions d'entretien et de maintenance, à la négligence de l'utilisateur ; lorsque les réparations auront été effectuées en dehors du réseau EMERAUDE MOTEURS SYSTEMES. Toutefois, en cas de non-paiement total ou partiel de ses factures EMERAUDE MOTEURS SYSTEMES ne sera pas tenu à cette garantie, le contrat de vente n'étant pas complètement respecté et le transfert de propriété non effectif. En aucun cas EMERAUDE MOTEURS SYSTEMES ne peut-être leur responsable des pertes d'exploitations occasionnées par des pannes survenues sur le matériel en cours de garanties.</p>
+  <div class="cgv-section">Article 7 – Matériel confié – dépôt en atelier</div>
+  <p class="cgv-p">Le matériel confié à EMS pour diagnostic ou réparation voyage aux frais et risques du Client, à l'aller comme au retour. Pendant sa présence en atelier, il est couvert par l'assurance d'EMS dans les limites de ses polices ; il appartient au Client d'assurer les risques excédant ces limites ainsi que la valeur de son matériel. Conformément à la loi du 31 décembre 1903 relative à la vente de certains objets abandonnés, tout matériel non retiré dans un délai d'un (1) an à compter de la notification de la mise à disposition pourra être vendu, le produit de la vente étant affecté au paiement des sommes dues à EMS. Des frais de gardiennage de 50 € par jour pourront être facturés à compter du trentième (30e) jour suivant la mise à disposition du matériel réparé.</p>
+  </div><!-- /cgv-body -->
+</div><!-- /cgv-page 1/2 -->
 
-  <div class="cgv-section">H • ATTRIBUTION DE COMPÉTENCE</div>
-  <p class="cgv-p">Il est expressément spécifié que tout litige pouvant se révéler entre EMERAUDE MOTEURS SYSTEMES et un de ses clients au cours d'une opération relevant d'un des thèmes énoncés ci-dessus sera du ressort du seul Tribunal de Commerce de Saint-Malo.</p>
+<div class="cgv-page">
+  <div class="cgv-body">
+
+  <div class="cgv-section">Article 8 – Réception des travaux</div>
+  <p class="cgv-p">À l'issue de l'intervention, un rapport d'intervention, bon de travail ou procès-verbal d'essais (le « Bon d'Intervention ») est présenté à la signature du Client ou de son représentant ; sa signature vaut réception des travaux.</p>
+  <div class="cgv-sub">8.1 Absence du Client lors de l'intervention</div>
+  <p class="cgv-p">Le Client est informé que certaines interventions, notamment à bord de navires ou sur des installations non gardées, peuvent être réalisées en son absence. Dans ce cas, le Bon d'Intervention est établi par le technicien d'EMS, porte la mention expresse de l'absence du Client au moment de la signature, et est adressé au Client par courrier électronique à l'adresse communiquée lors de la commande ; l'envoi à cette adresse vaut notification valable du Bon d'Intervention.</p>
+  <div class="cgv-sub">8.2 Réserves et acceptation tacite</div>
+  <p class="cgv-p">Faute de réserves écrites notifiées à EMS dans les quarante-huit (48) heures suivant, selon le cas, la fin de l'intervention signée contradictoirement, la remise du matériel réparé ou l'envoi du Bon d'Intervention par courrier électronique, les travaux sont réputés réceptionnés sans réserve. Le Bon d'Intervention ainsi transmis, ainsi que les journaux d'envoi de l'outil de dématérialisation d'EMS, font preuve entre les parties de la réalité, de la consistance et de la date des travaux ainsi que de leur notification, conformément aux articles 1366 et suivants du Code civil.</p>
+
+  <div class="cgv-section">Article 9 – Paiement</div>
+  <div class="cgv-sub">9.1 Modalités et délais</div>
+  <p class="cgv-p">Sauf convention contraire, les factures sont payables à trente (30) jours à compter de leur date d'émission, sans pouvoir dépasser les plafonds de l'article L.441-10 du Code de commerce (60 jours date de facture ou 45 jours fin de mois). EMS peut exiger un acompte à la commande et, pour les interventions importantes, des facturations intermédiaires à l'avancement.</p>
+  <div class="cgv-sub">9.2 Paiement entre les mains du factor – subrogation</div>
+  <p class="cgv-p">EMS a conclu un contrat d'affacturage. Lorsque la facture porte la mention de subrogation au profit du factor, seul le paiement effectué directement entre les mains de celui-ci est libératoire.</p>
+  <div class="cgv-sub">9.3 Retard de paiement</div>
+  <p class="cgv-p">Tout retard de paiement entraîne de plein droit et sans mise en demeure : l'exigibilité immédiate de toutes les sommes restant dues ; des pénalités de retard au taux de la Banque centrale européenne majoré de dix (10) points de pourcentage (article L.441-10 du Code de commerce) ; une indemnité forfaitaire pour frais de recouvrement de quarante (40) euros par facture (articles L.441-10 et D.441-5 du Code de commerce) ; et la faculté pour EMS de suspendre toute intervention en cours ou à venir. Le Client s'interdit toute compensation, retenue ou déduction unilatérale sans l'accord écrit et préalable d'EMS.</p>
+  <div class="cgv-sub">9.4 Droit de rétention</div>
+  <p class="cgv-p">Conformément aux articles 2286 et suivants du Code civil, EMS pourra exercer un droit de rétention sur tout matériel du Client en sa possession jusqu'au complet paiement des sommes dues au titre des interventions réalisées sur ce matériel.</p>
+
+  <div class="cgv-section">Article 10 – Garantie des interventions</div>
+  <p class="cgv-p">Les travaux de réparation réalisés par EMS sont garantis contre tout défaut d'exécution pendant une durée de trois (3) mois à compter de la réception des travaux, dans la limite de deux cents (200) heures de fonctionnement du matériel si celles-ci sont atteintes avant l'expiration de ce délai. Cette garantie couvre exclusivement la reprise, dans les ateliers d'EMS ou sur site au choix d'EMS, des travaux reconnus défectueux. Les pièces neuves fournies dans le cadre de l'intervention sont garanties dans les conditions prévues aux Conditions Générales de Vente d'EMS ou, si elle est plus favorable, selon la garantie du fabricant.</p>
+  <p class="cgv-p">La garantie est exclue : lorsque le défaut résulte d'une usure normale, d'un défaut d'entretien, d'une utilisation anormale ou non conforme aux préconisations du constructeur, d'une intervention d'un tiers ou du Client sur les organes réparés, d'une pièce fournie par le Client, ou d'un cas fortuit ou de force majeure ; lorsque le Client a refusé l'exécution de travaux connexes signalés comme nécessaires ; ou lorsque l'intervention a été réalisée en urgence à titre provisoire ou conservatoire. Les frais de transport, de démontage et de remontage sur site, de déplacement et de séjour restent à la charge du Client. La présente garantie ne fait pas obstacle à la garantie légale des vices cachés (articles 1641 et suivants du Code civil) entre professionnels.</p>
+
+  <div class="cgv-section">Article 11 – Responsabilité</div>
+  <p class="cgv-p">La responsabilité d'EMS est strictement limitée aux obligations définies aux présentes. Sauf faute lourde ou dolosive, la responsabilité d'EMS, toutes causes confondues, est plafonnée au montant hors taxes de l'intervention concernée. EMS ne pourra en aucun cas être tenue à la réparation des dommages indirects ou immatériels subis par le Client (perte de production, de profit, de chance, de données ou préjudice commercial), ni des dommages affectant des organes sur lesquels elle n'est pas intervenue.</p>
+  <div class="cgv-sub">11.1 Exclusion des pertes d'exploitation</div>
+  <p class="cgv-p">EMS ne pourra en aucun cas être tenue de réparer les pertes d'exploitation subies par le Client ou des tiers, quelle qu'en soit la cause, y compris en cas de défaut d'exécution, de retard, d'immobilisation du matériel, de reprise de travaux au titre de la garantie ou d'indisponibilité de pièces. Le Client déclare faire son affaire personnelle de l'assurance de ces risques et renonce, ainsi que ses assureurs, à tout recours contre EMS à ce titre. Cette exclusion constitue une condition essentielle du consentement d'EMS, dont il a été tenu compte dans la détermination du prix.</p>
+
+  <div class="cgv-section">Article 12 – Force majeure</div>
+  <p class="cgv-p">Conformément à l'article 1218 du Code civil, aucune des parties ne pourra être tenue pour responsable de l'inexécution de ses obligations résultant d'un événement échappant à son contrôle, raisonnablement imprévisible et dont les effets ne peuvent être évités par des mesures appropriées (intempéries exceptionnelles, grèves, pénuries de pièces, épidémies, décisions des autorités, fait du prince). Si l'empêchement est temporaire, l'exécution est suspendue ; s'il est définitif, le contrat est résolu de plein droit.</p>
+
+  <div class="cgv-section">Article 13 – Données personnelles</div>
+  <p class="cgv-p">EMS, responsable du traitement, collecte et traite les données personnelles du Client et de ses interlocuteurs aux fins de gestion des demandes, devis, commandes, interventions, facturation et recouvrement, sur le fondement de l'exécution du contrat, du respect de ses obligations légales et de son intérêt légitime. Les données peuvent être communiquées au factor d'EMS et à ses partenaires financiers. Les personnes concernées disposent d'un droit d'accès, de rectification, d'effacement, de limitation, d'opposition et de portabilité, à exercer par écrit auprès d'EMS, ainsi que du droit d'introduire une réclamation auprès de la CNIL.</p>
+
+  <div class="cgv-section">Article 14 – Droit applicable et attribution de compétence</div>
+  <p class="cgv-p">Les présentes Conditions Services et toutes les prestations qu'elles régissent sont soumises au droit français. Il est expressément spécifié que tout litige pouvant se révéler entre EMS et l'un de ses clients au cours d'une opération relevant des présentes, y compris en cas de pluralité de défendeurs ou d'appel en garantie, sera du ressort du seul Tribunal de commerce de Saint-Malo.</p>
   </div><!-- /cgv-body -->
 
   <div class="cgv-logo-wrap">
@@ -332,6 +363,8 @@ def _build_html(inv, client=None, moteur=None, photos_annexe=None,
 
     # Equipement (moteur principal)
     navire    = _g(moteur, "navire")           or _g(inv, "navire")
+    navire_immat = _g(moteur, "navire_immatriculation") or _g(inv, "navire_immatriculation")
+    navire_port  = _g(moteur, "navire_port_attache")    or _g(inv, "navire_port_attache")
     machine   = _g(moteur, "machine")          or _g(inv, "machine")
     type_mot  = _g(moteur, "type_moteur")      or _g(inv, "type_moteur")
     num_serie = _g(moteur, "num_serie")        or _g(inv, "num_serie")
@@ -340,8 +373,15 @@ def _build_html(inv, client=None, moteur=None, photos_annexe=None,
     marque    = _g(moteur, "marque")           or _g(inv, "marque")
     ref_const = _g(moteur, "ref_constructeur") or _g(inv, "ref_constructeur")
 
-    def _moteur_bloc(label, nav, mac, mar, ns, tmot, ref, nbh, svc):
+    def _moteur_bloc(label, nav, mac, mar, ns, tmot, ref, nbh, svc, nav_immat="", nav_port=""):
         """Génère le HTML d'un bloc moteur — template unique partagé."""
+        nav_detail = "".join(
+            f'<br><span style="font-size:8pt;color:#6b7785;font-weight:400">{_esc(v)}</span>'
+            for v in [
+                nav_immat and f"Immat. : {nav_immat}",
+                nav_port and f"Port d'attache : {nav_port}",
+            ] if v
+        )
         return f"""
 <table class="bloc-info">
   <colgroup>
@@ -354,7 +394,7 @@ def _build_html(inv, client=None, moteur=None, photos_annexe=None,
   </tr>
   <tr>
     <td class="lbl">Navire / Site</td>
-    <td>{_esc(nav)}</td>
+    <td>{_esc(nav)}{nav_detail}</td>
     <td class="lbl">Type machine</td>
     <td>{_esc(mac)}</td>
   </tr>
@@ -391,6 +431,8 @@ def _build_html(inv, client=None, moteur=None, photos_annexe=None,
             _g(_em, "num_serie"), _g(_em, "type_moteur"),
             _g(_em, "ref_constructeur"), _g(_em, "nb_heures_fct"),
             _g(_em, "date_mise_service"),
+            nav_immat=_g(_em, "navire_immatriculation"),
+            nav_port=_g(_em, "navire_port_attache"),
         )
         for _i, _em in enumerate(extra_moteurs, 2)
         if _g(_em, "num_serie")
@@ -662,6 +704,29 @@ def _build_html(inv, client=None, moteur=None, photos_annexe=None,
     font-weight: 600;
   }}
 }}
+/* Gabarit dedie aux 2 pages de conditions generales (.cgv-page, assignees
+   via la propriete CSS "page") : marge basse agrandie pour loger le logo
+   partenaires, ancre dans @bottom-center via l'element "running" declare
+   sur la derniere page (cf. .cgv-logo-wrap) — il n'apparait donc que sur
+   cette page-la, pas sur la premiere page de conditions. */
+@page cgv-conditions {{
+  size: A4;
+  margin: 10mm 5mm 46mm 5mm;
+  @bottom-left {{
+    content: "{_footer_left}";
+    font-size: 8pt;
+    color: #6b7785;
+  }}
+  @bottom-right {{
+    content: "Page " counter(page) " / " counter(pages);
+    font-size: 8pt;
+    color: #6b7785;
+    font-weight: 600;
+  }}
+  @bottom-center {{
+    content: element(cgv-logo);
+  }}
+}}
 """
 
     # ===== HTML =====
@@ -848,8 +913,14 @@ tr, .sign-box {{ page-break-inside: avoid; break-inside: avoid; }}
                  word-break: break-all; }}
 
 /* === PAGE CGV === */
+/* Chaque bloc .cgv-page force une nouvelle page (page-break-before), et
+   utilise le gabarit @page cgv-conditions (marge basse agrandie pour loger
+   le logo — cf. css_pdf_extra) : les 2 pages de conditions se suivent, et le
+   logo (position: running(), ci-dessous) ne s'affiche que sur la dernière,
+   sur laquelle il est effectivement déclaré dans le flux. */
 .cgv-page {{
   page-break-before: always; break-before: page;
+  page: cgv-conditions;
   font-size: 7.8px; line-height: 1.38; color: #1a2332;
 }}
 .cgv-title {{
@@ -872,8 +943,13 @@ tr, .sign-box {{ page-break-inside: avoid; break-inside: avoid; }}
 }}
 .cgv-p {{ margin: 0 0 3px; text-align: justify; }}
 .cgv-indent {{ padding-left: 10px; }}
+/* Tiré du flux normal et poussé dans la marge basse de la page (via @page
+   cgv-conditions / @bottom-center, cf. css_pdf_extra) : le logo se retrouve
+   ainsi ancré en bas de la dernière page de conditions uniquement, plutôt
+   que de suivre le texte au fil de la mise en page. */
 .cgv-logo-wrap {{
-  margin-top: 10px; text-align: center;
+  position: running(cgv-logo);
+  text-align: center;
   padding-top: 8px; border-top: 1px solid #b8c0c9;
 }}
 
@@ -1001,7 +1077,7 @@ tr, .sign-box {{ page-break-inside: avoid; break-inside: avoid; }}
 
 <!-- ═══ SECTION 3 : EQUIPEMENT ═══ -->
 <div class="section-header section-header-green">EQUIPEMENT</div>
-{_moteur_bloc("MOTEUR 1", navire, machine, marque, num_serie, type_mot, ref_const, nb_heures, date_svc)}
+{_moteur_bloc("MOTEUR 1", navire, machine, marque, num_serie, type_mot, ref_const, nb_heures, date_svc, nav_immat=navire_immat, nav_port=navire_port)}
 {_extra_moteurs_html}
 <!-- DEMANDE DU CLIENT -->
 <div class="section-bloc">
@@ -1259,6 +1335,7 @@ def sauvegarder_bon(inv, photos_annexe=None, generer_pdf=False,
     num_bon = _g(inv, "num_bon")
     if not num_bon:
         raise ValueError("Le bon n'a pas de num_bon")
+    num_bon = num_bon.upper()
     dossier = DOSSIERS_PATH / num_bon
     dossier.mkdir(parents=True, exist_ok=True)
 

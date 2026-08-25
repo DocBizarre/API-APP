@@ -65,6 +65,26 @@ COL = {
 }
 
 CGV_MARKER = "CONDITIONS GENERALES DE VENTE"
+CGA_MARKER = "CONDITIONS GENERALES D'ACHAT"
+SERVICES_MARKER = "PRESTATIONS DE SERVICES"
+
+
+def _detect_conditions_marker(text_upper):
+    """Identifie, dans le texte (déjà en majuscules) d'une page candidate,
+    laquelle des 3 familles de conditions générales EMS y figure. Un devis ou
+    un accusé de réception issu de l'ERP peut porter des CGV (vente de
+    matériel), des CGA (cas rare mais possible sur un document remanié), ou
+    les Conditions Générales de Prestations de Services et d'Interventions
+    (si le document concerne en réalité une intervention) — la détection se
+    fait donc sur le contenu réel de la page plutôt que sur une supposition
+    liée au type de document (CC/CF/DE)."""
+    if SERVICES_MARKER in text_upper:
+        return "SERVICES"
+    if CGA_MARKER in text_upper:
+        return "CGA"
+    if CGV_MARKER in text_upper:
+        return "CGV"
+    return None
 
 # En-têtes canoniques du tableau articles, par type de document. Les
 # libellés réels des PDF sources sont souvent coupés sur 2-3 lignes dans des
@@ -216,14 +236,18 @@ def parse_commande(path):
     data = {
         "entete": {}, "client": [], "expedier": [], "articles_header": [],
         "articles": [], "commentaire_commande": [], "totaux_header": [],
-        "totaux": [], "modalites": "",
+        "totaux": [], "modalites": "", "doc_type": "CC",
     }
     with pdfplumber.open(path) as pdf:
-        # Pages "document" = avant la première page de CGV
+        # Pages "document" = avant la première page de conditions générales
+        # (CGV, ou Conditions Services si l'accusé concerne en réalité une
+        # intervention plutôt qu'une vente de matériel — voir _detect_conditions_marker).
         cgv_idx = None
         for i, pg in enumerate(pdf.pages):
-            if CGV_MARKER in (pg.extract_text() or "").upper():
+            marker = _detect_conditions_marker((pg.extract_text() or "").upper())
+            if marker:
                 cgv_idx = i
+                data["conditions_type"] = marker
                 break
         doc_pages = pdf.pages[:cgv_idx] if cgv_idx else [pdf.pages[0]]
         data["cgv_start"] = cgv_idx  # index 0-based de la 1re page CGV (ou None)
@@ -313,8 +337,7 @@ def parse_commande(path):
                 taux_w = next((w for w in wordsL
                                if w["text"] == "Taux" and w["top"] > items_bot), None)
                 tot_top = taux_w["top"] if taux_w else items_bot + 200
-            band = [w for w in wordsL if items_bot + 2 < w["top"] < tot_top - 2
-                    and w["x0"] < 250]
+            band = [w for w in wordsL if items_bot + 2 < w["top"] < tot_top - 2]
             blines = [r["text"] for r in _lines(band)]
             data["commentaire_commande"] = [b for b in blines if b
                                             and "Commentaire commande" not in b]
@@ -363,13 +386,20 @@ def parse_bon_fournisseur(path):
         "entete": {}, "fournisseur": [], "expedier": [],
         "articles_header": [], "articles": [],
         "commentaire_commande": [],
-        "totaux_header": [], "totaux": [],
+        "totaux_header": [], "totaux": [], "doc_type": "CF",
     }
     with pdfplumber.open(path) as pdf:
+        # Un bon de commande fournisseur porte normalement des Conditions
+        # Générales d'Achat (CGA) — mais on détecte le marqueur réellement
+        # présent dans le PDF source plutôt que de le supposer, au cas où le
+        # document reprendrait encore d'anciennes CGV, ou concernerait en
+        # réalité une prestation sous-traitée (Conditions Services).
         cgv_idx = None
         for i, pg in enumerate(pdf.pages):
-            if CGV_MARKER in (pg.extract_text() or "").upper():
+            marker = _detect_conditions_marker((pg.extract_text() or "").upper())
+            if marker:
                 cgv_idx = i
+                data["conditions_type"] = marker
                 break
         doc_pages = list(pdf.pages[:cgv_idx]) if cgv_idx else list(pdf.pages)
         data["cgv_start"] = cgv_idx
@@ -469,7 +499,7 @@ def parse_bon_fournisseur(path):
                 )
                 tot_top = taux_w["top"] if taux_w else items_bot + 200
             band = [w for w in wordsL
-                    if items_bot + 2 < w["top"] < tot_top - 2 and w["x0"] < 250]
+                    if items_bot + 2 < w["top"] < tot_top - 2]
             blines = [r["text"] for r in _lines(band)]
             data["commentaire_commande"] = [
                 b for b in blines if b and "Commentaire commande" not in b
@@ -493,13 +523,20 @@ def parse_devis(path):
     data = {
         "entete": {}, "client": [], "expedier": [], "articles_header": [],
         "articles": [], "commentaire_commande": [], "totaux_header": [],
-        "totaux": [], "modalites": "",
+        "totaux": [], "modalites": "", "doc_type": "DE",
     }
     with pdfplumber.open(path) as pdf:
+        # Un devis issu de l'ERP peut être un devis de vente de matériel
+        # (CGV) ou, s'il concerne en réalité une intervention, porter les
+        # Conditions Générales de Prestations de Services et d'Interventions
+        # — on détecte le marqueur réellement présent plutôt que de supposer
+        # systématiquement des CGV.
         cgv_idx = None
         for i, pg in enumerate(pdf.pages):
-            if CGV_MARKER in (pg.extract_text() or "").upper():
+            marker = _detect_conditions_marker((pg.extract_text() or "").upper())
+            if marker:
                 cgv_idx = i
+                data["conditions_type"] = marker
                 break
         doc_pages = list(pdf.pages[:cgv_idx]) if cgv_idx else [pdf.pages[0]]
         data["cgv_start"] = cgv_idx
@@ -593,7 +630,7 @@ def parse_devis(path):
                 )
                 tot_top = taux_w["top"] if taux_w else items_bot + 200
             band = [w for w in wordsL
-                    if items_bot + 2 < w["top"] < tot_top - 2 and w["x0"] < 250]
+                    if items_bot + 2 < w["top"] < tot_top - 2]
             blines = [r["text"] for r in _lines(band)]
             data["commentaire_commande"] = [
                 b for b in blines if b and "Commentaire commande" not in b
@@ -1296,14 +1333,36 @@ def _extract_cgv_text(source_pdf, cgv_start):
         return ""
 
 
-def _build_cgv_logo_html(cgv_text, logo_uri=None):
-    """Génère une page CGV 2 colonnes + logo ancré en bas (running element WeasyPrint)."""
+_CONDITIONS_TITLES = {
+    "CGA": "CONDITIONS GÉNÉRALES D'ACHAT",
+    "SERVICES": "CONDITIONS GÉNÉRALES DE PRESTATIONS DE SERVICES ET D'INTERVENTIONS",
+    "CGV": "CONDITIONS GÉNÉRALES DE VENTE",
+}
+_CONDITIONS_FALLBACKS = {
+    "CGA": "Conditions générales d'achat disponibles sur demande.",
+    "SERVICES": "Conditions générales de prestations de services et d'interventions disponibles sur demande.",
+    "CGV": "Conditions générales de vente disponibles sur demande.",
+}
+
+
+def _build_cgv_logo_html(cgv_text, logo_uri=None, conditions_type="CGV"):
+    """Génère une page de conditions générales (2 colonnes + logo ancré en
+    bas, running element WeasyPrint). `conditions_type` ("CGV", "CGA" ou
+    "SERVICES") détermine le titre et le texte de repli affichés : il reflète
+    la famille de conditions réellement détectée dans le PDF source (un
+    devis/accusé peut porter des CGV *ou* les Conditions Services s'il
+    concerne en réalité une intervention — voir _detect_conditions_marker),
+    et non une simple déduction depuis le type de document (CC/CF/DE)."""
+    page_title = _CONDITIONS_TITLES.get(conditions_type, _CONDITIONS_TITLES["CGV"]) \
+        + " – EMERAUDE MOTEURS SYSTEMES"
+    fallback_text = _CONDITIONS_FALLBACKS.get(conditions_type, _CONDITIONS_FALLBACKS["CGV"])
     paragraphs = []
     for line in cgv_text.splitlines():
         line = line.strip()
         if not line:
             continue
-        if "CONDITIONS" in line.upper() and "VENTE" in line.upper():
+        line_up = line.upper()
+        if "CONDITIONS" in line_up and ("VENTE" in line_up or "ACHAT" in line_up or "SERVICES" in line_up):
             continue
         if re.match(r'^[A-Z]{1,2}\s*[•·–\-]\s', line) or (line.isupper() and len(line) < 60):
             paragraphs.append(
@@ -1311,7 +1370,7 @@ def _build_cgv_logo_html(cgv_text, logo_uri=None):
         else:
             paragraphs.append(f'<p class="cgv-p">{html.escape(line)}</p>')
     body = "\n".join(paragraphs) if paragraphs else \
-        '<p class="cgv-p">Conditions générales de vente disponibles sur demande.</p>'
+        f'<p class="cgv-p">{fallback_text}</p>'
 
     if logo_uri:
         # Le logo est extrait du flux normal (running element) et placé dans
@@ -1354,7 +1413,7 @@ body {{ font-family: 'Segoe UI', Arial, sans-serif;
 .cgv-p {{ margin: 0 0 3px; text-align: justify; }}
 {logo_css}
 </style></head><body>
-<div class="cgv-title">CONDITIONS GÉNÉRALES DE VENTE – EMERAUDE MOTEURS SYSTEMES</div>
+<div class="cgv-title">{html.escape(page_title)}</div>
 <div class="cgv-body">
 {body}
 </div>
@@ -1362,10 +1421,11 @@ body {{ font-family: 'Segoe UI', Arial, sans-serif;
 </body></html>"""
 
 
-def _fit_cgv_one_page(cgv_text, logo_uri=None):
-    """Rend la page CGV+logo (CSS identique aux bons d'intervention)."""
+def _fit_cgv_one_page(cgv_text, logo_uri=None, conditions_type="CGV"):
+    """Rend la page de conditions générales + logo (CSS identique aux bons
+    d'intervention)."""
     from weasyprint import HTML as _WH
-    return _WH(string=_build_cgv_logo_html(cgv_text, logo_uri)).write_pdf()
+    return _WH(string=_build_cgv_logo_html(cgv_text, logo_uri, conditions_type)).write_pdf()
 
 
 def _render_to_bytes(data, html_str, source_pdf=None, include_cgv=True):
@@ -1379,6 +1439,7 @@ def _render_to_bytes(data, html_str, source_pdf=None, include_cgv=True):
         writer.add_page(page)
 
     cgv_start = data.get("cgv_start")
+    doc_type = data.get("doc_type", "CC")
     logo_uri = _load_cgv_logo_uri()
 
     if include_cgv and source_pdf and cgv_start is not None:
@@ -1387,7 +1448,7 @@ def _render_to_bytes(data, html_str, source_pdf=None, include_cgv=True):
         cgv_text = ""
 
     try:
-        cgv_pdf = _fit_cgv_one_page(cgv_text, logo_uri)
+        cgv_pdf = _fit_cgv_one_page(cgv_text, logo_uri, doc_type)
         for page in PdfReader(io.BytesIO(cgv_pdf)).pages:
             writer.add_page(page)
     except Exception:
