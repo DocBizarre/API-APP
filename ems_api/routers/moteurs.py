@@ -121,6 +121,47 @@ def _resolve_affaires_liees(db: Session, moteurs: List[Moteur]) -> dict:
     return result
 
 
+def sync_moteur_apres_suppression_lien(db: Session, num_serie: str, affaire_id: str) -> None:
+    """Efface code_affaire d'un moteur quand le chapitre qui le rattachait à
+    cette affaire (par n° de série) vient d'être supprimé ou modifié.
+
+    Sans cela, code_affaire reste figé sur une affaire dont le moteur n'est
+    plus réellement un chapitre : la liste des moteurs continue d'afficher
+    l'alerte "déjà lié à l'affaire X" alors que ce n'est plus le cas.
+    N'efface que si aucun autre chapitre de la même affaire ne référence
+    encore ce n° de série (ex. deux chapitres pointant le même moteur).
+    """
+    if not num_serie:
+        return
+    m = db.query(Moteur).filter(Moteur.num_serie == num_serie).first()
+    if not m or not m.code_affaire:
+        return
+    aff = db.query(Affaire).filter(Affaire.id == affaire_id).first()
+    if not aff or m.code_affaire != code_from_num_affaire(aff.num_affaire):
+        return
+    still_linked = db.query(AffaireItem).filter(
+        AffaireItem.affaire_id == affaire_id,
+        AffaireItem.num_serie == num_serie,
+    ).first()
+    if not still_linked:
+        m.code_affaire = ""
+        db.commit()
+
+
+def clear_moteurs_code_affaire(db: Session, affaire: Affaire) -> None:
+    """Efface code_affaire de tous les moteurs pointant vers cette affaire.
+
+    À appeler avant la suppression d'une affaire : ses AffaireItem
+    disparaissent avec elle (cascade), donc rien d'autre ne nettoierait ce
+    champ déclaratif ensuite.
+    """
+    code = code_from_num_affaire(affaire.num_affaire)
+    if not code:
+        return
+    db.query(Moteur).filter(Moteur.code_affaire == code).update({"code_affaire": ""})
+    db.commit()
+
+
 @router.get("", response_model=List[MoteurOut])
 def list_moteurs(
     search: Optional[str] = Query(None),

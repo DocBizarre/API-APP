@@ -28,6 +28,7 @@ from ..config import settings
 from .interventions import _upsert_contact
 from .fournisseurs import _upsert_fournisseur
 from .navires import _upsert_navire
+from .moteurs import sync_moteur_apres_suppression_lien, clear_moteurs_code_affaire
 
 router = APIRouter(prefix="/affaires", tags=["affaires"])
 
@@ -535,6 +536,7 @@ def delete_affaire(affaire_id: str, db: Session = Depends(get_db)):
     a = db.query(Affaire).filter(Affaire.id == affaire_id).first()
     if not a:
         raise HTTPException(404, f"Affaire {affaire_id} introuvable")
+    clear_moteurs_code_affaire(db, a)
     db.delete(a)
     db.commit()
 
@@ -732,11 +734,14 @@ def update_item(affaire_id: str, item_id: str, body: AffaireItemUpdate,
     ).first()
     if not it:
         raise HTTPException(404, "Item introuvable")
+    ancien_num_serie = it.num_serie
     for field, val in body.model_dump(exclude_unset=True).items():
         if val is not None:
             setattr(it, field, val)
     it.version = (it.version or 1) + 1
     db.commit()
+    if ancien_num_serie and ancien_num_serie != it.num_serie:
+        sync_moteur_apres_suppression_lien(db, ancien_num_serie, affaire_id)
     db.refresh(it)
     return _item_to_out(it)
 
@@ -749,8 +754,10 @@ def delete_item(affaire_id: str, item_id: str, db: Session = Depends(get_db)):
     ).first()
     if not it:
         raise HTTPException(404, "Item introuvable")
+    num_serie = it.num_serie
     db.delete(it)
     db.commit()
+    sync_moteur_apres_suppression_lien(db, num_serie, affaire_id)
 
 
 # ─── Bilan (coûts prévus / réels) d'une affaire ─────────────────────────────

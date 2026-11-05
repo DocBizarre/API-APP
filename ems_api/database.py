@@ -46,6 +46,7 @@ def init_db():
     from .models import configurations  # noqa
     from .models import affaire, contact  # noqa
     from .models import bon_commande  # noqa
+    from .models import intention_achat  # noqa
     from .models import fournisseur  # noqa
     from .models import devis  # noqa
     from .models import navire  # noqa

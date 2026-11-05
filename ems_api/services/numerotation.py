@@ -24,6 +24,7 @@ from ..models.garantie import Garantie
 from ..models.amelioration import Amelioration
 from ..models.affaire import Affaire
 from ..models.bon_commande import BonCommande
+from ..models.intention_achat import IntentionAchat
 from ..models.devis import Devis
 
 # Serialize sequence generation within a single process (SQLite safety).
@@ -124,6 +125,11 @@ def next_num_amelioration(db: Session, device_prefix: str = "") -> str:
 def next_num_bon_commande(db: Session, device_prefix: str = "") -> str:
     """Génère le prochain numéro de bon de commande : BC-AAAA-XXXX."""
     return _prochain_numero(db, BonCommande, "num_bc", "BC", device_prefix)
+
+
+def next_num_intention_achat(db: Session, device_prefix: str = "") -> str:
+    """Génère le prochain numéro d'intention d'achat : IA-AAAA-XXXX."""
+    return _prochain_numero(db, IntentionAchat, "num_ia", "IA", device_prefix)
 
 
 def next_num_devis(db: Session, device_prefix: str = "") -> str:

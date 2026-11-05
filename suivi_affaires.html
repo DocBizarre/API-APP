@@ -488,7 +488,7 @@ label.form-label{display:block;font-size:11px;font-weight:600;color:var(--text-m
 textarea.form-control{resize:vertical;min-height:72px}
 .no-spinner::-webkit-outer-spin-button,.no-spinner::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .no-spinner[type=number]{-moz-appearance:textfield}
-select.form-control{appearance:none;padding-right:28px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
+select.form-control:not([multiple]){appearance:none;padding-right:28px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
 
 /* Search input with inline results (safe dans les modals) */
 .search-dropdown{display:flex;flex-direction:column;gap:0}
@@ -843,6 +843,8 @@ const ITEM_STATUTS = ['À faire','En cours','Terminé','NC'];
 const AFFAIRE_STATUTS = ['En cours','En attente','À facturer','Facturé','Clos','Annulé'];
 const AFFAIRE_COMPLEXITES = ['A','B','C'];
 const BC_STATUTS = ['Brouillon','Envoyé','Confirmé','Reçu','Annulé'];
+const IA_STATUTS = ['Brouillon','Envoyée','Confirmée','Annulée'];
+const IA_INCOTERMS = ['EXW','FCA','FOB','CFR','CIF','CPT','CIP','DAP','DPU','DDP'];
 
 // Identité EMS utilisée sur les documents imprimables (fiches récap, étiquettes)
 const EMS_ENTREPRISE = {
@@ -955,6 +957,7 @@ let state = {
   listSortCol: 'num_affaire',
   listSortDir: 'desc',
   // Vue liste bons de commande
+  achatsMode: 'bc', // 'bc' (bons de commande) ou 'intention' (intentions d'achat)
   bcListData: [],
   bcSearch: '',
   bcFilter: 'all',
@@ -962,6 +965,14 @@ let state = {
   bcPageSize: 25,
   bcSortCol: 'num_bc',
   bcSortDir: 'desc',
+  // Vue liste intentions d'achat
+  iaListData: [],
+  iaSearch: '',
+  iaFilter: 'all',
+  iaPage: 1,
+  iaPageSize: 25,
+  iaSortCol: 'num_ia',
+  iaSortDir: 'desc',
   // Histogrammes facturation (filtres indépendants par graphique)
   histoAchatUnit: 'annee', histoAchatFrom: '', histoAchatTo: '',
   histoLivraisonUnit: 'annee', histoLivraisonFrom: '', histoLivraisonTo: '',
@@ -969,6 +980,7 @@ let state = {
   // Tableaux facturation (onglet Tableaux)
   tableResteSortCol: 'resteHT', tableResteSortDir: 'desc',
   tableEntreeSortCol: 'dateObj', tableEntreeSortDir: 'asc',
+  tableRetardSortCol: 'dateObj', tableRetardSortDir: 'asc',
   // Vue planning (Gantt)
   ganttFilter: 'all',
 };
@@ -1892,16 +1904,16 @@ function cmpVal(a, b) {
 }
 
 function sortFacturationTable(which, col) {
-  const colField = which === 'reste' ? 'tableResteSortCol' : 'tableEntreeSortCol';
-  const dirField = which === 'reste' ? 'tableResteSortDir' : 'tableEntreeSortDir';
+  const colField = which === 'reste' ? 'tableResteSortCol' : which === 'retard' ? 'tableRetardSortCol' : 'tableEntreeSortCol';
+  const dirField = which === 'reste' ? 'tableResteSortDir' : which === 'retard' ? 'tableRetardSortDir' : 'tableEntreeSortDir';
   state[dirField] = (state[colField] === col && state[dirField] === 'asc') ? 'desc' : 'asc';
   state[colField] = col;
   renderFacturationGlobale();
 }
 
 function thSortFact(which, col, label, align) {
-  const colField = which === 'reste' ? state.tableResteSortCol : state.tableEntreeSortCol;
-  const dirField = which === 'reste' ? state.tableResteSortDir : state.tableEntreeSortDir;
+  const colField = which === 'reste' ? state.tableResteSortCol : which === 'retard' ? state.tableRetardSortCol : state.tableEntreeSortCol;
+  const dirField = which === 'reste' ? state.tableResteSortDir : which === 'retard' ? state.tableRetardSortDir : state.tableEntreeSortDir;
   const sorted = colField === col;
   const icon   = sorted ? (dirField === 'asc' ? '▲' : '▼') : '⇅';
   return `<th style="padding:8px 10px;text-align:${align||'left'};font-weight:600;color:var(--text-muted);cursor:pointer;white-space:nowrap"
@@ -1952,6 +1964,41 @@ function exportEntreeCsv() {
     ['date_prevue',  'Date prévisionnelle', p => p.dateStr || ''],
   ];
   exportTableCsv(state._facturationEntreeRows || [], cols, `entree_estimee_${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+// Un CSV brut ne peut pas porter de couleur — on exporte donc un tableau HTML
+// avec l'extension .xls, qu'Excel ouvre nativement en respectant les couleurs de cellule.
+const SEUIL_RETARD_COULEUR = 16;
+
+function exportRetardCsv() {
+  const cols = [
+    ['N° Affaire',           p => p.affaire.num_affaire || ''],
+    ['Projet',               p => p.affaire.nom_projet || p.affaire.navire_machine || ''],
+    ['Client',                p => p.affaire.client_nom || ''],
+    ['Stade',                p => p.stade || ''],
+    ['Montant restant HT',   p => p.montantHT.toFixed(2)],
+    ['Date prévisionnelle',  p => p.dateStr || ''],
+    ['Jours de retard',      p => p.joursRetard],
+  ];
+  const rows = state._facturationRetardRows || [];
+  const theadHtml = `<tr>${cols.map(c => `<th style="background:#e2e8f0;font-weight:bold;border:1px solid #94a3b8;padding:4px 8px">${escHtml(c[0])}</th>`).join('')}</tr>`;
+  const tbodyHtml = rows.map(p => {
+    const highlight = p.joursRetard >= SEUIL_RETARD_COULEUR;
+    const tdStyle = `border:1px solid #cbd5e1;padding:4px 8px${highlight ? ';background:#f87171;color:#7f1d1d;font-weight:bold' : ''}`;
+    return `<tr>${cols.map(c => `<td style="${tdStyle}">${escHtml(String(c[1](p)))}</td>`).join('')}</tr>`;
+  }).join('');
+  const html = `<html><head><meta charset="UTF-8"></head><body>` +
+    `<table style="border-collapse:collapse"><thead>${theadHtml}</thead><tbody>${tbodyHtml}</tbody></table>` +
+    `</body></html>`;
+  const blob = new Blob(['﻿' + html], { type: 'application/vnd.ms-excel' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `facturations_en_retard_${new Date().toISOString().slice(0,10)}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function exportBcLivraisonCsv() {
@@ -2549,6 +2596,32 @@ function renderFacturationGlobale() {
     </tr>`;
   }).join('');
 
+  // ── Tableau facturations en retard : sous-ensemble de pendingStages dont la date est dépassée ──
+  const retardGetters = entreeGetters;
+  const retardSortDir = state.tableRetardSortDir === 'desc' ? -1 : 1;
+  const retardGetter  = retardGetters[state.tableRetardSortCol] || retardGetters.dateObj;
+  const retardStagesSorted = pendingStages
+    .filter(p => p.dateObj && p.dateObj < today)
+    .map(p => ({ ...p, joursRetard: Math.round((today - p.dateObj) / 86400000) }))
+    .sort((a, b) => cmpVal(retardGetter(a), retardGetter(b)) * retardSortDir);
+  state._facturationRetardRows = retardStagesSorted;
+  const totalRetardHT = retardStagesSorted.reduce((s, p) => s + p.montantHT, 0);
+  const retardRows = retardStagesSorted.map(p => {
+    const b = p.affaire;
+    return `
+    <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="loadAffaire('${b.id}')"
+        onmouseover="this.style.background='var(--gray-bg)'" onmouseout="this.style.background=''">
+      <td style="padding:9px 10px;font-size:12px;color:var(--text-muted)">${escHtml(b.num_affaire||'—')}</td>
+      <td style="padding:9px 10px;font-weight:500">${escHtml(b.nom_projet||b.navire_machine||'—')}</td>
+      <td style="padding:9px 10px;font-size:12px;color:var(--text-muted)">${escHtml(b.client_nom||'—')}</td>
+      <td style="padding:9px 10px;font-size:12px">${escHtml(p.stade)}</td>
+      <td style="padding:9px 10px;text-align:right;font-weight:600;color:#dc2626">${fmtEur(p.montantHT)}
+        ${!p.exo ? `<div style="font-size:10px;color:var(--text-muted);font-weight:400">TTC : ${fmtEur(p.montant)}</div>` : ''}</td>
+      <td style="padding:9px 10px;color:#dc2626;font-weight:600">${escHtml(p.dateStr)} ⚠️</td>
+      <td style="padding:9px 10px;text-align:right;color:#dc2626;font-weight:600">${p.joursRetard} j</td>
+    </tr>`;
+  }).join('');
+
   // ── Tableau reste : enrichi (HT payé/restant) puis trié selon state.tableResteSortCol/Dir ──
   const resteEnriched = avecReste.map(b => {
     const exo = b.exonere_tva == 1;
@@ -2727,8 +2800,42 @@ function renderFacturationGlobale() {
       </div>` : `<p style="color:var(--text-muted);font-size:13px;padding:20px">Aucune entrée ni sortie en attente.</p>`}
     </div>`;
 
-  // ── Onglet Tableaux : reste à payer + entrée estimée ──
+  // ── Onglet Tableaux : retard + reste à payer + entrée estimée ──
   const tablesSection = `
+    <!-- Facturations en retard -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-weight:600;font-size:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <span>Facturations en retard
+          <span style="font-weight:400;color:var(--text-muted);font-size:12px;margin-left:6px">${retardStagesSorted.length} stade${retardStagesSorted.length!==1?'s':''} en retard</span>
+        </span>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:13px;color:#dc2626;font-weight:700">${fmtEur(totalRetardHT)} <span style="font-size:10px;font-weight:400;color:var(--text-muted)">HT</span></span>
+          ${retardStagesSorted.length ? `<button class="topbar-btn" style="padding:4px 10px;font-size:12px" onclick="exportRetardCsv()" title="Export Excel — les échéances à ${SEUIL_RETARD_COULEUR}+ jours de retard sont surlignées en rouge">⬇ Export Excel</button>` : ''}
+        </div>
+      </div>
+      ${retardStagesSorted.length ? `
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="background:var(--gray-bg);border-bottom:2px solid var(--border)">
+              ${thSortFact('retard','num_affaire','N°')}
+              ${thSortFact('retard','nom_projet','Projet')}
+              ${thSortFact('retard','client_nom','Client')}
+              ${thSortFact('retard','stade','Stade')}
+              ${thSortFact('retard','montantHT','Montant restant HT','right')}
+              ${thSortFact('retard','dateObj','Date prévisionnelle')}
+              <th style="padding:8px 10px;text-align:right;font-weight:600;color:var(--text-muted);white-space:nowrap">Retard</th>
+            </tr>
+          </thead>
+          <tbody>${retardRows}</tbody>
+        </table>
+      </div>` : `
+      <div class="empty-state" style="padding:40px 0">
+        <h3>Aucun retard</h3>
+        <p>Toutes les échéances de facturation sont à jour.</p>
+      </div>`}
+    </div>
+
     <!-- Affaires avec reste à payer -->
     <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden">
       <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-weight:600;font-size:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
@@ -4560,7 +4667,7 @@ async function searchMoteursInChapter(q) {
               ${[m.marque, m.type_moteur, m.navire, m.client_nom].filter(Boolean).map(escHtml).join(' · ')}
             </div>
           </div>
-          ${m.code_affaire && m.code_affaire !== codeAffaireFromNum(state.currentAffaire.num_affaire)
+          ${m.affaire_liee && m.code_affaire !== codeAffaireFromNum(state.currentAffaire.num_affaire)
             ? `<span style="font-size:11px;background:var(--warning-bg);color:var(--warning);padding:2px 7px;border-radius:10px">Lié: ${escHtml(m.code_affaire)}</span>`:''}
         </div>`).join('');
     }
@@ -5038,7 +5145,7 @@ async function searchMoteurs(q) {
             </div>
             ${m.client_nom ? `<div style="font-size:11px;color:var(--accent);margin-top:2px">${escHtml(m.client_nom)}</div>` : ''}
           </div>
-          ${m.code_affaire ? `<span style="font-size:11px;background:var(--warning-bg);color:var(--warning);padding:2px 7px;border-radius:10px;font-weight:600;flex-shrink:0">Lié: ${escHtml(m.code_affaire)}</span>` : ''}
+          ${m.affaire_liee ? `<span style="font-size:11px;background:var(--warning-bg);color:var(--warning);padding:2px 7px;border-radius:10px;font-weight:600;flex-shrink:0">Lié: ${escHtml(m.code_affaire)}</span>` : ''}
         </div>`).join('');
     }
     document.getElementById('moteur-dd').classList.add('open');
@@ -5051,7 +5158,7 @@ function selectMoteur(id) {
   document.getElementById('moteur-dd').classList.remove('open');
   document.getElementById('moteur-search-input').value = `${m.num_serie} — ${m.marque}`;
   const affCode = codeAffaireFromNum(state.currentAffaire.num_affaire);
-  const dejaLie = m.code_affaire && m.code_affaire !== affCode;
+  const dejaLie = m.affaire_liee && m.code_affaire !== affCode;
   const warning = dejaLie
     ? `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--warning-bg);color:var(--warning);border-radius:6px;font-size:12px;font-weight:600;margin-bottom:10px">⚠ Ce moteur est déjà lié à l'affaire ${escHtml(m.code_affaire)}. Le lier ici le déliera de cette affaire.</div>`
     : '';
@@ -5062,7 +5169,7 @@ async function confirmLinkMoteur() {
   const m = window._selectedMoteur;
   if(!m) return;
   const affCode = codeAffaireFromNum(state.currentAffaire.num_affaire);
-  if (m.code_affaire && m.code_affaire !== affCode) {
+  if (m.affaire_liee && m.code_affaire !== affCode) {
     const ok = await confirm(
       'Moteur déjà lié',
       `Ce moteur (${m.num_serie}) est déjà lié à l'affaire ${m.code_affaire}. Voulez-vous le délier de cette affaire et le lier à ${state.currentAffaire.num_affaire} ?`
@@ -6398,19 +6505,44 @@ function removeBcInterlocuteur(i) {
   renderBcInterlocuteurs();
 }
 
-async function showAchatsGlobal(affaireIdFilter) {
+async function showAchatsGlobal(affaireIdFilter, mode) {
   state.view = 'achats';
   state.currentId = null;
   state.achatsFilterAffaireId = affaireIdFilter || null;
+  if (mode) state.achatsMode = mode;
   state.bcPage = 1;
+  state.iaPage = 1;
   renderNav();
   _pushNavState();
-  document.getElementById('topbar-title').textContent = 'Achats — Bons de commande';
-  document.getElementById('topbar-actions').innerHTML =
-    `<button class="topbar-btn primary" onclick="openBcModal(null)">+ Nouveau bon de commande</button>`;
   document.getElementById('content').innerHTML =
     '<div style="padding:60px;text-align:center"><div class="spinner spinner-dark"></div></div>';
-  await reloadBonsCommande();
+  await refreshAchatsTopbar();
+  if (state.achatsMode === 'intention') {
+    await reloadIntentionsAchat();
+  } else {
+    await reloadBonsCommande();
+  }
+}
+
+function setAchatsMode(mode) {
+  if (state.achatsMode === mode) return;
+  state.achatsMode = mode;
+  showAchatsGlobal(state.achatsFilterAffaireId, mode);
+}
+
+async function refreshAchatsTopbar() {
+  const isIntention = state.achatsMode === 'intention';
+  document.getElementById('topbar-title').textContent = isIntention
+    ? 'Achats — Intentions d\'achat' : 'Achats — Bons de commande';
+  document.getElementById('topbar-actions').innerHTML = `
+    <div class="seg-toggle" style="display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-right:10px">
+      <button class="btn btn-sm ${!isIntention?'btn-primary':'btn-ghost'}" style="border-radius:0" onclick="setAchatsMode('bc')">Bons de commande</button>
+      <button class="btn btn-sm ${isIntention?'btn-primary':'btn-ghost'}" style="border-radius:0" onclick="setAchatsMode('intention')">Intentions d'achat</button>
+    </div>
+    ${isIntention
+      ? `<button class="topbar-btn primary" onclick="openIaModal(null)">+ Nouvelle intention d'achat</button>`
+      : `<button class="topbar-btn primary" onclick="openBcModal(null)">+ Nouveau bon de commande</button>`}
+  `;
 }
 
 async function reloadBonsCommande() {
@@ -6583,6 +6715,189 @@ function debounceBcSearch(q) {
   state.bcSearch = q;
   clearTimeout(_bcSearchTimer);
   _bcSearchTimer = setTimeout(() => { state.bcPage = 1; reloadBonsCommande(); }, 350);
+}
+
+function iaStatutBadge(statut) {
+  const styles = {
+    'Brouillon':  'background:#f3f4f6;color:#4b5563',
+    'Envoyée':    'background:#dbeafe;color:#1d4ed8',
+    'Confirmée':  'background:#ede9fe;color:#5b21b6',
+    'Annulée':    'background:#fee2e2;color:#991b1b',
+  };
+  const css = styles[statut] || styles['Brouillon'];
+  return `<span style="${css};display:inline-flex;align-items:center;padding:2px 9px;border-radius:12px;font-size:11px;font-weight:600">${escHtml(statut)}</span>`;
+}
+
+async function reloadIntentionsAchat() {
+  try {
+    const params = new URLSearchParams();
+    if (state.achatsFilterAffaireId) params.set('affaire_id', state.achatsFilterAffaireId);
+    if (state.iaFilter !== 'all') params.set('statut', state.iaFilter);
+    if (state.iaSearch) params.set('search', state.iaSearch);
+    state.intentionsAchat = await GET(`/intentions-achat?${params}`);
+    state.iaListData = [...state.intentionsAchat];
+    sortIaListData();
+    renderIaTablePage();
+  } catch(e) {
+    document.getElementById('content').innerHTML =
+      `<div class="empty-state"><div class="icon">⚠️</div><h3>Erreur</h3><p>${escHtml(e.message)}</p></div>`;
+  }
+}
+
+function sortIaListData() {
+  const col = state.iaSortCol;
+  const dir = state.iaSortDir === 'asc' ? 1 : -1;
+  state.iaListData.sort((a, b) => {
+    let av = a[col], bv = b[col];
+    if (typeof av === 'number' || typeof bv === 'number') {
+      return ((av||0) - (bv||0)) * dir;
+    }
+    av = (av || '').toString().toLowerCase();
+    bv = (bv || '').toString().toLowerCase();
+    return av < bv ? -dir : av > bv ? dir : 0;
+  });
+}
+
+function renderIaTablePage() {
+  const data    = state.iaListData;
+  const total   = data.length;
+  const page    = state.iaPage;
+  const size    = state.iaPageSize;
+  const start   = (page - 1) * size;
+  const rows    = data.slice(start, start + size);
+  const totalHt = data.reduce((s,b) => s + (b.total_ht||0), 0);
+
+  const filterChip = state.achatsFilterAffaireId ? `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:6px 12px;font-size:13px">
+      <span>Filtré sur une affaire</span>
+      <button class="btn btn-ghost btn-xs" onclick="showAchatsGlobal(null)">✕ Retirer le filtre</button>
+    </div>` : '';
+
+  document.getElementById('content').innerHTML = `
+  ${filterChip}
+  <div class="list-toolbar">
+    <div class="list-search-wrap">
+      <span class="list-search-icon">🔍</span>
+      <input type="text" value="${escHtml(state.iaSearch)}"
+        placeholder="N° intention, fournisseur, réf. client…"
+        oninput="debounceIaSearch(this.value)" autofocus>
+    </div>
+    <div class="list-filters">
+      ${[['all','Tous',''],['Brouillon','Brouillon','#6b7280'],['Envoyée','Envoyée','#2563eb'],['Confirmée','Confirmée','#7c3aed'],['Annulée','Annulée','#dc2626']].map(([f,l,c])=>
+        `<button class="list-filter-btn ${state.iaFilter===f?'active':''}" onclick="setIaFilter('${f}')">
+           ${c?`<span class="fdot" style="background:${c}"></span>`:''}${l}
+         </button>`).join('')}
+    </div>
+  </div>
+  <div class="affaire-table-wrap">
+    <table class="affaire-table">
+      <thead><tr>
+        ${thIaCol('num_ia','N° Intention')}
+        ${thIaCol('fournisseur_nom','Fournisseur')}
+        <th>Affaire liée</th>
+        ${thIaCol('reference_client','Réf. client')}
+        <th>Langue</th>
+        ${thIaCol('statut','Statut')}
+        ${thIaCol('total_ht','Total HT')}
+        <th style="width:110px"></th>
+      </tr></thead>
+      <tbody>
+        ${rows.length ? rows.map(iaRow).join('') :
+          `<tr><td colspan="8" style="text-align:center;padding:48px;color:var(--text-muted)">
+            Aucune intention d'achat trouvée
+           </td></tr>`}
+      </tbody>
+    </table>
+    ${renderIaPagination(total, page, size)}
+  </div>
+  ${total ? `
+  <div style="display:flex;justify-content:flex-end;padding:10px 4px;border-top:2px solid var(--border);margin-top:6px;font-size:14px">
+    <span style="color:var(--text-muted);margin-right:8px">Total (HT) :</span>
+    <strong>${fmtEur(totalHt)}</strong>
+  </div>` : ''}`;
+}
+
+function thIaCol(col, label) {
+  const sorted = state.iaSortCol === col;
+  const icon   = sorted ? (state.iaSortDir === 'asc' ? '▲' : '▼') : '⇅';
+  return `<th class="sortable ${sorted?'sorted':''}" onclick="sortIaTable('${col}')">
+    ${label}<span class="sort-icon">${icon}</span></th>`;
+}
+
+function iaRow(ia) {
+  return `<tr ondblclick="openIaModal('${ia.id}')" style="cursor:pointer" title="Double-clic pour ouvrir l'intention d'achat">
+    <td class="td-num">${escHtml(ia.num_ia)}</td>
+    <td class="td-muted" title="${escHtml(ia.fournisseur_nom)}">${escHtml(ia.fournisseur_nom||'—')}</td>
+    <td onclick="event.stopPropagation()" ondblclick="event.stopPropagation()">
+      ${ia.affaire_id
+        ? `<span style="background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:10px;cursor:pointer;font-size:12px" onclick="loadAffaire('${ia.affaire_id}')" title="Ouvrir l'affaire liée">${escHtml(ia.affaire_num||'')}${ia.affaire_nom?' — '+escHtml(ia.affaire_nom):''}</span>`
+        : `<span style="color:var(--text-muted);font-style:italic;font-size:12px">—</span>`}
+    </td>
+    <td class="td-muted">${escHtml(ia.reference_client||'—')}</td>
+    <td><span style="font-size:11px;font-weight:600;color:var(--text-muted);border:1px solid var(--border);border-radius:4px;padding:1px 6px">${(ia.langue||'fr').toUpperCase()}</span></td>
+    <td>${iaStatutBadge(ia.statut)}</td>
+    <td class="td-muted">${fmtEur(ia.total_ht)}</td>
+    <td onclick="event.stopPropagation()" ondblclick="event.stopPropagation()" style="white-space:nowrap">
+      <button class="btn-icon" title="PDF" onclick="generateIntentionAchatPdf('${ia.id}')">📄</button>
+      <button class="btn-icon" title="Modifier" onclick="openIaModal('${ia.id}')">✏️</button>
+      <button class="btn-icon" title="Dupliquer" onclick="duplicateIntentionAchat('${ia.id}')">📑</button>
+      <button class="btn-icon red" title="Supprimer" onclick="deleteIntentionAchat('${ia.id}')">🗑</button>
+    </td>
+  </tr>`;
+}
+
+function renderIaPagination(total, page, size) {
+  if (total <= size) return '';
+  const totalPages = Math.ceil(total / size);
+  const s = (page-1)*size + 1, e = Math.min(page*size, total);
+  const pages = [];
+  if (totalPages <= 7) {
+    for (let i=1; i<=totalPages; i++) pages.push(i);
+  } else {
+    pages.push(1);
+    if (page > 3) pages.push('…');
+    for (let i=Math.max(2,page-1); i<=Math.min(totalPages-1,page+1); i++) pages.push(i);
+    if (page < totalPages-2) pages.push('…');
+    pages.push(totalPages);
+  }
+  return `<div class="pagination">
+    <div class="pagination-info">
+      <span>${s}–${e} sur <strong>${total}</strong> intention${total>1?'s':''} d'achat</span>
+      <select class="page-size-sel" onchange="setIaPageSize(+this.value)">
+        ${[10,25,50,100].map(n=>`<option ${n===size?'selected':''}>${n}</option>`).join('')}
+      </select>
+      <span>/ page</span>
+    </div>
+    <div class="pagination-btns">
+      <button class="page-btn" ${page===1?'disabled':''} onclick="goIaPage(${page-1})">‹</button>
+      ${pages.map(p=>p==='…'
+        ? '<span style="padding:0 4px;color:var(--text-muted)">…</span>'
+        : `<button class="page-btn ${p===page?'active':''}" onclick="goIaPage(${p})">${p}</button>`
+      ).join('')}
+      <button class="page-btn" ${page===totalPages?'disabled':''} onclick="goIaPage(${page+1})">›</button>
+    </div>
+  </div>`;
+}
+
+function sortIaTable(col) {
+  state.iaSortDir = state.iaSortCol === col && state.iaSortDir === 'asc' ? 'desc' : 'asc';
+  state.iaSortCol = col;
+  state.iaPage = 1;
+  sortIaListData();
+  renderIaTablePage();
+}
+function goIaPage(n) {
+  state.iaPage = n;
+  renderIaTablePage();
+  document.getElementById('content').scrollTop = 0;
+}
+function setIaPageSize(n) { state.iaPageSize = n; state.iaPage = 1; renderIaTablePage(); }
+function setIaFilter(f) { state.iaFilter = f; state.iaPage = 1; reloadIntentionsAchat(); }
+let _iaSearchTimer = null;
+function debounceIaSearch(q) {
+  state.iaSearch = q;
+  clearTimeout(_iaSearchTimer);
+  _iaSearchTimer = setTimeout(() => { state.iaPage = 1; reloadIntentionsAchat(); }, 350);
 }
 
 let _bcLignes = [];
@@ -7150,6 +7465,534 @@ function updateBcPaiementsTotal() {
     ${totalReste !== null ? `<span style="${resteColor}">Reste ${label} : ${fmtEur(totalReste)}</span>` : ''}
     ${totalPct > 100 ? '<span style="color:#dc2626">⚠️ Total > 100 %</span>' : ''}
   `;
+}
+
+// ══════════════════ Intentions d'achat ══════════════════
+
+let _iaLignes = [];
+let _iaInterlocuteurs = [];
+let _iaAffaireId = null;
+let _iaAffaireLabel = '';
+let _iaLangue = 'fr';
+
+function openIaModal(iaId, duplicateFrom) {
+  const ia = duplicateFrom || (iaId ? (state.intentionsAchat.find(b => b.id === iaId) || {}) : {});
+  const isDuplicate = !!duplicateFrom;
+  const effectiveIaId = isDuplicate ? null : iaId;
+  _iaLignes = (ia.lignes || []).map(l => ({...l}));
+  _iaAffaireId = ia.affaire_id || null;
+  _iaAffaireLabel = ia.affaire_id ? `${ia.affaire_num||''}${ia.affaire_nom?' — '+ia.affaire_nom:''}` : '';
+  _iaLangue = ia.langue || 'fr';
+  try { _iaInterlocuteurs = JSON.parse(ia.interlocuteurs_fournisseur || '[]'); } catch(e) { _iaInterlocuteurs = []; }
+  if (!_iaInterlocuteurs.length && ia.fournisseur_contact) {
+    _iaInterlocuteurs = [{ nom: ia.fournisseur_contact, email: ia.fournisseur_email||'', telephone: ia.fournisseur_tel||'', role: '' }];
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+  <div class="modal modal-lg" style="max-height:92vh">
+    <div class="modal-header">
+      <h2>${effectiveIaId ? "✏️ Modifier l'intention d'achat" : (isDuplicate ? "📄 Dupliquer l'intention d'achat" : "+ Nouvelle intention d'achat")}</h2>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div id="ia-lang-toggle" style="display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+          <button type="button" class="btn btn-sm ${_iaLangue==='fr'?'btn-primary':'btn-ghost'}" style="border-radius:0" onclick="setIaLangue('fr')" title="Document en français">FR</button>
+          <button type="button" class="btn btn-sm ${_iaLangue==='en'?'btn-primary':'btn-ghost'}" style="border-radius:0" onclick="setIaLangue('en')" title="Document generated in English">EN</button>
+        </div>
+        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body" style="overflow-y:auto;flex:1">
+      <div style="margin-bottom:14px">
+        <label class="form-label">Affaire liée (optionnel)</label>
+        <div id="ia-affaire-picked" style="display:${_iaAffaireId?'flex':'none'};align-items:center;gap:8px;background:var(--gray-bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px">
+          <span id="ia-affaire-picked-label" style="flex:1">${escHtml(_iaAffaireLabel)}</span>
+          <button type="button" class="btn btn-ghost btn-xs" onclick="clearIaAffaire()">✕ Délier</button>
+        </div>
+        <div id="ia-affaire-search-wrap" style="position:relative;display:${_iaAffaireId?'none':'block'}">
+          <input class="form-control" id="ia-affaire-search" placeholder="Rechercher une affaire (n°, projet, navire…)" autocomplete="off"
+            oninput="onIaAffaireInput(this.value)">
+          <div id="ia-affaire-results" class="search-results" style="display:none;position:absolute;z-index:20;background:var(--surface);border:1px solid var(--border);border-radius:6px;width:100%;max-height:180px;overflow-y:auto"></div>
+        </div>
+      </div>
+      <div class="form-row triple" style="margin-bottom:12px">
+        <div>
+          <label class="form-label">Référence devis (EMS)</label>
+          <input class="form-control" id="ia-reference-devis" value="${escHtml(ia.reference_devis||'')}" placeholder="Ex : réf. devis EMS">
+        </div>
+        <div>
+          <label class="form-label">Référence client</label>
+          <input class="form-control" id="ia-reference-client" value="${escHtml(ia.reference_client||'')}" placeholder="Ex : réf. commande client">
+        </div>
+        <div>
+          <label class="form-label">Statut</label>
+          <select class="form-control" id="ia-statut">
+            ${IA_STATUTS.map(s=>`<option ${s===(ia.statut||'Brouillon')?'selected':''}>${s}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-row triple" style="margin-bottom:12px">
+        <div>
+          <label class="form-label">Fournisseur</label>
+          <input class="form-control" id="ia-fournisseur-nom" list="ia-fournisseurs-list"
+            value="${escHtml(ia.fournisseur_nom||'')}" placeholder="Nom du fournisseur"
+            autocomplete="off" oninput="onIaFournisseurNomChange(this.value)">
+          <datalist id="ia-fournisseurs-list">
+            ${state.fournisseurs.map(f=>`<option value="${escHtml(f.nom)}">`).join('')}
+          </datalist>
+        </div>
+        <div>
+          <label class="form-label">Référence fournisseur</label>
+          <input class="form-control" id="ia-reference-fournisseur" value="${escHtml(ia.reference_fournisseur||'')}" placeholder="Ex : réf. devis fournisseur">
+        </div>
+        <div>
+          <label class="form-label">Incoterm</label>
+          <input class="form-control" id="ia-incoterm" list="ia-incoterms-list" value="${escHtml(ia.incoterm||'')}" placeholder="Ex : DDP, FCA…">
+          <datalist id="ia-incoterms-list">
+            ${IA_INCOTERMS.map(t=>`<option value="${t}">`).join('')}
+          </datalist>
+        </div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label class="form-label">Adresse fournisseur</label>
+        <input class="form-control" id="ia-fournisseur-rue" placeholder="N° et rue" value="${escHtml(ia.fournisseur_rue||'')}" style="margin-bottom:6px">
+        <div class="form-row triple" style="margin-bottom:0">
+          <input class="form-control" id="ia-fournisseur-cp" placeholder="Code postal" value="${escHtml(ia.fournisseur_code_postal||'')}">
+          <input class="form-control" id="ia-fournisseur-ville" placeholder="Ville" value="${escHtml(ia.fournisseur_ville||'')}">
+          <input class="form-control" id="ia-fournisseur-pays" placeholder="Pays" value="${escHtml(ia.fournisseur_pays||'France')}">
+        </div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label class="form-label">Adresse de livraison</label>
+        <input class="form-control" id="ia-livraison-nom" placeholder="${escHtml(BC_LIVRAISON_DEFAUT.nom)}" value="${escHtml(ia.livraison_nom||'')}" style="margin-bottom:6px">
+        <input class="form-control" id="ia-livraison-rue" placeholder="${escHtml(BC_LIVRAISON_DEFAUT.rue)}" value="${escHtml(ia.livraison_rue||'')}" style="margin-bottom:6px">
+        <div class="form-row triple" style="margin-bottom:6px">
+          <input class="form-control" id="ia-livraison-cp" placeholder="${escHtml(BC_LIVRAISON_DEFAUT.cp)}" value="${escHtml(ia.livraison_code_postal||'')}">
+          <input class="form-control" id="ia-livraison-ville" placeholder="${escHtml(BC_LIVRAISON_DEFAUT.ville)}" value="${escHtml(ia.livraison_ville||'')}">
+          <input class="form-control" id="ia-livraison-pays" placeholder="${escHtml(BC_LIVRAISON_DEFAUT.pays)}" value="${escHtml(ia.livraison_pays||'')}">
+        </div>
+        <input class="form-control" id="ia-lieu-livraison-texte" value="${escHtml(ia.lieu_livraison_texte||'')}" placeholder="Lieu de livraison en texte libre (ex : FCA Gainsborough UK)">
+      </div>
+      <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:12px">
+        <div style="background:var(--gray-bg);padding:8px 14px;font-size:12px;font-weight:600;color:var(--text-muted);border-bottom:1px solid var(--border);letter-spacing:.3px">
+          Interlocuteur(s) fournisseur
+        </div>
+        <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:13px;font-weight:600;color:var(--text)">Contacts côté fournisseur</span>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="addIaInterlocuteur()" style="font-size:12px;padding:4px 10px">+ Ajouter un interlocuteur</button>
+          </div>
+          <div id="ia-interlocuteurs-list" style="display:flex;flex-direction:column;gap:6px"></div>
+          <datalist id="ia-interloc-noms">
+            ${state.contacts.map(c=>`<option value="${escHtml(c.nom)}">`).join('')}
+          </datalist>
+          <datalist id="ia-interloc-roles">
+            <option value="Contact commercial"></option>
+            <option value="Contact technique"></option>
+            <option value="Comptabilité"></option>
+            <option value="Direction"></option>
+          </datalist>
+        </div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label class="form-label" style="margin-bottom:6px;display:block">Chargé de commande (EMS)</label>
+        <div class="form-row triple" style="margin-bottom:0">
+          <div>
+            <input class="form-control" id="ia-charge-nom" list="ia-techniciens-list"
+              value="${escHtml(ia.charge_commande_nom||'')}" placeholder="Nom du chargé de commande"
+              autocomplete="off" oninput="onIaChargeNomChange(this.value)">
+          </div>
+          <div>
+            <input class="form-control" id="ia-charge-email" type="email"
+              value="${escHtml(ia.charge_commande_email||'')}" placeholder="Email">
+          </div>
+          <div>
+            <input class="form-control" id="ia-charge-tel"
+              value="${escHtml(ia.charge_commande_tel||'')}" placeholder="Téléphone">
+          </div>
+        </div>
+        <datalist id="ia-techniciens-list">
+          ${state.techniciens.map(t=>`<option value="${escHtml(t.nom)}">`).join('')}
+        </datalist>
+      </div>
+      <div class="form-row" style="margin-bottom:12px">
+        <div>
+          <label class="form-label">Date</label>
+          <input class="form-control" type="date" id="ia-date-commande" value="${toInputDate(ia.date_commande||'')}">
+        </div>
+        <div>
+          <label class="form-label">Délai de livraison</label>
+          <input class="form-control" id="ia-delai-livraison-texte" value="${escHtml(ia.delai_livraison_texte||'')}" placeholder="Ex : 6-64 weeks after PO">
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;user-select:none;margin-bottom:14px">
+        <input type="checkbox" id="ia-exonere-tva" style="width:15px;height:15px;cursor:pointer" ${ia.exonere_tva?'checked':''} onchange="updateIaLignesTotal()">
+        <span>Exonéré de TVA</span>
+      </label>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <label class="form-label" style="margin:0">Scope de fourniture</label>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="addIaLigne()">+ Ajouter une ligne</button>
+      </div>
+      <div id="ia-lignes-list" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:8px;padding:7px 10px;background:var(--gray-bg);border:1px dashed var(--border);border-radius:6px">
+        <label class="form-label" style="margin:0;white-space:nowrap">Frais de port (HT) <span style="font-weight:400;color:var(--text-muted)">— hors pièces</span></label>
+        <div style="position:relative">
+          <input class="form-control no-spinner" style="font-size:13px;width:110px;padding-right:22px;text-align:right" type="number" min="0" step="0.01"
+            id="ia-frais-port" value="${ia.frais_port ?? 0}" oninput="updateIaLignesTotal()">
+          <span style="position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text-muted);pointer-events:none">€</span>
+        </div>
+      </div>
+      <div id="ia-lignes-total" style="display:none;justify-content:flex-end;gap:16px;padding:8px 4px;font-size:13px;margin-top:6px;border-top:1px solid var(--border)"></div>
+
+      <div style="margin-top:14px">
+        <label class="form-label">Conditions de paiement</label>
+        <textarea class="form-control" id="ia-conditions-paiement-texte" rows="2" placeholder="Ex : 30% down payment / 60% before shipment / 10% after acceptance">${escHtml(ia.conditions_paiement_texte||'')}</textarea>
+      </div>
+      <div style="margin-top:10px">
+        <label class="form-label">Garantie</label>
+        <textarea class="form-control" id="ia-garantie-texte" rows="2" placeholder="Ex : 24 months warranty from delivery">${escHtml(ia.garantie_texte||'')}</textarea>
+      </div>
+      <div style="margin-top:10px">
+        <label class="form-label">Conditions</label>
+        <textarea class="form-control" id="ia-conditions" rows="2">${escHtml(ia.conditions||'')}</textarea>
+      </div>
+      <div style="margin-top:10px">
+        <label class="form-label">Notes internes</label>
+        <textarea class="form-control" id="ia-notes" rows="2">${escHtml(ia.notes||'')}</textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="saveIntentionAchat('${effectiveIaId||''}')">Enregistrer</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  renderIaLignes();
+  renderIaInterlocuteurs();
+  document.getElementById('ia-fournisseur-nom')?.focus();
+}
+
+function setIaLangue(v) {
+  _iaLangue = v;
+  const wrap = document.getElementById('ia-lang-toggle');
+  if (!wrap) return;
+  wrap.querySelectorAll('button').forEach((btn, i) => {
+    const active = (i === 0 && v === 'fr') || (i === 1 && v === 'en');
+    btn.className = `btn btn-sm ${active ? 'btn-primary' : 'btn-ghost'}`;
+  });
+}
+
+let _iaAffaireTimer = null;
+function onIaAffaireInput(val) {
+  clearTimeout(_iaAffaireTimer);
+  const box = document.getElementById('ia-affaire-results');
+  if (!val || val.length < 2) { if (box) box.style.display = 'none'; return; }
+  _iaAffaireTimer = setTimeout(async () => {
+    try {
+      const results = await GET(`/affaires?search=${encodeURIComponent(val)}`);
+      if (!box) return;
+      if (!results.length) { box.style.display = 'none'; return; }
+      box.innerHTML = results.slice(0, 15).map(a => `
+        <div style="padding:6px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border)"
+          onmousedown="pickIaAffaire('${a.id}', '${escHtml(a.num_affaire).replace(/'/g,"\\'")}', '${escHtml(a.nom_projet||'').replace(/'/g,"\\'")}')">
+          <strong>${escHtml(a.num_affaire)}</strong>${a.nom_projet ? ' — '+escHtml(a.nom_projet) : ''}
+        </div>`).join('');
+      box.style.display = 'block';
+    } catch(e) { /* recherche best-effort, ignore les erreurs réseau */ }
+  }, 250);
+}
+function pickIaAffaire(id, num, nom) {
+  _iaAffaireId = id;
+  _iaAffaireLabel = num + (nom ? ' — ' + nom : '');
+  const results = document.getElementById('ia-affaire-results');
+  if (results) results.style.display = 'none';
+  document.getElementById('ia-affaire-search-wrap').style.display = 'none';
+  document.getElementById('ia-affaire-picked-label').textContent = _iaAffaireLabel;
+  document.getElementById('ia-affaire-picked').style.display = 'flex';
+}
+function clearIaAffaire() {
+  _iaAffaireId = null;
+  _iaAffaireLabel = '';
+  document.getElementById('ia-affaire-picked').style.display = 'none';
+  document.getElementById('ia-affaire-search-wrap').style.display = 'block';
+  const input = document.getElementById('ia-affaire-search');
+  if (input) { input.value = ''; input.focus(); }
+}
+function onIaChargeNomChange(val) {
+  const t = state.techniciens.find(t => t.nom === val);
+  if (!t) return;
+  const emailEl = document.getElementById('ia-charge-email');
+  const telEl = document.getElementById('ia-charge-tel');
+  if (emailEl) emailEl.value = t.email || '';
+  if (telEl) telEl.value = t.telephone || '';
+}
+function onIaFournisseurNomChange(val) {
+  const f = state.fournisseurs.find(f => f.nom === val);
+  if (!f) return;
+  if (!_iaInterlocuteurs.length && (f.contact || f.email || f.telephone)) {
+    _iaInterlocuteurs = [{ nom: f.contact||'', email: f.email||'', telephone: f.telephone||'', role: '' }];
+    renderIaInterlocuteurs();
+  }
+  const map = {
+    'ia-fournisseur-rue': f.rue,
+    'ia-fournisseur-cp': f.code_postal, 'ia-fournisseur-ville': f.ville,
+    'ia-fournisseur-pays': f.pays,
+  };
+  for (const [id, fieldVal] of Object.entries(map)) {
+    const el = document.getElementById(id);
+    if (el && fieldVal) el.value = fieldVal;
+  }
+}
+
+function renderIaInterlocuteurs() {
+  const list = document.getElementById('ia-interlocuteurs-list');
+  if (!list) return;
+  list.innerHTML = _iaInterlocuteurs.map((it, i) => `
+    <div class="interloc-row-main">
+      <input class="form-control" style="font-size:13px" placeholder="Nom" list="ia-interloc-noms" autocomplete="off"
+        value="${escHtml(it.nom||'')}" oninput="_iaInterlocuteurs[${i}].nom=this.value"
+        onchange="matchIaInterlocuteurContact(${i})">
+      <input class="form-control" style="font-size:13px" type="email" placeholder="Email"
+        value="${escHtml(it.email||'')}" oninput="_iaInterlocuteurs[${i}].email=this.value">
+      <input class="form-control" style="font-size:13px" placeholder="Téléphone"
+        value="${escHtml(it.telephone||'')}" oninput="_iaInterlocuteurs[${i}].telephone=this.value">
+      <input class="form-control" style="font-size:13px" placeholder="Rôle" list="ia-interloc-roles" autocomplete="off"
+        value="${escHtml(it.role||'')}" oninput="_iaInterlocuteurs[${i}].role=this.value">
+      <button type="button" onclick="removeIaInterlocuteur(${i})"
+        style="background:none;border:none;color:var(--danger);font-size:16px;padding:2px 4px;cursor:pointer;line-height:1" title="Supprimer">✕</button>
+    </div>`).join('');
+}
+function matchIaInterlocuteurContact(i) {
+  const it = _iaInterlocuteurs[i];
+  if (!it || !it.nom) return;
+  const contact = state.contacts.find(c => (c.nom||'').trim().toLowerCase() === it.nom.trim().toLowerCase());
+  if (!contact) return;
+  if (!it.email && contact.email) it.email = contact.email;
+  if (!it.telephone && contact.telephone) it.telephone = contact.telephone;
+  renderIaInterlocuteurs();
+}
+function addIaInterlocuteur() {
+  _iaInterlocuteurs.push({ nom: '', email: '', telephone: '', role: '' });
+  renderIaInterlocuteurs();
+  const first = document.querySelector('#ia-interlocuteurs-list > div:last-child input');
+  if (first) first.focus();
+}
+function removeIaInterlocuteur(i) {
+  _iaInterlocuteurs.splice(i, 1);
+  renderIaInterlocuteurs();
+}
+
+function renderIaLignes() {
+  const list = document.getElementById('ia-lignes-list');
+  if (!list) return;
+  list.innerHTML = _iaLignes.map((l, i) => `
+    <div style="background:var(--gray-bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;display:grid;grid-template-columns:.9fr .9fr 1.3fr .9fr .5fr .8fr auto;gap:6px;align-items:start;position:relative">
+      <div style="position:relative">
+        <input class="form-control" style="font-size:13px" placeholder="Référence (P/N)" autocomplete="off"
+          value="${escHtml(l.reference||'')}"
+          oninput="onIaRefInput(${i}, this.value)" onblur="setTimeout(()=>hideIaRefResults(${i}),150)">
+        <div id="ia-ref-results-${i}" class="search-results" style="display:none;position:absolute;z-index:20;background:var(--surface);border:1px solid var(--border);border-radius:6px;width:100%;max-height:160px;overflow-y:auto"></div>
+      </div>
+      <input class="form-control" style="font-size:13px" placeholder="Drawing No"
+        value="${escHtml(l.drawing_no||'')}" oninput="_iaLignes[${i}].drawing_no=this.value">
+      <input class="form-control" style="font-size:13px" placeholder="Description"
+        value="${escHtml(l.libelle||'')}" oninput="_iaLignes[${i}].libelle=this.value">
+      <input class="form-control" style="font-size:13px" placeholder="Ratio/Notes"
+        value="${escHtml(l.ratio_notes||'')}" oninput="_iaLignes[${i}].ratio_notes=this.value">
+      <input class="form-control" style="font-size:13px" type="number" min="0" step="1" placeholder="Qté"
+        value="${l.quantite ?? 1}" oninput="_iaLignes[${i}].quantite=this.value;updateIaLigneRow(${i})">
+      <div style="position:relative">
+        <input class="form-control no-spinner" style="font-size:13px;padding-right:22px" type="number" min="0" step="0.01" placeholder="PU HT"
+          value="${l.prix_unitaire ?? 0}" oninput="_iaLignes[${i}].prix_unitaire=this.value;updateIaLigneRow(${i})">
+        <span style="position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text-muted);pointer-events:none">€</span>
+      </div>
+      <button type="button" onclick="removeIaLigne(${i})" style="background:none;border:none;color:var(--danger);font-size:16px;padding:2px 4px;cursor:pointer;line-height:1" title="Supprimer">✕</button>
+    </div>`).join('');
+  updateIaLignesTotal();
+}
+
+function updateIaLigneRow(i) {
+  updateIaLignesTotal();
+}
+
+let _iaRefTimers = {};
+function onIaRefInput(i, val) {
+  _iaLignes[i].reference = val;
+  _iaLignes[i].piece_id = null;
+  clearTimeout(_iaRefTimers[i]);
+  if (!val || val.length < 2) { hideIaRefResults(i); return; }
+  _iaRefTimers[i] = setTimeout(async () => {
+    try {
+      const results = await GET(`/pieces?search=${encodeURIComponent(val)}&ref_only=true&limit=15`);
+      const box = document.getElementById(`ia-ref-results-${i}`);
+      if (!box) return;
+      if (!results.length) { box.style.display = 'none'; return; }
+      box.innerHTML = results.map(p => `
+        <div style="padding:6px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border)"
+          onmousedown="pickIaPiece(${i}, '${p.id}', '${escHtml(p.reference).replace(/'/g,"\\'")}', '${escHtml(p.libelle||'').replace(/'/g,"\\'")}', ${p.prix_achat||0})">
+          <strong>${escHtml(p.reference)}</strong>${p.libelle ? ' — '+escHtml(p.libelle) : ''}
+        </div>`).join('');
+      box.style.display = 'block';
+    } catch(e) { /* recherche best-effort, ignore les erreurs réseau */ }
+  }, 250);
+}
+function hideIaRefResults(i) {
+  const box = document.getElementById(`ia-ref-results-${i}`);
+  if (box) box.style.display = 'none';
+}
+function pickIaPiece(i, pieceId, reference, libelle, prixAchat) {
+  _iaLignes[i].piece_id = pieceId;
+  _iaLignes[i].reference = reference;
+  _iaLignes[i].libelle = libelle;
+  _iaLignes[i].prix_unitaire = prixAchat;
+  hideIaRefResults(i);
+  renderIaLignes();
+}
+
+function addIaLigne() {
+  _iaLignes.push({ piece_id: null, reference: '', drawing_no: '', libelle: '', ratio_notes: '', quantite: 1, prix_unitaire: 0, ordre: _iaLignes.length });
+  renderIaLignes();
+  const inputs = document.querySelectorAll('#ia-lignes-list > div:last-child input');
+  if (inputs[0]) inputs[0].focus();
+}
+function removeIaLigne(i) {
+  _iaLignes.splice(i, 1);
+  renderIaLignes();
+}
+function updateIaLignesTotal() {
+  const totalEl = document.getElementById('ia-lignes-total');
+  const fraisPort = parseFloat(document.getElementById('ia-frais-port')?.value) || 0;
+  if (!totalEl) return;
+  if (!_iaLignes.length && !fraisPort) { totalEl.style.display = 'none'; return; }
+  const exo = document.getElementById('ia-exonere-tva')?.checked;
+  const totalLignesHt = _iaLignes.reduce((s,l) => s + (parseFloat(l.quantite)||0) * (parseFloat(l.prix_unitaire)||0), 0);
+  const totalHt = totalLignesHt + fraisPort;
+  const tva = exo ? 0 : totalHt * 0.20;
+  const ttc = totalHt + tva;
+  totalEl.style.display = 'flex';
+  totalEl.innerHTML = `
+    ${fraisPort ? `<span>Sous-total pièces HT : <strong>${fmtEur(totalLignesHt)}</strong></span><span>Frais de port HT : <strong>${fmtEur(fraisPort)}</strong></span>` : ''}
+    <span>Total HT : <strong>${fmtEur(totalHt)}</strong></span>
+    ${!exo ? `<span>TVA 20% : <strong>${fmtEur(tva)}</strong></span>` : ''}
+    <span style="color:var(--primary)">Total ${exo?'HT (exonéré)':'TTC'} : <strong>${fmtEur(ttc)}</strong></span>
+  `;
+}
+
+async function saveIntentionAchat(iaId) {
+  const iaInterlocuteursValides = _iaInterlocuteurs.filter(it => it.nom || it.email);
+  const iaPremierContact = iaInterlocuteursValides[0] || {};
+  const body = {
+    affaire_id:            _iaAffaireId || null,
+    langue:                _iaLangue,
+    reference_devis:       document.getElementById('ia-reference-devis').value.trim(),
+    reference_client:      document.getElementById('ia-reference-client').value.trim(),
+    fournisseur_nom:       document.getElementById('ia-fournisseur-nom').value.trim(),
+    reference_fournisseur:   document.getElementById('ia-reference-fournisseur').value.trim(),
+    fournisseur_rue:         document.getElementById('ia-fournisseur-rue').value.trim(),
+    fournisseur_code_postal: document.getElementById('ia-fournisseur-cp').value.trim(),
+    fournisseur_ville:       document.getElementById('ia-fournisseur-ville').value.trim(),
+    fournisseur_pays:        document.getElementById('ia-fournisseur-pays').value.trim(),
+    fournisseur_contact:   (iaPremierContact.nom||'').trim(),
+    fournisseur_email:     (iaPremierContact.email||'').trim(),
+    fournisseur_tel:       (iaPremierContact.telephone||'').trim(),
+    interlocuteurs_fournisseur: JSON.stringify(iaInterlocuteursValides),
+    livraison_nom:         document.getElementById('ia-livraison-nom').value.trim() || BC_LIVRAISON_DEFAUT.nom,
+    livraison_rue:         document.getElementById('ia-livraison-rue').value.trim() || BC_LIVRAISON_DEFAUT.rue,
+    livraison_code_postal: document.getElementById('ia-livraison-cp').value.trim() || BC_LIVRAISON_DEFAUT.cp,
+    livraison_ville:       document.getElementById('ia-livraison-ville').value.trim() || BC_LIVRAISON_DEFAUT.ville,
+    livraison_pays:        document.getElementById('ia-livraison-pays').value.trim() || BC_LIVRAISON_DEFAUT.pays,
+    incoterm:              document.getElementById('ia-incoterm').value.trim(),
+    lieu_livraison_texte:  document.getElementById('ia-lieu-livraison-texte').value.trim(),
+    delai_livraison_texte: document.getElementById('ia-delai-livraison-texte').value.trim(),
+    conditions_paiement_texte: document.getElementById('ia-conditions-paiement-texte').value.trim(),
+    garantie_texte:        document.getElementById('ia-garantie-texte').value.trim(),
+    charge_commande_nom:   document.getElementById('ia-charge-nom').value.trim(),
+    charge_commande_email: document.getElementById('ia-charge-email').value.trim(),
+    charge_commande_tel:   document.getElementById('ia-charge-tel').value.trim(),
+    date_commande:         fromInputDate(document.getElementById('ia-date-commande').value),
+    statut:                document.getElementById('ia-statut').value,
+    conditions:            document.getElementById('ia-conditions').value.trim(),
+    notes:                 document.getElementById('ia-notes').value.trim(),
+    exonere_tva:           document.getElementById('ia-exonere-tva').checked ? 1 : 0,
+    frais_port:            parseFloat(document.getElementById('ia-frais-port').value) || 0,
+    lignes: _iaLignes
+      .filter(l => l.reference || l.drawing_no || l.libelle || l.ratio_notes || l.quantite || l.prix_unitaire)
+      .map((l, i) => ({
+        piece_id: l.piece_id || null,
+        reference: l.reference || '',
+        drawing_no: l.drawing_no || '',
+        libelle: l.libelle || '',
+        ratio_notes: l.ratio_notes || '',
+        quantite: parseFloat(l.quantite) || 0,
+        prix_unitaire: parseFloat(l.prix_unitaire) || 0,
+        ordre: i,
+      })),
+  };
+  const btn = document.querySelector('.modal-footer .btn-primary');
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    if (iaId) {
+      await PUT(`/intentions-achat/${iaId}`, body);
+      toast("Intention d'achat mise à jour", 'success');
+    } else {
+      const created = await POST('/intentions-achat', body);
+      btn.setAttribute('onclick', `saveIntentionAchat('${created.id}')`);
+      toast("Intention d'achat créée", 'success');
+    }
+    await reloadIntentionsAchat();
+  } catch(e) {
+    toast(e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Enregistrer';
+  }
+}
+
+function duplicateIntentionAchat(iaId) {
+  const src = state.intentionsAchat.find(b => b.id === iaId);
+  if (!src) return;
+  const dup = {
+    ...src,
+    statut: 'Brouillon',
+    date_commande: '',
+    lignes: (src.lignes || []).map(l => ({...l})),
+  };
+  openIaModal(null, dup);
+  toast("Intention d'achat dupliquée, vérifiez les informations avant d'enregistrer", 'info');
+}
+
+async function deleteIntentionAchat(iaId) {
+  const ok = await confirm("Supprimer cette intention d'achat ?", 'Cette action est irréversible.');
+  if (!ok) return;
+  try {
+    await DEL(`/intentions-achat/${iaId}`);
+    toast("Intention d'achat supprimée", 'success');
+    await reloadIntentionsAchat();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function generateIntentionAchatPdf(iaId) {
+  const btn = document.querySelector(`[onclick="generateIntentionAchatPdf('${iaId}')"]`);
+  const origText = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  try {
+    const ia = state.intentionsAchat.find(b => b.id === iaId);
+    const lang = (ia && ia.langue) || 'fr';
+    const resp = await fetch(`${API_BASE}/intentions-achat/${iaId}/pdf?lang=${lang}`);
+    if (!resp.ok) { const txt = await resp.text(); throw new Error(txt); }
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `IA_${(ia?.num_ia||'intention').replace(/\//g,'-')}.pdf`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast('PDF téléchargé', 'success');
+    await reloadIntentionsAchat();
+  } catch(e) {
+    toast('Erreur PDF : ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = origText; }
+  }
 }
 
 async function saveBonCommande(bcId) {

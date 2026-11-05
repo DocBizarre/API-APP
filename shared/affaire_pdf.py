@@ -913,15 +913,22 @@ def build_bon_commande_html(bon: dict, lignes: list, affaire: dict | None = None
     except ImportError:
         entreprise = {
             "nom": "EMERAUDE MOTEURS SYSTÈMES",
+            "forme_juridique": "SARL",
+            "capital": "50 000",
             "adresse_1": "9 Rue d'Armorique – 35540 Miniac Morvan",
             "adresse_2": "",
             "tel": "02.99.19.01.99",
             "fax": "",
             "email": "service.technique@emeraudemoteurs.com",
             "siret": "431 976 729 00027",
+            "rcs_ville": "Saint-Malo",
+            "rcs_numero": "431 976 729",
             "tva": "FR 14 431 976 729",
             "site": "www.emeraudemoteurs.com",
         }
+
+    def _e(key, default=""):
+        return entreprise.get(key) or default
 
     num_bc     = _g(bon, "num_bc")
     date_cmd   = _g(bon, "date_commande")
@@ -1032,6 +1039,15 @@ def build_bon_commande_html(bon: dict, lignes: list, affaire: dict | None = None
   @bottom-left {{ content: "Bon de commande — {_esc(num_bc)}"; font-size: 8pt; color: #6b7785; }}
   @bottom-right {{ content: "Page " counter(page) " / " counter(pages); font-size: 8pt; color: #6b7785; }}
 }}
+/* Gabarit dédié aux pages de conditions générales : marges latérales
+   réduites (5mm au lieu de 10mm) pour gagner la largeur nécessaire à un
+   confortable rendu sur 2 colonnes en 2 pages. */
+@page bc-cga {{
+  size: A4;
+  margin: 12mm 5mm 18mm 5mm;
+  @bottom-left {{ content: "Bon de commande — {_esc(num_bc)}"; font-size: 8pt; color: #6b7785; }}
+  @bottom-right {{ content: "Page " counter(page) " / " counter(pages); font-size: 8pt; color: #6b7785; }}
+}}
 * {{ box-sizing: border-box; margin: 0; padding: 0; }}
 body {{ font-family: Arial, sans-serif; font-size: 10pt; color: #1a2a3a; }}
 .header {{ display: flex; justify-content: space-between; align-items: flex-start;
@@ -1056,6 +1072,36 @@ table.montants tr {{ break-inside: avoid; }}
 table.montants tr.totals-row td {{ background: #eff6ff; font-weight: 700; font-size: 11pt; border-bottom: none; border-top: 2px solid #002b5c; break-inside: avoid; }}
 .conditions-box {{ border: 1px solid #d1d9e0; border-radius: 6px; padding: 10px 14px; }}
 .conditions-box h4 {{ font-size: 8pt; text-transform: uppercase; color: #6b7785; letter-spacing: .5px; margin-bottom: 6px; }}
+.section-header {{
+  display: block; padding: 5px 12px; font-size: 10.5pt; font-weight: 700;
+  color: #fff; background: #002b5c; margin: 16px 0 0; border-radius: 4px 4px 0 0;
+  letter-spacing: .3px; text-transform: uppercase;
+  page-break-after: avoid; break-after: avoid;
+}}
+/* La partie bon de commande (en-tête, lignes, conditions particulières) est
+   ainsi toujours séparée des conditions générales d'achat (texte fixe) : ces
+   dernières démarrent systématiquement en haut d'une page. */
+.conditions-page-break {{ page-break-before: always; break-before: page; }}
+.section-body-flat {{ font-size: 9.5pt; line-height: 1.6; padding: 10px 0 0; }}
+.clause {{ margin-top: 6px; page-break-inside: avoid; break-inside: avoid; }}
+.clause:first-child {{ margin-top: 0; }}
+.clause h5 {{ font-size: 9pt; color: #002b5c; margin-bottom: 2px; }}
+.clause p {{ font-size: 8.3pt; line-height: 1.4; color: #3a4552; text-align: justify; margin-top: 3px; }}
+/* Conditions générales sur 2 pages : mise en page sur 2 colonnes (comme les
+   CGV des devis / bons d'intervention), texte intégral non tronqué. Pas de
+   page-break-after ici (contrairement au devis) : le pied d'identité qui
+   suit doit rester collé à la fin de l'article 16, pas partir sur une 3e
+   page. */
+.cga-page-wrap {{ page: bc-cga; }}
+.cgv-columns {{
+  column-count: 2; column-gap: 16px; column-rule: 1px solid #d0d4d9;
+}}
+.cgv-columns .clause {{ margin-top: 5px; page-break-inside: auto; break-inside: auto; }}
+.cgv-columns .clause:first-child {{ margin-top: 0; }}
+.cgv-columns .clause h5 {{
+  font-size: 8pt; margin: 0 0 1px; break-after: avoid; page-break-after: avoid;
+}}
+.cgv-columns .clause p {{ font-size: 7.6pt; line-height: 1.32; margin-top: 2px; }}
 </style>
 </head>
 <body>
@@ -1132,6 +1178,426 @@ table.montants tr.totals-row td {{ background: #eff6ff; font-weight: 700; font-s
   </div>''' if conditions else ''}
   {f'''<div class="conditions-box" style="margin-top:10px">
     <h4>Notes internes</h4>
+    <div style="font-size:9pt;color:#4b5563;white-space:pre-wrap">{_esc(notes)}</div>
+  </div>''' if notes else ''}
+
+  <div class="cga-page-wrap">
+  <div class="section-header conditions-page-break">Conditions générales d'achat</div>
+  <div class="section-body-flat">
+    <div style="font-size:8pt;color:#6b7785;font-style:italic;margin-bottom:8px">Version 2026.01 – Applicable à compter du 10/08/2026</div>
+
+    <div class="cgv-columns">
+    <div class="clause">
+      <h5>Article 1 – Champ d'application et opposabilité</h5>
+      <p>Les présentes conditions générales d'achat (les « CGA ») s'appliquent à toutes les commandes de fournitures, matériels, composants, pièces détachées et prestations de services (y compris de sous-traitance) passées par {_esc(_e('nom', 'EMERAUDE MOTEURS SYSTEMES'))} (« EMS ») auprès de ses fournisseurs et prestataires (le « Fournisseur »).</p>
+      <p>L'acceptation de la commande, son exécution même partielle, ou l'absence de réserve écrite dans les huit (8) jours de sa réception, emporte adhésion pleine et entière du Fournisseur aux présentes CGA. Les présentes CGA prévalent sur les conditions générales de vente du Fournisseur, sur ses devis, accusés de réception ou tout autre document, sauf dérogation expresse acceptée par écrit par EMS.</p>
+    </div>
+
+    <div class="clause">
+      <h5>Article 2 – Commandes</h5>
+      <p>Seules engagent EMS les commandes écrites (y compris par voie électronique) émises par une personne habilitée. Le Fournisseur adresse à EMS un accusé de réception de commande dans les huit (8) jours de sa réception ; à défaut, la commande est réputée acceptée aux conditions d'EMS. Toute réserve ou modification apportée par le Fournisseur ne lie EMS qu'après acceptation écrite de sa part.</p>
+      <p>EMS peut modifier ou annuler une commande avant son expédition ; les parties conviendront de bonne foi des conséquences éventuelles sur le prix et les délais, sur justification des coûts réellement engagés par le Fournisseur.</p>
+    </div>
+
+    <div class="clause">
+      <h5>Article 3 – Prix</h5>
+      <p>Sauf stipulation contraire figurant sur la commande, les prix sont fermes, définitifs et non révisables, exprimés hors taxes, et s'entendent marchandises emballées, rendues au lieu de livraison indiqué sur la commande (DDP Incoterms 2020 pour les Fournisseurs établis hors de France), tous frais d'emballage, de transport et d'assurance inclus. Aucun supplément de prix (hausse de matières, surcharge énergie ou transport, frais de facturation, minimum de commande) ne sera accepté sans accord écrit et préalable d'EMS.</p>
+    </div>
+
+    <div class="clause">
+      <h5>Article 4 – Délais de livraison et pénalités de retard</h5>
+      <p>Les délais de livraison ou d'exécution mentionnés sur la commande sont impératifs et constituent une condition essentielle de l'engagement d'EMS. Le Fournisseur informe EMS sans délai de tout risque de retard, cette information ne l'exonérant pas de sa responsabilité.</p>
+      <p>En cas de retard, EMS pourra, de plein droit et sans mise en demeure préalable, appliquer une pénalité égale à un (1) % du montant hors taxes de la commande par semaine de retard entamée, plafonnée à dix (10) % de ce montant, sans préjudice de son droit de résilier la commande pour la partie non exécutée et de s'approvisionner auprès d'un tiers aux frais et risques du Fournisseur, ainsi que de son droit à indemnisation du préjudice subi. Les pénalités ne sont pas libératoires.</p>
+      <p>Aucune livraison anticipée ou partielle ne peut intervenir sans l'accord préalable d'EMS ; à défaut, EMS pourra retourner les marchandises aux frais et risques du Fournisseur ou différer le point de départ du délai de paiement à la date de livraison convenue.</p>
+    </div>
+
+    <div class="clause">
+      <h5>Article 5 – Livraison, transfert de propriété et des risques</h5>
+      <p>Les livraisons sont effectuées au lieu, à la date et dans les conditions (horaires, conditionnement, étiquetage, documents d'accompagnement : bon de livraison rappelant le numéro de commande, certificats de conformité, notices) indiqués sur la commande.</p>
+      <p>Le transfert de propriété et le transfert des risques interviennent à la livraison effective au lieu convenu, après émargement du bon de livraison par EMS. Toute clause de réserve de propriété figurant dans les documents du Fournisseur est inopposable à EMS, sauf acceptation expresse et écrite de celle-ci au plus tard au moment de la livraison.</p>
+    </div>
+
+    <div class="clause">
+      <h5>Article 6 – Réception, contrôle et conformité</h5>
+      <p>La signature du bon de livraison atteste uniquement de la remise des marchandises et du nombre de colis, sans emporter reconnaissance de leur conformité. EMS dispose d'un délai de trente (30) jours à compter de la livraison pour contrôler la conformité quantitative et qualitative des fournitures et notifier ses réserves, sans que ce délai constitue une renonciation à la garantie des vices cachés ou aux non-conformités révélées ultérieurement.</p>
+      <p>En cas de non-conformité, EMS pourra, à son choix : refuser tout ou partie de la livraison et la retourner aux frais et risques du Fournisseur ; exiger le remplacement ou la mise en conformité sans délai ; ou résilier la commande, sans préjudice de dommages et intérêts. Les acomptes éventuellement versés seront alors immédiatement restitués.</p>
+    </div>
+
+    <div class="clause">
+      <h5>Article 7 – Garanties</h5>
+      <p>Le Fournisseur garantit que les fournitures et prestations sont conformes à la commande, aux spécifications, plans et normes applicables, exemptes de tout vice ou défaut de conception, de matière ou de fabrication, adaptées à l'usage auquel EMS les destine lorsque cet usage a été porté à sa connaissance, et conformes à la réglementation en vigueur (notamment en matière de sécurité, de marquage CE et d'environnement).</p>
+      <p>Sauf garantie plus favorable consentie par le Fournisseur ou imposée par la loi, la garantie contractuelle est de vingt-quatre (24) mois à compter de la livraison, pièces, main-d'œuvre et déplacements inclus. Toute pièce réparée ou remplacée bénéficie d'une nouvelle période de garantie de même durée. Cette garantie s'ajoute aux garanties légales, notamment celle des vices cachés (articles 1641 et suivants du Code civil). Le Fournisseur garantit EMS contre tout recours de tiers, notamment des clients d'EMS, fondé sur un défaut des fournitures.</p>
+    </div>
+
+    <div class="clause">
+      <h5>Article 8 – Facturation et paiement</h5>
+      <p>Les factures, conformes à la réglementation en vigueur (notamment aux mentions obligatoires de l'article L.441-9 du Code de commerce) et rappelant le numéro de commande et le numéro de bon de livraison, sont adressées à EMS après livraison conforme. Sauf stipulation contraire sur la commande, les factures sont payées à quarante-cinq (45) jours fin de mois à compter de leur date d'émission, conformément à l'article L.441-10 du Code de commerce, par virement.</p>
+      <p>EMS pourra suspendre le paiement de toute facture correspondant à des fournitures non conformes ou faisant l'objet d'un litige, à due concurrence, ainsi que compenser les sommes dues au Fournisseur avec toute somme dont celui-ci serait redevable envers elle (pénalités, avoirs, frais de retour), après information écrite du Fournisseur.</p>
+    </div>
+
+    <div class="clause">
+      <h5>Article 9 – Sous-traitance</h5>
+      <p>Le Fournisseur ne peut sous-traiter tout ou partie de la commande sans l'accord écrit et préalable d'EMS. En cas de sous-traitance acceptée dans le cadre d'un contrat d'entreprise, le Fournisseur fait son affaire du respect de la loi n° 75-1334 du 31 décembre 1975 relative à la sous-traitance, notamment de la présentation de ses sous-traitants à l'acceptation d'EMS et de l'agrément de leurs conditions de paiement, et garantit EMS contre toute action directe de ses propres sous-traitants.</p>
+    </div>
+
+    <div class="clause">
+      <h5>Article 10 – Propriété intellectuelle, plans et outillages</h5>
+      <p>Les plans, études, spécifications, modèles, logiciels et savoir-faire communiqués par EMS au Fournisseur demeurent la propriété exclusive d'EMS ; ils ne peuvent être utilisés que pour l'exécution de la commande, ni reproduits ou communiqués à des tiers, et sont restitués à première demande. Les outillages financés en tout ou partie par EMS sont sa propriété ; le Fournisseur en assure la garde, l'entretien et l'assurance, et s'interdit de les utiliser pour des tiers.</p>
+      <p>Le Fournisseur garantit que les fournitures ne portent atteinte à aucun droit de propriété intellectuelle de tiers et garantit EMS contre toute action en contrefaçon, en supportant l'ensemble des frais et condamnations en résultant.</p>
+    </div>
+
+    <div class="clause">
+      <h5>Article 11 – Confidentialité</h5>
+      <p>Le Fournisseur s'engage à tenir strictement confidentielles toutes les informations techniques, commerciales et financières communiquées par EMS ou dont il aurait connaissance à l'occasion de l'exécution de la commande, pendant toute la durée de la relation et cinq (5) ans après son terme, et à ne les utiliser qu'aux fins d'exécution de la commande. Toute référence commerciale à EMS est soumise à son accord écrit préalable.</p>
+    </div>
+
+    <div class="clause">
+      <h5>Article 12 – Conformité réglementaire</h5>
+      <p>Le Fournisseur déclare et garantit qu'il exerce son activité en conformité avec l'ensemble de ses obligations légales et réglementaires, notamment en matière de droit du travail, de lutte contre le travail dissimulé (articles L.8222-1 et suivants du Code du travail – remise des attestations de vigilance pour tout contrat d'au moins 5 000 € HT), de lutte contre la corruption et le blanchiment de capitaux, de protection de l'environnement et de sécurité des produits.</p>
+      <p>Le Fournisseur déclare que ni lui, ni les membres de son groupe, ni leurs dirigeants ou bénéficiaires effectifs ne font l'objet de sanctions internationales, et qu'il n'est ni situé ni immatriculé dans un pays ou territoire faisant l'objet de sanctions interdisant de façon générale les relations commerciales. Toute violation des présentes déclarations autorise EMS à résilier immédiatement, de plein droit et sans indemnité, toute commande en cours.</p>
+    </div>
+
+    <div class="clause">
+      <h5>Article 13 – Assurances</h5>
+      <p>Le Fournisseur déclare être titulaire, auprès d'une compagnie notoirement solvable, d'une police d'assurance responsabilité civile professionnelle et produits couvrant les conséquences pécuniaires des dommages corporels, matériels et immatériels causés à EMS ou aux tiers du fait des fournitures ou prestations. Il en justifie à première demande d'EMS par la production d'une attestation en cours de validité.</p>
+    </div>
+
+    <div class="clause">
+      <h5>Article 14 – Résiliation</h5>
+      <p>En cas de manquement du Fournisseur à l'une quelconque de ses obligations, non réparé dans un délai de quinze (15) jours à compter d'une mise en demeure écrite restée sans effet, EMS pourra résilier de plein droit la ou les commandes concernées, sans préjudice de tous dommages et intérêts. La résiliation pourra intervenir sans mise en demeure préalable en cas de manquement grave, notamment aux articles 11 et 12 des présentes.</p>
+    </div>
+
+    <div class="clause">
+      <h5>Article 15 – Force majeure</h5>
+      <p>Conformément à l'article 1218 du Code civil, aucune des parties ne pourra être tenue pour responsable de l'inexécution de ses obligations résultant d'un événement de force majeure. La partie affectée notifie l'événement à l'autre partie sans délai. Si l'empêchement excède trente (30) jours, EMS pourra résilier la commande sans indemnité de part ni d'autre, les acomptes versés pour des fournitures non livrées étant restitués.</p>
+    </div>
+
+    <div class="clause">
+      <h5>Article 16 – Droit applicable et attribution de compétence</h5>
+      <p>Les présentes CGA et toutes les commandes qu'elles régissent sont soumises au droit français, à l'exclusion de la Convention de Vienne du 11 avril 1980 sur la vente internationale de marchandises.</p>
+      <p><strong>Tout litige relatif à leur validité, leur interprétation ou leur exécution, y compris en cas de pluralité de défendeurs ou d'appel en garantie, sera de la compétence exclusive du Tribunal de commerce de {_esc(_e('rcs_ville', 'Saint-Malo'))}.</strong></p>
+    </div>
+    </div><!-- /cgv-columns -->
+
+    <div style="margin-top:10px;font-size:8pt;color:#6b7785;text-align:center">
+      {_esc(_e('nom', 'EMERAUDE MOTEURS SYSTEMES'))} – {_esc(_e('forme_juridique', 'SARL'))} au capital de {_esc(_e('capital', '50 000'))} € –
+      {_esc(_e('adresse_1'))}<br>
+      RCS {_esc(_e('rcs_ville', 'Saint-Malo'))} {_esc(_e('rcs_numero', '431 976 729'))} – Code APE 3320B – TVA intracommunautaire {_esc(_e('tva'))}
+    </div>
+  </div>
+  </div><!-- /cga-page-wrap -->
+
+</body>
+</html>"""
+
+
+_IA_LABELS = {
+    "fr": {
+        "titre": "Intention d'achat", "emetteur": "Émetteur", "fournisseur": "Fournisseur",
+        "livraison": "Livraison", "affaire": "Affaire", "ref_devis": "Référence devis",
+        "ref_client": "Référence client", "incoterm": "Incoterm",
+        "lieu_livraison": "Lieu de livraison", "delai_livraison": "Délai de livraison",
+        "conditions_paiement": "Conditions de paiement", "garantie": "Garantie",
+        "reference": "Référence", "drawing_no": "Drawing No", "designation": "Désignation",
+        "ratio_notes": "Ratio/Notes", "qte": "Qté", "pu_ht": "PU HT", "montant_ht": "Montant HT",
+        "sous_total": "Sous-total pièces HT", "frais_port": "Frais de port HT (hors pièces)",
+        "total_ht": "Total HT", "total_ttc": "Total TTC", "tva": "TVA 20 %",
+        "emis_le": "Émis le", "commande": "Chargé de commande",
+        "conditions_commerciales": "Conditions commerciales",
+        "conditions": "Conditions", "notes": "Notes internes",
+        "num_label": "N° Intention d'achat",
+    },
+    "en": {
+        "titre": "Purchase Intent", "emetteur": "Issuer", "fournisseur": "Supplier",
+        "livraison": "Delivery", "affaire": "Project", "ref_devis": "Our reference (quotation)",
+        "ref_client": "Your reference", "incoterm": "Incoterm",
+        "lieu_livraison": "Delivery place", "delai_livraison": "Lead time",
+        "conditions_paiement": "Payment conditions", "garantie": "Warranty",
+        "reference": "P/N", "drawing_no": "Drawing No", "designation": "Description",
+        "ratio_notes": "Ratio/Notes", "qte": "Qty", "pu_ht": "Unit price", "montant_ht": "Amount",
+        "sous_total": "Parts subtotal (excl. VAT)", "frais_port": "Freight (excl. VAT, excl. parts)",
+        "total_ht": "Total (excl. VAT)", "total_ttc": "Total (incl. VAT)", "tva": "VAT 20 %",
+        "emis_le": "Issued on", "commande": "Order contact",
+        "conditions_commerciales": "Commercial terms",
+        "conditions": "Conditions", "notes": "Internal notes",
+        "num_label": "Purchase Intent No.",
+    },
+}
+
+
+def build_intention_achat_html(intention: dict, lignes: list, affaire: dict | None = None,
+                               lang: str = "fr") -> str:
+    """Génère le HTML d'une intention d'achat (confirmation préliminaire, non engageante,
+    envoyée à un fournisseur). Champs tous optionnels ; disponible en français ou en anglais."""
+    L = _IA_LABELS.get(lang) or _IA_LABELS["fr"]
+    lang = lang if lang in _IA_LABELS else "fr"
+
+    try:
+        from ems_api.config import settings
+        entreprise = settings.ENTREPRISE
+    except ImportError:
+        entreprise = {
+            "nom": "EMERAUDE MOTEURS SYSTÈMES",
+            "forme_juridique": "SARL",
+            "capital": "50 000",
+            "adresse_1": "9 Rue d'Armorique – 35540 Miniac Morvan",
+            "adresse_2": "",
+            "tel": "02.99.19.01.99",
+            "fax": "",
+            "email": "service.technique@emeraudemoteurs.com",
+            "siret": "431 976 729 00027",
+            "rcs_ville": "Saint-Malo",
+            "rcs_numero": "431 976 729",
+            "tva": "FR 14 431 976 729",
+            "site": "www.emeraudemoteurs.com",
+        }
+
+    num_ia       = _g(intention, "num_ia")
+    ref_devis    = _g(intention, "reference_devis")
+    ref_client   = _g(intention, "reference_client")
+    incoterm     = _g(intention, "incoterm")
+    lieu_liv_txt = _g(intention, "lieu_livraison_texte")
+    delai_liv    = _g(intention, "delai_livraison_texte")
+    cond_paiement = _g(intention, "conditions_paiement_texte")
+    garantie     = _g(intention, "garantie_texte")
+    date_cmd     = _g(intention, "date_commande")
+    conditions   = _g(intention, "conditions")
+    notes        = _g(intention, "notes")
+    exo          = bool(int(_g(intention, "exonere_tva", 0) or 0))
+
+    num_affaire = _g(affaire, "num_affaire")
+    nom_projet  = _g(affaire, "nom_projet")
+
+    emetteur_lines = "".join(
+        f'<div class="detail">{_esc(v)}</div>'
+        for v in [entreprise.get("adresse_1", ""), entreprise.get("adresse_2", ""),
+                  entreprise.get("tel") and f"☎ {entreprise['tel']}"]
+        if v
+    )
+
+    charge_nom   = _g(intention, "charge_commande_nom")
+    charge_email = _g(intention, "charge_commande_email")
+    charge_tel   = _g(intention, "charge_commande_tel")
+    charge_html = ""
+    if charge_nom or charge_email or charge_tel:
+        charge_details = "".join(
+            f'<div class="detail">{_esc(v)}</div>'
+            for v in [charge_email and f"✉ {charge_email}", charge_tel and f"☎ {charge_tel}"]
+            if v
+        )
+        charge_html = f"""<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #d1d9e0">
+      <div style="font-size:8pt;text-transform:uppercase;color:#6b7785;letter-spacing:.5px">{L['commande']}</div>
+      <div style="font-size:10pt;font-weight:600;color:#1e3a5f;margin-top:2px">{_esc(charge_nom) or '—'}</div>
+      {charge_details}
+    </div>"""
+
+    fourn_nom      = _g(intention, "fournisseur_nom")
+    fourn_cp_ville = " ".join(v for v in [_g(intention, "fournisseur_code_postal"), _g(intention, "fournisseur_ville")] if v)
+    fourn_lines = "".join(
+        f'<div class="detail">{_esc(v)}</div>'
+        for v in [_g(intention, "fournisseur_rue"),
+                  fourn_cp_ville,
+                  _g(intention, "fournisseur_pays"),
+                  _g(intention, "fournisseur_contact") and f"Contact : {_g(intention, 'fournisseur_contact')}",
+                  _g(intention, "fournisseur_email") and f"✉ {_g(intention, 'fournisseur_email')}",
+                  _g(intention, "fournisseur_tel") and f"☎ {_g(intention, 'fournisseur_tel')}"]
+        if v
+    )
+
+    livraison_nom      = _g(intention, "livraison_nom")
+    livraison_cp_ville = " ".join(v for v in [_g(intention, "livraison_code_postal"), _g(intention, "livraison_ville")] if v)
+    livraison_lines = "".join(
+        f'<div class="detail">{_esc(v)}</div>'
+        for v in [_g(intention, "livraison_rue"), livraison_cp_ville, _g(intention, "livraison_pays")]
+        if v
+    )
+
+    date_emission = datetime.now().strftime("%d/%m/%Y")
+    logo_uri = _logo_data_uri()
+    logo_html = (f'<img src="{logo_uri}" alt="{_esc(entreprise.get("nom",""))}" style="max-width:240px;max-height:110px;">'
+                 if logo_uri else f'<div style="font-size:20px;font-weight:bold;color:#002b5c">{_esc(entreprise.get("nom",""))}</div>')
+
+    has_prix = any(float(_g(l, "prix_unitaire", 0) or 0) for l in lignes)
+
+    rows = ""
+    total_ht = 0.0
+    for l in lignes:
+        qte = float(_g(l, "quantite", 0) or 0)
+        pu  = float(_g(l, "prix_unitaire", 0) or 0)
+        montant = float(_g(l, "montant_ligne", qte * pu) or 0)
+        total_ht += montant
+        prix_cells = (
+            f'<td style="text-align:right">{_fmt_eur(pu)}</td><td style="text-align:right">{_fmt_eur(montant)}</td>'
+            if has_prix else ""
+        )
+        rows += f"""<tr>
+            <td>{_esc(_g(l, "reference"))}</td>
+            <td>{_esc(_g(l, "drawing_no"))}</td>
+            <td>{_esc(_g(l, "libelle"))}</td>
+            <td>{_esc(_g(l, "ratio_notes"))}</td>
+            <td style="text-align:center">{qte:g}</td>
+            {prix_cells}
+          </tr>"""
+
+    frais_port = float(_g(intention, "frais_port", 0) or 0)
+    sous_total_lignes_ht = total_ht
+    total_ht += frais_port
+    tva = 0.0 if exo else round(total_ht * 0.20, 2)
+    total_ttc = total_ht if exo else total_ht + tva
+    n_cols = 6 if has_prix else 4
+
+    totals_html = ""
+    if has_prix:
+        frais_port_row = ""
+        if frais_port:
+            frais_port_row = f"""<tr class="totals-row"><td colspan="4">{L['sous_total']}</td>
+              <td colspan="2" style="text-align:right">{_fmt_eur(sous_total_lignes_ht)}</td></tr>
+              <tr class="totals-row" style="background:#f8faff"><td colspan="4" style="font-style:italic;color:#4b5563">{L['frais_port']}</td>
+              <td colspan="2" style="text-align:right;font-style:italic;color:#4b5563">{_fmt_eur(frais_port)}</td></tr>"""
+        tva_row = "" if exo else f"""<tr class="totals-row"><td colspan="4">{L['tva']}</td>
+              <td colspan="2" style="text-align:right">{_fmt_eur(tva)}</td></tr>"""
+        exo_row = '<tr class="totals-row"><td colspan="6" style="color:#d97706;font-size:9pt">⚠️ TVA exonérée — justificatif requis</td></tr>' if exo else ""
+        totals_html = f"""{frais_port_row}
+      <tr class="totals-row"><td colspan="4" style="font-weight:600">{L['total_ht']}</td>
+        <td colspan="2" style="text-align:right;font-weight:600">{_fmt_eur(total_ht)}</td></tr>
+      {tva_row}
+      {exo_row}
+      <tr class="totals-row total-row">
+        <td colspan="4">{L['total_ht'] if exo else L['total_ttc']}</td>
+        <td colspan="2" style="text-align:right">{_fmt_eur(total_ttc)}</td>
+      </tr>"""
+
+    objet_extra = "".join(
+        f'<div><label>{lbl}</label><div class="val">{_esc(val)}</div></div>'
+        for lbl, val in [
+            (L["ref_devis"], ref_devis), (L["ref_client"], ref_client),
+            (L["incoterm"], incoterm), (L["delai_livraison"], delai_liv),
+            (date_cmd and L["emis_le"] or "", date_cmd),
+        ] if val
+    )
+
+    commercial_rows = "".join(
+        f'''<div style="margin-top:8px">
+          <div style="font-size:8pt;text-transform:uppercase;color:#6b7785;letter-spacing:.5px">{lbl}</div>
+          <div style="font-size:10pt;color:#1a2a3a;white-space:pre-wrap;margin-top:2px">{_esc(val)}</div>
+        </div>'''
+        for lbl, val in [
+            (L["conditions_paiement"], cond_paiement),
+            (L["garantie"], garantie),
+            (L["lieu_livraison"], lieu_liv_txt),
+        ] if val
+    )
+    commercial_html = ""
+    if commercial_rows:
+        commercial_html = f'''<div class="conditions-box" style="margin-bottom:12px">
+      <h4>{L['conditions_commerciales']}</h4>
+      {commercial_rows}
+    </div>'''
+
+    return f"""<!DOCTYPE html>
+<html lang="{lang}">
+<head>
+<meta charset="UTF-8">
+<style>
+@page {{
+  size: A4;
+  margin: 12mm 10mm 18mm 10mm;
+  @bottom-left {{ content: "{_esc(L['titre'])} — {_esc(num_ia)}"; font-size: 8pt; color: #6b7785; }}
+  @bottom-right {{ content: "Page " counter(page) " / " counter(pages); font-size: 8pt; color: #6b7785; }}
+}}
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{ font-family: Arial, sans-serif; font-size: 10pt; color: #1a2a3a; }}
+.header {{ display: flex; justify-content: space-between; align-items: flex-start;
+           margin-bottom: 20px; border-bottom: 3px solid #002b5c; padding-bottom: 14px; }}
+.doc-title {{ font-size: 18pt; font-weight: bold; color: #002b5c; text-transform: uppercase; }}
+.ref-box {{ background: #002b5c; color: #fff; padding: 8px 16px; border-radius: 6px; text-align: right; }}
+.ref-box .ref-label {{ font-size: 8pt; opacity: .8; }}
+.ref-box .ref-num {{ font-size: 13pt; font-weight: bold; }}
+.parties {{ display: flex; gap: 12px; margin-bottom: 16px; }}
+.party-box {{ flex: 1; min-width: 0; border: 1px solid #d1d9e0; border-radius: 6px; padding: 10px 12px; }}
+.party-box h3 {{ font-size: 8pt; text-transform: uppercase; color: #6b7785; letter-spacing: .5px; margin-bottom: 6px; }}
+.party-box .name {{ font-size: 11pt; font-weight: bold; color: #002b5c; }}
+.detail {{ font-size: 9pt; color: #4b5563; margin-top: 3px; }}
+.objet-box {{ background: #f8faff; border: 1px solid #bfdbfe; border-radius: 6px;
+              padding: 10px 14px; margin-bottom: 16px; display: flex; gap: 40px; flex-wrap: wrap; }}
+.objet-box label {{ font-size: 8pt; text-transform: uppercase; color: #6b7785; letter-spacing: .5px; display: block; }}
+.objet-box .val {{ font-size: 10.5pt; font-weight: 600; color: #1e3a5f; margin-top: 3px; }}
+table.montants {{ width: 100%; border-collapse: collapse; margin-bottom: 16px; }}
+table.montants th {{ background: #002b5c; color: #fff; padding: 7px 10px; font-size: 9pt; font-weight: 600; text-align: left; }}
+table.montants td {{ padding: 8px 10px; border-bottom: 1px solid #e5eaf0; }}
+table.montants tr {{ break-inside: avoid; }}
+table.montants tr.totals-row td {{ background: #eff6ff; font-weight: 700; font-size: 11pt; border-bottom: none; border-top: 2px solid #002b5c; break-inside: avoid; }}
+.conditions-box {{ border: 1px solid #d1d9e0; border-radius: 6px; padding: 10px 14px; }}
+.conditions-box h4 {{ font-size: 8pt; text-transform: uppercase; color: #6b7785; letter-spacing: .5px; margin-bottom: 6px; }}
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      {logo_html}
+    </div>
+    <div style="text-align:right">
+      <div class="doc-title">{_esc(L['titre'])}</div>
+      <div style="margin-top:10px" class="ref-box">
+        <div class="ref-label">{_esc(L['num_label'])}</div>
+        <div class="ref-num">{_esc(num_ia)}</div>
+      </div>
+      <div style="margin-top:6px;font-size:9pt;color:#6b7785">{_esc(L['emis_le'])} {_esc(date_emission)}</div>
+    </div>
+  </div>
+
+  <div class="parties">
+    <div class="party-box">
+      <h3>{L['emetteur']}</h3>
+      <div class="name">{_esc(entreprise.get("nom", ""))}</div>
+      {emetteur_lines}
+      {charge_html}
+    </div>
+    <div class="party-box">
+      <h3>{L['fournisseur']}</h3>
+      <div class="name">{_esc(fourn_nom or '—')}</div>
+      {fourn_lines}
+    </div>
+    <div class="party-box">
+      <h3>{L['livraison']}</h3>
+      <div class="name">{_esc(livraison_nom or '—')}</div>
+      {livraison_lines}
+    </div>
+  </div>
+
+  <div class="objet-box">
+    <div>
+      <label>{L['affaire']}</label>
+      <div class="val">{_esc(num_affaire or '—')}{' — ' + _esc(nom_projet) if nom_projet else ''}</div>
+    </div>
+    {objet_extra}
+  </div>
+
+  <table class="montants">
+    <thead>
+      <tr>
+        <th style="width:14%">{L['reference']}</th>
+        <th style="width:14%">{L['drawing_no']}</th>
+        <th style="width:{'26%' if has_prix else '38%'}">{L['designation']}</th>
+        <th style="width:14%">{L['ratio_notes']}</th>
+        <th style="width:8%;text-align:center">{L['qte']}</th>
+        {f'<th style="width:12%;text-align:right">{L["pu_ht"]}</th><th style="width:12%;text-align:right">{L["montant_ht"]}</th>' if has_prix else ''}
+      </tr>
+    </thead>
+    <tbody>
+      {rows}
+      {totals_html}
+    </tbody>
+  </table>
+
+  {commercial_html}
+  {f'''<div class="conditions-box" style="margin-bottom:12px">
+    <h4>{L['conditions']}</h4>
+    <div style="font-size:10pt;white-space:pre-wrap">{_esc(conditions)}</div>
+  </div>''' if conditions else ''}
+  {f'''<div class="conditions-box">
+    <h4>{L['notes']}</h4>
     <div style="font-size:9pt;color:#4b5563;white-space:pre-wrap">{_esc(notes)}</div>
   </div>''' if notes else ''}
 
@@ -1356,6 +1822,15 @@ def build_devis_html(devis: dict, lignes: list, client: dict | None = None,
   @bottom-left {{ content: "Devis — {_esc(num_devis)}"; font-size: 8pt; color: #6b7785; }}
   @bottom-right {{ content: "Page " counter(page) " / " counter(pages); font-size: 8pt; color: #6b7785; }}
 }}
+/* Gabarit dédié aux pages de conditions générales : marges latérales
+   réduites (5mm au lieu de 10mm) pour gagner la largeur nécessaire à un
+   confortable rendu sur 2 colonnes en 2 pages. */
+@page devis-cgv {{
+  size: A4;
+  margin: 12mm 5mm 18mm 5mm;
+  @bottom-left {{ content: "Devis — {_esc(num_devis)}"; font-size: 8pt; color: #6b7785; }}
+  @bottom-right {{ content: "Page " counter(page) " / " counter(pages); font-size: 8pt; color: #6b7785; }}
+}}
 * {{ box-sizing: border-box; margin: 0; padding: 0; }}
 body {{ font-family: Arial, sans-serif; font-size: 10pt; color: #1a2a3a; }}
 .header {{ display: flex; justify-content: space-between; align-items: flex-start;
@@ -1430,6 +1905,24 @@ table.annexe-table {{ orphans: 3; widows: 3; }}
 .clause:first-child {{ margin-top: 0; }}
 .clause h5 {{ font-size: 9pt; color: #002b5c; margin-bottom: 2px; }}
 .clause p {{ font-size: 8.3pt; line-height: 1.4; color: #3a4552; text-align: justify; }}
+/* Conditions générales sur 2 pages : mise en page sur 2 colonnes (comme le
+   document CGV imprimé de référence), texte intégral non tronqué. Les
+   clauses ne sont volontairement pas insécables (pas de break-inside:avoid)
+   pour laisser le texte se répartir librement entre les 2 colonnes puis les
+   2 pages, quitte à couper un paragraphe en cours de phrase — c'est ce qui
+   permet de tenir en 2 pages sans réduire le contenu. Seul le titre de
+   chaque article reste collé à son premier paragraphe (break-after:avoid). */
+.cgv-page-wrap {{ page: devis-cgv; }}
+.cgv-columns {{
+  column-count: 2; column-gap: 16px; column-rule: 1px solid #d0d4d9;
+  page-break-after: always; break-after: page;
+}}
+.cgv-columns .clause {{ margin-top: 5px; page-break-inside: auto; break-inside: auto; }}
+.cgv-columns .clause:first-child {{ margin-top: 0; }}
+.cgv-columns .clause h5 {{
+  font-size: 8pt; margin: 0 0 1px; break-after: avoid; page-break-after: avoid;
+}}
+.cgv-columns .clause p {{ font-size: 7.6pt; line-height: 1.32; margin-top: 2px; }}
 .accord-box {{ display: flex; gap: 24px; margin-top: 16px; page-break-inside: avoid; break-inside: avoid; }}
 .accord-box .accord-cell {{ flex: 1; border: 1px solid #d1d9e0; border-radius: 6px; padding: 14px 16px; min-height: 90px; }}
 .accord-box h4 {{ font-size: 8pt; text-transform: uppercase; color: #6b7785; letter-spacing: .5px; margin-bottom: 30px; }}
@@ -1518,10 +2011,12 @@ table.annexe-table {{ orphans: 3; widows: 3; }}
 
   {notes_html}
 
+  <div class="cgv-page-wrap">
   <div class="section-header conditions-page-break">5. Conditions générales de prestations de services et d'interventions</div>
   <div class="section-body section-body-flat">
     <div style="font-size:8pt;color:#6b7785;font-style:italic;margin-bottom:8px">Version 2026.01 – Applicable à compter du 10/08/2026</div>
 
+    <div class="cgv-columns">
     <div class="clause">
       <h5>Article 1 – Champ d'application – Hiérarchie contractuelle</h5>
       <p>Les présentes conditions générales de prestations de services (les « Conditions Services ») s'appliquent à toutes les prestations de services réalisées par {_esc(entreprise.get("nom",""))} (« EMS ») au profit de ses clients professionnels (le « Client ») : diagnostic, dépannage, réparation, révision, entretien, maintenance préventive ou corrective, installation, mise en service, réglage et essais de moteurs, équipements et systèmes, que ces prestations soient réalisées dans les ateliers d'EMS ou sur site (y compris, le cas échéant, à bord de navires ou sur les installations du Client).</p>
@@ -1617,7 +2112,9 @@ table.annexe-table {{ orphans: 3; widows: 3; }}
       <p>Les présentes Conditions Services et toutes les prestations qu'elles régissent sont soumises au droit français.</p>
       <p><strong>Il est expressément spécifié que tout litige pouvant se révéler entre EMS et l'un de ses clients au cours d'une opération relevant des présentes, y compris en cas de pluralité de défendeurs ou d'appel en garantie, sera du ressort du seul Tribunal de commerce de {_esc(_e('rcs_ville', 'Saint-Malo'))}.</strong></p>
     </div>
+    </div><!-- /cgv-columns -->
   </div>
+  </div><!-- /cgv-page-wrap -->
 
   <div class="signature-page">
     <div class="keep-together">

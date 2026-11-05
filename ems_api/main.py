@@ -44,7 +44,7 @@ from .routers import (
        interventions, garanties, ameliorations, documents,
        types_intervention, types_moteur, statuts_garantie, stats_config, pieces, sync, admin,
        pdf_export, marques, affaires, contacts, updates, accuse_reception,
-       bons_commande, modeles_chapitre, fournisseurs, devis, navires,
+       bons_commande, intentions_achat, modeles_chapitre, fournisseurs, devis, navires,
    )
 
 
@@ -132,6 +132,7 @@ app.include_router(pdf_export.router, dependencies=deps)
 app.include_router(pdf_export.router_render, dependencies=deps)
 app.include_router(affaires.router, dependencies=deps)
 app.include_router(bons_commande.router, dependencies=deps)
+app.include_router(intentions_achat.router, dependencies=deps)
 app.include_router(devis.router, dependencies=deps)
 app.include_router(contacts.router, dependencies=deps)
 app.include_router(fournisseurs.router, dependencies=deps)
