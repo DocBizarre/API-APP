@@ -48,7 +48,7 @@ def test_create_amelioration(client, client_id):
         "priorite": "Haute", "statut": "Nouveau"
     })
     assert r.status_code == 201
-    assert r.json()["num_ticket"].startswith("AMELIO-")
+    assert r.json()["num_ticket"].startswith("AME-")
 
 
 def test_stats_ameliorations(client, client_id):
