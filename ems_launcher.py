@@ -614,19 +614,35 @@ class Launcher(tk.Tk):
         self._update_badge.pack_forget()
         self._set_check_status("🔄 Vérification des mises à jour…", "#aac4e8")
 
+        # Le thread ne touche JAMAIS à Tk : il dépose son résultat, et le thread
+        # principal vient le relever (_poll_check_result). Si la fenêtre est
+        # détruite entre-temps (ex. une app lancée ferme le Launcher), les
+        # after() en attente sont annulés et rien ne plante.
         import threading
+        self._check_result = None
         def _run():
             try:
                 from ems_client import sync_config
                 api_url = sync_config.server_url()
             except Exception:
                 api_url = "http://127.0.0.1:8765"
-            joignable, info = _updater.probe_server(api_url, __version__)
-            if info:
-                self.after(0, lambda: self._show_update_badge(info))
-            else:
-                self.after(0, lambda: self._show_check_result(joignable))
+            try:
+                self._check_result = _updater.probe_server(api_url, __version__)
+            except Exception:
+                self._check_result = (False, None)
         threading.Thread(target=_run, daemon=True).start()
+        self.after(200, self._poll_check_result)
+
+    def _poll_check_result(self):
+        res = self._check_result
+        if res is None:
+            self.after(200, self._poll_check_result)
+            return
+        joignable, info = res
+        if info:
+            self._show_update_badge(info)
+        else:
+            self._show_check_result(joignable)
 
     def _set_check_status(self, text: str, fg: str):
         self._check_status.config(text=text, fg=fg)
