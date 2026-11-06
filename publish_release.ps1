@@ -12,8 +12,15 @@
 # - .\build.ps1 doit avoir ete lance au prealable
 # - Le partage \\EMSVMA001\EMS_install doit etre accessible
 
+# Options :
+#   -Server 192.168.1.10   cible (IP par defaut : le nom EMSVMA001 n'est pas
+#                          resolu hors du reseau local, ex. via VPN)
+param(
+    [string]$Server = "192.168.1.10"
+)
+
 # ----- Configuration -----
-$SERVER_NAME = "EMSVMA001"
+$SERVER_NAME = $Server
 $SERVER_IP   = "192.168.1.10"
 $SERVER_PORT = "8765"
 $SHARE_PATH  = "\\$SERVER_NAME\EMS_install"

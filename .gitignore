@@ -49,3 +49,6 @@ env/
 # OS
 Thumbs.db
 .DS_Store
+
+# Zips de release copiés localement par build.ps1 (servis par /static)
+ems_api/static/*.zip
