@@ -42,9 +42,13 @@ if (-not $App) {
             Write-Host "  Format invalide (attendu : X.Y.Z)" -ForegroundColor Red
             exit 1
         }
-        $content = Get-Content $versionFile -Raw
+        # Lecture/écriture en UTF-8 SANS BOM : Get-Content sans -Encoding lit
+        # en ANSI sous PowerShell 5.1 et Set-Content -Encoding UTF8 réécrivait
+        # alors les accents en double encodage (« SystÃ¨mes » dans les titres).
+        $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+        $content = [System.IO.File]::ReadAllText($versionFile, $utf8NoBom)
         $content = $content -replace '__version__ = "[^"]+"', "__version__ = `"$newVersion`""
-        Set-Content $versionFile -Value $content.TrimEnd() -Encoding UTF8 -NoNewline
+        [System.IO.File]::WriteAllText($versionFile, $content, $utf8NoBom)
         Write-Host "  Version mise a jour : $currentVersion -> $newVersion" -ForegroundColor Green
         $currentVersion = $newVersion
     } else {
@@ -81,8 +85,11 @@ function Build-App([string]$name, [string]$spec) {
         Write-Warning "Spec introuvable : $specPath"
         return $false
     }
-    $cmd = $PYINSTALLER_CMD -split " "
-    & $cmd[0] ($cmd[1..($cmd.Length-1)] + @($specPath, "--distpath", $DIST, "--workpath", (Join-Path $ROOT "build"), "--noconfirm", "--clean"))
+    $cmd = @($PYINSTALLER_CMD -split " ")
+    # Arguments après l'exécutable (aucun si la commande est "pyinstaller" seul :
+    # $cmd[1..0] vaudrait [1,0] en PowerShell -> index hors limites en StrictMode)
+    $preArgs = @($cmd | Select-Object -Skip 1)
+    & $cmd[0] ($preArgs + @($specPath, "--distpath", $DIST, "--workpath", (Join-Path $ROOT "build"), "--noconfirm", "--clean"))
     if ($LASTEXITCODE -ne 0) {
         Write-Host "ERREUR lors du build de $name (code $LASTEXITCODE)" -ForegroundColor Red
         return $false
