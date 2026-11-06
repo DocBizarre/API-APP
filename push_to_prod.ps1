@@ -149,7 +149,21 @@ foreach ($folder in $folders) {
     # service EMS_API tant qu'il tourne : sans cette exclusion, robocopy reste
     # bloque a retenter indefiniment sur un fichier verrouille - /R:3 /W:5
     # fait echouer rapidement au lieu de boucler des heures en silence)
-    $result = robocopy $src $dst /MIR /XD __pycache__ .venv /XF *.db *.log *.db-journal *.db-shm *.db-wal /R:3 /W:5 /NJH /NJS /NDL /NFL /NC /NS
+    #
+    # /XD exclut aussi les dossiers de DONNEES du serveur (chemins complets,
+    # cote dev ET cote serveur) : /MIR supprime sinon tout ce qui n'existe pas
+    # en dev, y compris des repertoires entiers quels que soient les filtres
+    # /XF -> ems_api\data\backups (sauvegardes quotidiennes), dossiers\,
+    # ems.db.bak*, et la sauvegarde ems.db.backup_* creee juste au-dessus ;
+    # ems_api\static contient les zips de release publies par publish_release.
+    # (updates.json, seul fichier utile de ems_api\data en dev, est gere a part
+    # plus bas : copie uniquement s'il est absent du serveur.)
+    $xdData = @()
+    foreach ($sub in @("data", "static")) {
+        $xdData += "$src\$sub"
+        $xdData += "$dst\$sub"
+    }
+    $result = robocopy $src $dst /MIR /XD __pycache__ .venv @xdData /XF *.db *.log *.db-journal *.db-shm *.db-wal /R:3 /W:5 /NJH /NJS /NDL /NFL /NC /NS
     
     # Robocopy renvoie 0-7 = succes, 8+ = erreur
     if ($LASTEXITCODE -ge 8) {
