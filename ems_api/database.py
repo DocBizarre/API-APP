@@ -135,6 +135,7 @@ def init_db():
         ("bons_commande", "lien_monstock",             "TEXT DEFAULT ''"),
         ("bons_commande", "envoye_le",                 "TEXT DEFAULT ''"),
         ("bons_commande", "envoye_a",                  "TEXT DEFAULT ''"),
+        ("receptions_achat", "statut_avant",           "TEXT DEFAULT ''"),
         ("intentions_achat", "envoye_le",              "TEXT DEFAULT ''"),
         ("intentions_achat", "envoye_a",               "TEXT DEFAULT ''"),
         ("affaire_couts", "stade",                    "TEXT DEFAULT 'P1'"),

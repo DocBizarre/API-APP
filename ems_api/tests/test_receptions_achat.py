@@ -73,6 +73,19 @@ def test_annuler_reception_revient_au_statut_precedent(client):
     assert b["statut"] == "Confirmé" and b["date_livraison_reelle"] == "" and b["receptions"] == []
 
 
+def test_annuler_toutes_les_receptions_retablit_le_statut_initial(client):
+    bc = _bc(client, statut="Envoyé")
+    l1, _ = _ids(bc)
+    url = f"/bons-commande/{bc['id']}/receptions"
+    r1 = client.post(url, json={"lignes": [{"ligne_id": l1, "quantite_recue": 3}]}).json()
+    r2 = client.post(url, json={"lignes": [{"ligne_id": l1, "quantite_recue": 2}]}).json()
+    assert r2["statut"] == "Reçu partiellement"
+    b = client.delete(f"{url}/{r2['receptions'][-1]['id']}").json()
+    assert b["statut"] == "Reçu partiellement"          # il reste une réception
+    b = client.delete(f"{url}/{r1['receptions'][0]['id']}").json()
+    assert b["statut"] == "Envoyé"                      # statut d'avant la 1re réception
+
+
 def test_modifier_le_bon_conserve_les_receptions(client):
     bc = _bc(client)
     l1, l2 = _ids(bc)

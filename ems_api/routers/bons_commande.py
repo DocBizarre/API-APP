@@ -75,8 +75,13 @@ def _date_fr_key(s: str):
         return (0, 0, 0)
 
 
-def _appliquer_etat_reception(bc: BonCommande) -> None:
-    """Aligne le statut (et la date de livraison réelle) du bon sur ses réceptions."""
+_STATUTS_RECEPTION = ("Reçu", "Reçu partiellement")
+
+
+def _appliquer_etat_reception(bc: BonCommande, statut_sans_reception: str = "") -> None:
+    """Aligne le statut (et la date de livraison réelle) du bon sur ses réceptions.
+    `statut_sans_reception` : statut à rétablir si plus rien n'est reçu (statut
+    d'avant la première réception), à défaut « Confirmé »."""
     if bc.statut == "Annulé":
         return
     ancien = bc.statut
@@ -92,8 +97,11 @@ def _appliquer_etat_reception(bc: BonCommande) -> None:
         bc.date_livraison_reelle = ""
     if etat == "partielle":
         bc.statut = "Reçu partiellement"
-    elif ancien in ("Reçu", "Reçu partiellement"):
-        bc.statut = "Confirmé"
+    elif ancien in _STATUTS_RECEPTION:
+        if statut_sans_reception and statut_sans_reception not in _STATUTS_RECEPTION:
+            bc.statut = statut_sans_reception
+        else:
+            bc.statut = "Confirmé"
 
 
 def _ligne_to_out(l: BonCommandeLigne, recu: Optional[dict] = None) -> dict:
@@ -497,6 +505,7 @@ def create_reception(bc_id: str, body: ReceptionCreate, db: Session = Depends(ge
         numero_bl=(body.numero_bl or "").strip(),
         receptionnaire=(body.receptionnaire or "").strip(),
         commentaire=(body.commentaire or "").strip(),
+        statut_avant=bc.statut or "",
     )
     for lid, q in a_recevoir.items():
         ligne = lignes_bc[lid]
@@ -523,9 +532,12 @@ def delete_reception(bc_id: str, reception_id: str, db: Session = Depends(get_db
     reception = next((r for r in bc.receptions if r.id == reception_id), None)
     if reception is None:
         raise HTTPException(404, "Réception introuvable")
+    # Statut d'avant la toute première réception (rétabli si plus rien n'est reçu)
+    statut_initial = next((r.statut_avant for r in bc.receptions
+                           if r.statut_avant and r.statut_avant not in _STATUTS_RECEPTION), "")
     bc.receptions.remove(reception)
     db.flush()
-    _appliquer_etat_reception(bc)
+    _appliquer_etat_reception(bc, statut_initial)
     bc.version = (bc.version or 1) + 1
     db.commit()
     db.refresh(bc)

@@ -8514,7 +8514,11 @@ function renderReceptionModal(bc) {
       ? '<div style="padding:10px;background:var(--gray-bg);border-radius:6px;font-size:13px;margin-bottom:12px">Ce bon de commande ne comporte aucune ligne à réceptionner.</div>'
       : (!aRecevoir.length
         ? `<div style="padding:10px;background:#d1fae5;color:#065f46;border-radius:6px;font-size:13px;margin-bottom:12px">✓ Commande entièrement reçue${bc.date_livraison_reelle ? ' le ' + escHtml(bc.date_livraison_reelle) : ''}.</div>`
-        : ''));
+        : (bc.statut === 'Reçu' && !(bc.receptions || []).length
+          ? `<div style="padding:10px;background:#fef3c7;color:#92400e;border-radius:6px;font-size:13px;margin-bottom:12px">
+               ⚠ Ce bon est déjà marqué « Reçu » (saisi avant le suivi des réceptions) : les quantités ci-dessous n'ont simplement pas été pointées.
+               N'enregistrez une réception que pour régulariser — une réception partielle le repasserait en « Reçu partiellement ».</div>`
+          : '')));
 
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay reception-overlay';

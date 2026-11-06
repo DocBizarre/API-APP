@@ -19,7 +19,10 @@ class ReceptionAchat(Base):
     numero_bl        = Column(String, default="")   # n° du bon de livraison fournisseur
     receptionnaire   = Column(String, default="")
     commentaire      = Column(String, default="")
-    created_at       = Column(DateTime(timezone=True), server_default=func.now())
+    # Statut du bon avant cette réception : rétabli si on annule la dernière
+    # réception (sinon un bon « Brouillon » / « Envoyé » finirait « Confirmé »).
+    statut_avant     = Column(String, default="")
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
 
     bon_commande = relationship("BonCommande", back_populates="receptions")
     lignes       = relationship("ReceptionAchatLigne", back_populates="reception",
