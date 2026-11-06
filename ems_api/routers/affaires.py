@@ -28,6 +28,7 @@ from ..config import settings
 from .interventions import _upsert_contact
 from .fournisseurs import _upsert_fournisseur
 from .navires import _upsert_navire
+from .commerciaux import _upsert_commercial
 from .moteurs import sync_moteur_apres_suppression_lien, clear_moteurs_code_affaire
 
 router = APIRouter(prefix="/affaires", tags=["affaires"])
@@ -257,6 +258,7 @@ _SORT_COLUMNS = {
     "client_nom":      Client.nom,
     "navire_machine":  Affaire.navire_machine,
     "charge_affaire":  Affaire.charge_affaire,
+    "commercial":      Affaire.commercial,
     "date_debut":      Affaire.date_debut,
     "date_fin_prevue": Affaire.date_fin_prevue,
     "statut":          Affaire.statut,
@@ -292,6 +294,7 @@ def list_affaires(
                 Affaire.navire_machine.ilike(like),
                 Affaire.ref_interne.ilike(like),
                 Affaire.charge_affaire.ilike(like),
+                Affaire.commercial.ilike(like),
                 Client.nom.ilike(like))
         )
 
@@ -455,6 +458,9 @@ def create_affaire(body: AffaireCreate, db: Session = Depends(get_db)):
         num_commande_client=body.num_commande_client,
         charge_affaire=body.charge_affaire,
         resp_technique=body.resp_technique,
+        commercial=body.commercial,
+        commercial_email=body.commercial_email,
+        commercial_tel=body.commercial_tel,
         date_debut=body.date_debut,
         date_fat=body.date_fat,
         date_fin_fat=body.date_fin_fat,
@@ -493,6 +499,7 @@ def create_affaire(body: AffaireCreate, db: Session = Depends(get_db)):
     )
     db.add(a)
     _upsert_fournisseur(db, a.fournisseur)
+    _upsert_commercial(db, a.commercial, a.commercial_email, a.commercial_tel)
     _client_nom = ""
     if a.client_id:
         _client = db.query(Client).filter(Client.id == a.client_id).first()
@@ -522,6 +529,8 @@ def update_affaire(affaire_id: str, body: AffaireUpdate,
         _upsert_interlocuteurs(db, body.interlocuteurs_client, entreprise=_client_nom)
     if body.fournisseur is not None:
         _upsert_fournisseur(db, a.fournisseur)
+    if body.commercial is not None:
+        _upsert_commercial(db, a.commercial, a.commercial_email, a.commercial_tel)
     if body.navire_machine is not None:
         _upsert_navire(db, a.navire_machine, a.navire_immatriculation,
                       a.navire_port_attache, a.client_id)
@@ -594,7 +603,7 @@ def generer_pdf_affaire(affaire_id: str, pdf_type: str = "complet",
                    .all()
     ] if a.num_affaire else []
 
-    _pdf_type = pdf_type if pdf_type in ("complet", "technique") else "complet"
+    _pdf_type = pdf_type if pdf_type in ("complet", "technique", "accuse_reception") else "complet"
     html_str = build_affaire_html(a_dict, items, client=c_dict, for_pdf=True,
                                   pdf_type=_pdf_type, moteurs=moteurs)
 
@@ -605,11 +614,13 @@ def generer_pdf_affaire(affaire_id: str, pdf_type: str = "complet",
 
     safe_num = a.num_affaire.replace("/", "-").replace(" ", "_")
     suffix = "_TECHNIQUE" if _pdf_type == "technique" else ""
+    filename = (f"AR_Commande_{safe_num}.pdf" if _pdf_type == "accuse_reception"
+                else f"Affaire_{safe_num}{suffix}.pdf")
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'attachment; filename="Affaire_{safe_num}{suffix}.pdf"',
+            "Content-Disposition": f'attachment; filename="{filename}"',
             "Cache-Control": "no-store",
         },
     )

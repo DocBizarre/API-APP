@@ -46,8 +46,10 @@ def init_db():
     from .models import configurations  # noqa
     from .models import affaire, contact  # noqa
     from .models import bon_commande  # noqa
+    from .models import reception_achat  # noqa
     from .models import intention_achat  # noqa
     from .models import fournisseur  # noqa
+    from .models import commercial  # noqa
     from .models import devis  # noqa
     from .models import navire  # noqa
     Base.metadata.create_all(bind=engine)
@@ -92,6 +94,9 @@ def init_db():
         ("affaires", "conditions_reglement",     "TEXT DEFAULT ''"),
         ("affaires", "garanties",                "TEXT DEFAULT ''"),
         ("affaires", "resp_technique",           "TEXT DEFAULT ''"),
+        ("affaires", "commercial",               "TEXT DEFAULT ''"),
+        ("affaires", "commercial_email",         "TEXT DEFAULT ''"),
+        ("affaires", "commercial_tel",           "TEXT DEFAULT ''"),
         ("affaires", "interlocuteurs_client",    "TEXT DEFAULT '[]'"),
         ("affaires", "date_fat",                 "TEXT DEFAULT ''"),
         ("affaires", "date_fin_fat",             "TEXT DEFAULT ''"),
@@ -128,6 +133,10 @@ def init_db():
         ("bons_commande", "interlocuteurs_fournisseur", "TEXT DEFAULT '[]'"),
         ("bons_commande", "reference_monstock",       "TEXT DEFAULT ''"),
         ("bons_commande", "lien_monstock",             "TEXT DEFAULT ''"),
+        ("bons_commande", "envoye_le",                 "TEXT DEFAULT ''"),
+        ("bons_commande", "envoye_a",                  "TEXT DEFAULT ''"),
+        ("intentions_achat", "envoye_le",              "TEXT DEFAULT ''"),
+        ("intentions_achat", "envoye_a",               "TEXT DEFAULT ''"),
         ("affaire_couts", "stade",                    "TEXT DEFAULT 'P1'"),
         ("affaire_couts", "bon_commande_id",          "TEXT"),
         ("affaire_couts", "poste_lie_id",             "TEXT"),
@@ -433,3 +442,20 @@ def init_db():
             for i, lib in enumerate(_defaults):
                 _s.add(MarqueMoteur(libelle=lib, ordre=i))
             _s.commit()
+
+    # Reprise ponctuelle : liens références produits ↔ fournisseurs déduits des
+    # bons de commande / intentions d'achat déjà enregistrés (une seule fois,
+    # marqueur dans la table config ; le prix retenu est celui du dernier achat).
+    try:
+        from .models.configurations import Config as _CfgPF
+        from .services.piece_fournisseurs import backfill_depuis_achats
+        with _Session(engine) as _s8:
+            _cle = "migration:piece_fournisseurs_backfill"
+            if not _s8.query(_CfgPF).filter(_CfgPF.cle == _cle).first():
+                _n = backfill_depuis_achats(_s8)
+                _s8.add(_CfgPF(cle=_cle, valeur=str(_n)))
+                _s8.commit()
+    except Exception:
+        import logging as _logPF
+        _logPF.getLogger(__name__).warning("Reprise des liens pièces/fournisseurs impossible",
+                                           exc_info=True)

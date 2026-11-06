@@ -50,6 +50,9 @@ class IntentionAchat(Base):
     frais_port              = Column(Float, default=0.0)
     date_generation         = Column(DateTime(timezone=True))
     pdf_path                = Column(String, default="")
+    # Envoi au fournisseur (renseigné depuis l'app Affaire après l'envoi du mail)
+    envoye_le               = Column(String, default="")   # JJ/MM/AAAA HH:MM, vide = non envoyé
+    envoye_a                = Column(String, default="")   # destinataire(s)
     version                 = Column(Integer, default=1)
     created_at              = Column(DateTime(timezone=True), server_default=func.now())
     updated_at              = Column(DateTime(timezone=True), server_default=func.now(),

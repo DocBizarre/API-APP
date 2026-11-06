@@ -11,6 +11,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
+from ..schemas.intention_achat import EnvoiIn
 from ..database import get_db
 from ..models.affaire import Affaire
 from ..models.piece import Piece
@@ -22,6 +23,7 @@ from ..services.numerotation import next_num_intention_achat
 from .affaires import _get_dossier, _create_arborescence
 from .interventions import _upsert_contact
 from .fournisseurs import _upsert_fournisseur
+from ..services.piece_fournisseurs import lier_lignes_achat
 
 router = APIRouter(prefix="/intentions-achat", tags=["intentions-achat"])
 
@@ -192,6 +194,7 @@ def create_intention_achat(body: IntentionAchatCreate, db: Session = Depends(get
                        ia.fournisseur_tel, ia.fournisseur_rue, ia.fournisseur_code_postal,
                        ia.fournisseur_ville, ia.fournisseur_pays)
     _upsert_interlocuteurs_fournisseur(db, ia.interlocuteurs_fournisseur)
+    lier_lignes_achat(db, ia.fournisseur_nom, body.lignes, ia.date_commande)
     db.commit()
     db.refresh(ia)
     return _to_out(ia)
@@ -216,6 +219,9 @@ def update_intention_achat(ia_id: str, body: IntentionAchatUpdate,
                        ia.fournisseur_tel, ia.fournisseur_rue, ia.fournisseur_code_postal,
                        ia.fournisseur_ville, ia.fournisseur_pays)
     _upsert_interlocuteurs_fournisseur(db, ia.interlocuteurs_fournisseur)
+    lier_lignes_achat(db, ia.fournisseur_nom,
+                      body.lignes if lignes is not None else list(ia.lignes),
+                      ia.date_commande)
     ia.version = (ia.version or 1) + 1
     db.commit()
     db.refresh(ia)
@@ -285,3 +291,21 @@ def generer_pdf_intention_achat(ia_id: str, lang: str = Query("fr", pattern="^(f
             "Cache-Control": "no-store",
         },
     )
+
+@router.post("/{ia_id}/envoi", response_model=IntentionAchatOut,
+             summary="Marque la commande comme envoyée au fournisseur (ou annule)")
+def marquer_envoi(ia_id: str, body: EnvoiIn, db: Session = Depends(get_db)):
+    obj = _get_intention(ia_id, db)
+    if body.envoye:
+        obj.envoye_le = datetime.now().strftime("%d/%m/%Y %H:%M")
+        obj.envoye_a = (body.envoye_a or "").strip()
+        if (obj.statut or "Brouillon") == "Brouillon":
+            obj.statut = "Envoyée"
+    else:
+        obj.envoye_le = ""
+        obj.envoye_a = ""
+    obj.version = (obj.version or 1) + 1
+    db.commit()
+    db.refresh(obj)
+    return _to_out(obj)
+

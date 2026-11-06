@@ -103,6 +103,9 @@ class AffaireCreate(BaseModel):
     num_commande_client:     str = ""
     charge_affaire:          str = ""
     resp_technique:          str = ""
+    commercial:              str = ""
+    commercial_email:        str = ""
+    commercial_tel:          str = ""
     date_debut:              str = ""
     date_fat:                str = ""
     date_fin_fat:            str = ""
@@ -151,6 +154,9 @@ class AffaireUpdate(BaseModel):
     num_commande_client:     Optional[str] = None
     charge_affaire:          Optional[str] = None
     resp_technique:          Optional[str] = None
+    commercial:              Optional[str] = None
+    commercial_email:        Optional[str] = None
+    commercial_tel:          Optional[str] = None
     date_debut:              Optional[str] = None
     date_fat:                Optional[str] = None
     date_fin_fat:            Optional[str] = None
@@ -201,6 +207,9 @@ class AffaireOut(BaseModel):
     num_commande_client:     str = ""
     charge_affaire:          str
     resp_technique:          str = ""
+    commercial:              str = ""
+    commercial_email:        str = ""
+    commercial_tel:          str = ""
     date_debut:              str
     date_fat:                str = ""
     date_fin_fat:            str = ""

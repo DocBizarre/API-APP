@@ -19,6 +19,9 @@ class Affaire(Base):
     num_commande_client    = Column(String, default="")
     charge_affaire         = Column(String, default="")
     resp_technique         = Column(String, default="")
+    commercial             = Column(String, default="")   # commercial EMS en charge de l'affaire
+    commercial_email       = Column(String, default="")
+    commercial_tel         = Column(String, default="")
     date_debut      = Column(String, default="")   # JJ/MM/AAAA
     date_fat        = Column(String, default="")   # JJ/MM/AAAA — début FAT (Factory Acceptance Test)
     date_fin_fat    = Column(String, default="")   # JJ/MM/AAAA — fin FAT

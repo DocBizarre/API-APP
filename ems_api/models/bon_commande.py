@@ -43,6 +43,9 @@ class BonCommande(Base):
     paiements               = Column(String, default="[]")  # échéancier de paiement (JSON)
     date_generation         = Column(DateTime(timezone=True))
     pdf_path                = Column(String, default="")
+    # Envoi au fournisseur (renseigné depuis l'app Affaire après l'envoi du mail)
+    envoye_le               = Column(String, default="")   # JJ/MM/AAAA HH:MM, vide = non envoyé
+    envoye_a                = Column(String, default="")   # destinataire(s)
     version                 = Column(Integer, default=1)
     created_at              = Column(DateTime(timezone=True), server_default=func.now())
     updated_at              = Column(DateTime(timezone=True), server_default=func.now(),
@@ -52,6 +55,9 @@ class BonCommande(Base):
     lignes  = relationship("BonCommandeLigne", back_populates="bon_commande",
                            cascade="all, delete-orphan",
                            order_by="BonCommandeLigne.ordre")
+    receptions = relationship("ReceptionAchat", back_populates="bon_commande",
+                              cascade="all, delete-orphan",
+                              order_by="ReceptionAchat.created_at")
 
 
 class BonCommandeLigne(Base):
@@ -72,3 +78,6 @@ class BonCommandeLigne(Base):
 
     bon_commande = relationship("BonCommande", back_populates="lignes")
     piece        = relationship("Piece")
+
+
+from . import reception_achat  # noqa: E402,F401  (résolution de BonCommande.receptions)

@@ -739,6 +739,120 @@ def email_devis(devis, client, moteur=None, pdf_path=""):
     return email, pj_auto
 
 
+# ─── Commandes fournisseur (bons de commande / intentions d'achat) ─────────
+
+_SIGNATURE_EMS = """L'equipe EMS - Emeraude Moteurs Systemes
+9 Rue d'Armorique - 35540 Miniac Morvan
+Tel : 02.99.19.01.99
+www.emeraudemoteurs.com"""
+
+TEMPLATE_BON_COMMANDE = """Bonjour{contact_line},
+
+Veuillez trouver ci-joint notre bon de commande n° {num}{ref_line}.
+{affaire_line}
+Merci de nous retourner un accusé de réception de commande confirmant les prix et le délai de livraison.
+
+Cordialement,
+{signataire}
+""" + _SIGNATURE_EMS + "\n"
+
+TEMPLATE_INTENTION_ACHAT = """Bonjour{contact_line},
+
+Veuillez trouver ci-joint notre intention d'achat n° {num}{ref_line}.
+{affaire_line}
+Merci de nous confirmer votre meilleure offre (prix, délai de livraison et conditions).
+
+Cordialement,
+{signataire}
+""" + _SIGNATURE_EMS + "\n"
+
+TEMPLATE_INTENTION_ACHAT_EN = """Hello{contact_line},
+
+Please find attached our purchase intent no. {num}{ref_line}.
+{affaire_line}
+Could you please confirm your best offer (price, lead time and terms).
+
+Best regards,
+{signataire}
+EMS - Emeraude Moteurs Systemes
+9 Rue d'Armorique - 35540 Miniac Morvan - France
+Phone: +33 2 99 19 01 99
+www.emeraudemoteurs.com
+"""
+
+
+def destinataires_commande(bon):
+    """Emails des interlocuteurs fournisseur du bon (à défaut, l'email fournisseur)."""
+    import json as _json
+    try:
+        interlocs = _json.loads(_safe(bon, "interlocuteurs_fournisseur") or "[]")
+    except (ValueError, TypeError):
+        interlocs = []
+    emails = []
+    for it in interlocs if isinstance(interlocs, list) else []:
+        e = (it.get("email") or "").strip() if isinstance(it, dict) else ""
+        if e and e.lower() not in {x.lower() for x in emails}:
+            emails.append(e)
+    if not emails and _safe(bon, "fournisseur_email").strip():
+        emails.append(_safe(bon, "fournisseur_email").strip())
+    return emails
+
+
+def email_commande_fournisseur(bon, pdf_path="", kind="bc"):
+    """
+    Ouvre le client mail avec un brouillon à destination des interlocuteurs du
+    fournisseur, joignant le PDF du bon de commande (kind="bc") ou de
+    l'intention d'achat (kind="ia", en anglais si la langue du document est "en").
+    Retourne (destinataires, pj_auto).
+    """
+    emails = destinataires_commande(bon)
+    to = "; ".join(emails)
+    en = kind == "ia" and _safe(bon, "langue") == "en"
+
+    try:
+        import json as _json
+        interlocs = _json.loads(_safe(bon, "interlocuteurs_fournisseur") or "[]")
+        premier = next((it.get("nom", "").strip() for it in interlocs
+                        if isinstance(it, dict) and it.get("nom")), "")
+    except (ValueError, TypeError):
+        premier = ""
+    contact = premier or _safe(bon, "fournisseur_contact").strip()
+    contact_line = f" {contact}" if contact else ""
+
+    num = _safe(bon, "num_bc" if kind == "bc" else "num_ia") or _safe(bon, "numero")
+    ref_f = _safe(bon, "reference_fournisseur").strip()
+    if ref_f:
+        ref_line = f" (your ref. {ref_f})" if en else f" (votre réf. {ref_f})"
+    else:
+        ref_line = ""
+    aff = _safe(bon, "affaire_num")
+    if aff:
+        affaire_line = (f"\nOur project reference: {aff}\n" if en
+                        else f"\nNotre référence affaire : {aff}\n")
+    else:
+        affaire_line = ""
+    signataire = _safe(bon, "charge_commande_nom").strip()
+    tel = _safe(bon, "charge_commande_tel").strip()
+    mail_charge = _safe(bon, "charge_commande_email").strip()
+    signataire = "\n".join(x for x in (signataire, tel, mail_charge) if x)
+
+    if kind == "bc":
+        subject = f"[EMS] Bon de commande {num}"
+        tpl = TEMPLATE_BON_COMMANDE
+    elif en:
+        subject = f"[EMS] Purchase intent {num}"
+        tpl = TEMPLATE_INTENTION_ACHAT_EN
+    else:
+        subject = f"[EMS] Intention d'achat {num}"
+        tpl = TEMPLATE_INTENTION_ACHAT
+    body = tpl.format(contact_line=contact_line, num=num, ref_line=ref_line,
+                      affaire_line=affaire_line, signataire=signataire)
+
+    pj_auto = _ouvrir_brouillon(to=to, cc="", subject=subject, body=body,
+                               attachment_path=pdf_path)
+    return emails, pj_auto
+
+
 # ─── Templates garantie ──────────────────────────────────────────────────────
 
 _TEMPLATE_GARANTIE_CLIENT = """\

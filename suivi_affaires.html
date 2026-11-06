@@ -842,7 +842,7 @@ const ITEM_TYPES = [
 const ITEM_STATUTS = ['À faire','En cours','Terminé','NC'];
 const AFFAIRE_STATUTS = ['En cours','En attente','À facturer','Facturé','Clos','Annulé'];
 const AFFAIRE_COMPLEXITES = ['A','B','C'];
-const BC_STATUTS = ['Brouillon','Envoyé','Confirmé','Reçu','Annulé'];
+const BC_STATUTS = ['Brouillon','Envoyé','Confirmé','Reçu partiellement','Reçu','Annulé'];
 const IA_STATUTS = ['Brouillon','Envoyée','Confirmée','Annulée'];
 const IA_INCOTERMS = ['EXW','FCA','FOB','CFR','CIF','CPT','CIP','DAP','DPU','DDP'];
 
@@ -934,6 +934,7 @@ let state = {
   contacts: [],       // demandeurs / signataires connus (précomplétion)
   fournisseurs: [],   // fournisseurs connus (précomplétion)
   navires: [],        // navires connus (précomplétion immat / port d'attache)
+  commerciaux: [],    // commerciaux EMS connus (précomplétion email / téléphone)
   chapterTemplates: {},        // modèles de champs par type (overrides, en base)
   chapterTemplatesLocked: false,
   chapterCustomTypes: [],      // types de chapitre ajoutés par l'utilisateur
@@ -1273,7 +1274,7 @@ function _filterAffairesForList(list) {
   if (state.listFilter !== 'all') arr = arr.filter(a => a.statut === state.listFilter);
   if (state.listSearch) {
     const q = state.listSearch.toLowerCase();
-    arr = arr.filter(a => [a.num_affaire, a.nom_projet, a.navire_machine, a.ref_interne, a.charge_affaire, a.client_nom]
+    arr = arr.filter(a => [a.num_affaire, a.nom_projet, a.navire_machine, a.ref_interne, a.charge_affaire, a.commercial, a.client_nom]
       .some(v => (v || '').toString().toLowerCase().includes(q)));
   }
   return arr;
@@ -1418,6 +1419,7 @@ function exportListCsv() {
     ['client_nom', 'Client'],
     ['navire_machine', 'Navire / Machine'],
     ['charge_affaire', "Chargé d'affaire"],
+    ['commercial', 'Commercial EMS'],
     ['date_debut', 'Début'],
     ['date_fat', 'Début FAT'],
     ['date_fin_fat', 'Fin FAT'],
@@ -1502,6 +1504,9 @@ function showDashboard() {
 }
 function dashCard(a) {
   const pct = progress(a._items || []);
+  // Même base que le KPI « CA des affaires en cours » : prix HT + année de livraison prévue
+  const ht = parseHT(a.prix_ht);
+  const dLivr = parseFrDateStr(a.date_fin_prevue);
   return `<div class="panel" style="margin-bottom:10px;cursor:pointer" onclick="loadAffaire('${a.id}')">
     <div class="panel-body" style="padding:12px 16px">
       <div style="display:flex;align-items:center;gap:10px">
@@ -1509,6 +1514,10 @@ function dashCard(a) {
           <div style="font-size:12px;color:var(--text-muted);font-weight:500">${escHtml(a.num_affaire)}</div>
           <div style="font-size:14px;font-weight:600;margin-top:1px">${escHtml(a.nom_projet||a.navire_machine||'—')}</div>
           <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${escHtml(a.client_nom||'')} ${a.navire_machine?'· '+escHtml(a.navire_machine):''}</div>
+        </div>
+        <div style="text-align:right;white-space:nowrap;min-width:110px">
+          <div style="font-size:13px;font-weight:600;${ht === null ? 'color:var(--text-muted);font-weight:400' : ''}" title="Chiffre d'affaires HT">${ht === null ? 'CA —' : fmtEur(ht) + ' <span style="font-size:10px;font-weight:400;color:var(--text-muted)">HT</span>'}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px" title="${dLivr ? 'Livraison prévue le ' + escHtml(a.date_fin_prevue) : 'Date de livraison prévue non renseignée'}">Livraison ${dLivr ? dLivr.getFullYear() : '—'}</div>
         </div>
         ${statusBadge(a.statut)}
         ${a.nb_items ? `<span style="font-size:12px;color:var(--text-muted)">${a.nb_items} chapitres</span>` : ''}
@@ -2906,7 +2915,7 @@ function renderFacturationGlobale() {
   const bonsTotalHT    = bons.reduce((s, b) => s + (b.total_ht  || 0), 0);
   const bonsTotalTTC   = bons.reduce((s, b) => s + (b.total_ttc || 0), 0);
   const bonsMoyenneHT  = nbBons ? bonsTotalHT / nbBons : 0;
-  const bcStatutColors = { 'Brouillon':'#6b7280', 'Envoyé':'#2563eb', 'Confirmé':'#7c3aed', 'Reçu':'#059669', 'Annulé':'#dc2626' };
+  const bcStatutColors = { 'Brouillon':'#6b7280', 'Envoyé':'#2563eb', 'Confirmé':'#7c3aed', 'Reçu partiellement':'#d97706', 'Reçu':'#059669', 'Annulé':'#dc2626' };
   const bonsByStatut = BC_STATUTS.map(s => {
     const grp = bons.filter(b => b.statut === s);
     return { statut: s, nb: grp.length, ht: grp.reduce((x, b) => x + (b.total_ht || 0), 0) };
@@ -3307,6 +3316,7 @@ function renderAffaireDetail() {
       <div class="topbar-menu" id="affaire-doc-menu">
         <button onclick="downloadAffairePdf('complet')" title="PDF complet (données financières + garanties)">📄 PDF complet</button>
         <button onclick="downloadAffairePdf('technique')" title="PDF technique (sans données financières)">📄 PDF technique</button>
+        <button onclick="downloadAffairePdf('accuse_reception')" title="Accusé de réception de commande pour le client (sans informations internes, avec les CGV)">📄 Accusé de réception de commande</button>
         <div class="topbar-menu-sep"></div>
         <button onclick="printFicheRecapA4()" title="Fiche récapitulative A4 (logo, infos affaire, contacts client)">📋 Fiche récap A4</button>
         <button onclick="printEtiquetteExpedition()" title="Étiquette d'expédition (livraison + contact EMS)">📦 Étiquette expédition</button>
@@ -3337,7 +3347,8 @@ function renderAffaireDetail() {
         ${a.reference_fournisseur?`<div class="info-field"><label>Référence fournisseur</label><div class="val">${escHtml(a.reference_fournisseur)}</div></div>`:''}
         <div class="info-field"><label>Navire / Machine</label><div class="val ${!a.navire_machine?'empty':''}">${escHtml(a.navire_machine||'—')}</div></div>
         <div class="info-field"><label>Chargé d'affaire</label><div class="val ${!a.charge_affaire?'empty':''}">${escHtml(a.charge_affaire||'—')}</div></div>
-        <div class="info-field"><label>Responsable technique</label><div class="val ${!a.resp_technique?'empty':''}">${escHtml(a.resp_technique||'—')}</div></div>
+        <div class="info-field"><label>Référent technique</label><div class="val ${!a.resp_technique?'empty':''}">${escHtml(a.resp_technique||'—')}</div></div>
+        <div class="info-field"><label>Commercial EMS</label><div class="val ${!a.commercial?'empty':''}">${escHtml(a.commercial||'—')}${a.commercial && (a.commercial_email || a.commercial_tel) ? `<div style="font-size:11px;font-weight:400;color:var(--text-muted)">${[a.commercial_email, a.commercial_tel].filter(Boolean).map(escHtml).join(' · ')}</div>` : ''}</div></div>
         ${(() => {
           const ht = parseHT(a.prix_ht);
           const exo = a.exonere_tva == 1;
@@ -5455,6 +5466,8 @@ async function openAffaireModal(a) {
   if(!state.navires.length) {
     state.navires = await GET('/navires').catch(()=>[]);
   }
+  // Toujours relu : un commercial ajouté par un collègue est proposé tout de suite
+  state.commerciaux = await GET('/commerciaux').catch(()=>state.commerciaux);
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
@@ -5510,7 +5523,7 @@ async function openAffaireModal(a) {
           <label class="form-label">Fournisseur</label>
           <input class="form-control" id="af-fournisseur" list="af-fournisseurs-list" autocomplete="off" value="${escHtml(a?.fournisseur||'')}" placeholder="Nom du fournisseur">
           <datalist id="af-fournisseurs-list">
-            ${state.fournisseurs.map(f=>`<option value="${escHtml(f.nom)}">`).join('')}
+            ${fournisseurOptionsHtml()}
           </datalist>
         </div>
         <div>
@@ -5606,7 +5619,7 @@ async function openAffaireModal(a) {
           </datalist>
         </div>
         <div>
-          <label class="form-label">Responsable technique</label>
+          <label class="form-label">Référent technique</label>
           <input class="form-control" id="af-resp-tech" list="af-charge-list"
             value="${escHtml(a?.resp_technique||'')}" placeholder="Sélectionner ou saisir…" autocomplete="off">
         </div>
@@ -5621,6 +5634,27 @@ async function openAffaireModal(a) {
           <input class="form-control" id="af-navire-port" value="${escHtml(a?.navire_port_attache||'')}" placeholder="Ex: Marseille">
         </div>
         <div></div>
+      </div>
+      <div class="form-row triple" data-tab-panel="general">
+        <div>
+          <label class="form-label" style="display:flex;align-items:center;gap:6px">
+            <span>Commercial EMS</span>
+            <button type="button" class="btn btn-ghost btn-xs" style="margin-left:auto;padding:0 4px;text-transform:none;letter-spacing:0"
+              onclick="openCommerciauxModal()" title="Gérer la liste des commerciaux (précomplétion)">⚙ Gérer</button>
+          </label>
+          <input class="form-control" id="af-commercial" list="af-commerciaux-list"
+            value="${escHtml(a?.commercial||'')}" placeholder="Sélectionner ou saisir…" autocomplete="off"
+            oninput="prefillCommercial(this.value)">
+          <datalist id="af-commerciaux-list">${commerciauxOptionsHtml()}</datalist>
+        </div>
+        <div>
+          <label class="form-label">Email commercial</label>
+          <input class="form-control" id="af-commercial-email" type="email" value="${escHtml(a?.commercial_email||'')}" placeholder="prenom.nom@…">
+        </div>
+        <div>
+          <label class="form-label">Téléphone commercial</label>
+          <input class="form-control" id="af-commercial-tel" value="${escHtml(a?.commercial_tel||'')}" placeholder="+33 6 …">
+        </div>
       </div>
       <!-- ── Planning (3 blocs de dates, couleurs alignées sur le Gantt) ── -->
       <div class="date-blocks-wrap" data-tab-panel="planning" style="display:none">
@@ -6263,6 +6297,148 @@ function prefillNavireInfos(nom) {
   if (portEl  && !portEl.value.trim()  && n.port_attache)    portEl.value  = n.port_attache;
 }
 
+// ── Commercial EMS de l'affaire (table /commerciaux : précomplétion + gestion) ──
+function commerciauxOptionsHtml() {
+  return (state.commerciaux || []).map(c => {
+    const info = [c.email, c.telephone].filter(Boolean).join(' · ');
+    return `<option value="${escHtml(c.nom)}"${info ? ` label="${escHtml(info)}"` : ''}>`;
+  }).join('');
+}
+function findCommercial(nom) {
+  const v = (nom || '').trim().toLowerCase();
+  if (!v) return null;
+  return (state.commerciaux || []).find(c => (c.nom || '').trim().toLowerCase() === v) || null;
+}
+// Choix d'un commercial connu : email / téléphone repris de la table.
+// (Écrase les champs : choisir un autre commercial doit remplacer ses coordonnées.)
+function prefillCommercial(nom) {
+  const c = findCommercial(nom);
+  if (!c) return;
+  const emailEl = document.getElementById('af-commercial-email');
+  const telEl   = document.getElementById('af-commercial-tel');
+  if (emailEl && c.email)     emailEl.value = c.email;
+  if (telEl   && c.telephone) telEl.value   = c.telephone;
+}
+function refreshCommerciauxDatalist() {
+  const dl = document.getElementById('af-commerciaux-list');
+  if (dl) dl.innerHTML = commerciauxOptionsHtml();
+}
+
+async function openCommerciauxModal() {
+  state.commerciaux = await GET('/commerciaux').catch(() => state.commerciaux || []);
+  document.querySelector('.modal-overlay.commerciaux-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay commerciaux-overlay';
+  overlay.innerHTML = `
+  <div class="modal" style="max-width:760px;max-height:90vh">
+    <div class="modal-header">
+      <h2>👤 Commerciaux EMS</h2>
+      <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+    </div>
+    <div class="modal-body" style="overflow-y:auto;flex:1">
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">
+        Liste proposée dans le champ « Commercial EMS » des affaires (avec email et téléphone préremplis).
+        Elle s'enrichit aussi automatiquement à l'enregistrement d'une affaire. Modifier ou supprimer un
+        commercial ici ne change pas les affaires existantes.
+      </p>
+      <div id="commerciaux-list" style="display:flex;flex-direction:column;gap:6px"></div>
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px">Ajouter un commercial</div>
+        <div style="display:grid;grid-template-columns:1.2fr 1.4fr 1fr auto;gap:6px">
+          <input class="form-control" id="com-new-nom" placeholder="Nom" style="font-size:13px">
+          <input class="form-control" id="com-new-email" type="email" placeholder="Email" style="font-size:13px">
+          <input class="form-control" id="com-new-tel" placeholder="Téléphone" style="font-size:13px">
+          <button type="button" class="btn btn-primary btn-sm" onclick="addCommercial()">+ Ajouter</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Fermer</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  renderCommerciauxList();
+  document.getElementById('com-new-nom')?.focus();
+}
+
+function renderCommerciauxList() {
+  const list = document.getElementById('commerciaux-list');
+  if (!list) return;
+  const peutChoisir = !!document.getElementById('af-commercial');
+  const cs = state.commerciaux || [];
+  list.innerHTML = cs.length ? cs.map(c => `
+    <div style="display:grid;grid-template-columns:1.2fr 1.4fr 1fr auto;gap:6px;align-items:center">
+      <input class="form-control" style="font-size:13px" id="com-nom-${c.id}" value="${escHtml(c.nom)}">
+      <input class="form-control" style="font-size:13px" id="com-email-${c.id}" type="email" value="${escHtml(c.email || '')}" placeholder="Email">
+      <input class="form-control" style="font-size:13px" id="com-tel-${c.id}" value="${escHtml(c.telephone || '')}" placeholder="Téléphone">
+      <div style="display:flex;gap:2px;align-items:center;white-space:nowrap">
+        <span style="font-size:11px;color:var(--text-muted);min-width:58px;text-align:right" title="Affaires où il est indiqué comme commercial">${c.nb_affaires || 0} affaire${(c.nb_affaires || 0) > 1 ? 's' : ''}</span>
+        ${peutChoisir ? `<button type="button" class="btn-icon" title="Choisir pour cette affaire" onclick="pickCommercial('${c.id}')">✔</button>` : ''}
+        <button type="button" class="btn-icon" title="Enregistrer les modifications" onclick="saveCommercial('${c.id}')">💾</button>
+        <button type="button" class="btn-icon red" title="Retirer de la liste" onclick="deleteCommercial('${c.id}')">🗑</button>
+      </div>
+    </div>`).join('')
+    : '<div style="font-size:13px;color:var(--text-muted);padding:8px 0">Aucun commercial enregistré pour l\'instant.</div>';
+}
+
+async function _reloadCommerciaux() {
+  state.commerciaux = await GET('/commerciaux').catch(() => state.commerciaux || []);
+  renderCommerciauxList();
+  refreshCommerciauxDatalist();
+}
+
+async function addCommercial() {
+  const nom = document.getElementById('com-new-nom').value.trim();
+  if (!nom) { toast('Le nom est obligatoire', 'warning'); return; }
+  try {
+    await POST('/commerciaux', {
+      nom,
+      email: document.getElementById('com-new-email').value.trim(),
+      telephone: document.getElementById('com-new-tel').value.trim(),
+    });
+    ['com-new-nom', 'com-new-email', 'com-new-tel'].forEach(id => { document.getElementById(id).value = ''; });
+    toast('Commercial ajouté', 'success');
+    await _reloadCommerciaux();
+    document.getElementById('com-new-nom')?.focus();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function saveCommercial(id) {
+  const nom = document.getElementById(`com-nom-${id}`).value.trim();
+  if (!nom) { toast('Le nom est obligatoire', 'warning'); return; }
+  try {
+    await PUT(`/commerciaux/${id}`, {
+      nom,
+      email: document.getElementById(`com-email-${id}`).value.trim(),
+      telephone: document.getElementById(`com-tel-${id}`).value.trim(),
+    });
+    toast('Commercial mis à jour', 'success');
+    await _reloadCommerciaux();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function deleteCommercial(id) {
+  const c = (state.commerciaux || []).find(x => x.id === id);
+  const ok = await confirm('Retirer ce commercial ?',
+    `${escHtml(c?.nom || '')} ne sera plus proposé. Les affaires existantes conservent leurs informations.`);
+  if (!ok) return;
+  try {
+    await DEL(`/commerciaux/${id}`);
+    toast('Commercial retiré', 'success');
+    await _reloadCommerciaux();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function pickCommercial(id) {
+  const c = (state.commerciaux || []).find(x => x.id === id);
+  const nomEl = document.getElementById('af-commercial');
+  if (!c || !nomEl) return;
+  nomEl.value = c.nom;
+  document.getElementById('af-commercial-email').value = c.email || '';
+  document.getElementById('af-commercial-tel').value = c.telephone || '';
+  document.querySelector('.modal-overlay.commerciaux-overlay')?.remove();
+}
+
 async function saveAffaire(id) {
   const body = {
     num_affaire:             document.getElementById('af-num').value.trim() || undefined,
@@ -6278,7 +6454,10 @@ async function saveAffaire(id) {
     num_commande_client:     document.getElementById('af-num-cmd').value.trim(),
     charge_affaire:          document.getElementById('af-charge').value.trim(),
     resp_technique:          document.getElementById('af-resp-tech').value.trim(),
-    prix_ht:                 document.getElementById('af-prix-ht').value.trim(),
+    commercial:              document.getElementById('af-commercial').value.trim(),
+    commercial_email:        document.getElementById('af-commercial-email').value.trim(),
+    commercial_tel:          document.getElementById('af-commercial-tel').value.trim(),
+    prix_ht:               document.getElementById('af-prix-ht').value.trim(),
     exonere_tva:             document.getElementById('af-exonere-tva')?.checked ? 1 : 0,
     etablissement_financier: document.getElementById('af-ets-fin').value.trim(),
     date_achat:              fromInputDate(document.getElementById('af-achat').value),
@@ -6329,6 +6508,7 @@ async function saveAffaire(id) {
       state.currentId = created.id;
     }
     document.querySelector('.modal-overlay')?.remove();
+    refreshFournisseursEtContacts();
     renderNav();
     if(id) renderAffaireDetail();
     else await loadAffaire(state.currentId);
@@ -6368,8 +6548,11 @@ async function downloadAffairePdf(pdfType = 'complet') {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
+    const safeNum = a.num_affaire.replace(/\//g,'-');
     const suffix = pdfType === 'technique' ? '_TECHNIQUE' : '';
-    link.download = `Affaire_${a.num_affaire.replace(/\//g,'-')}${suffix}.pdf`;
+    link.download = pdfType === 'accuse_reception'
+      ? `AR_Commande_${safeNum}.pdf`
+      : `Affaire_${safeNum}${suffix}.pdf`;
     link.click();
     URL.revokeObjectURL(url);
     toast('PDF téléchargé', 'success');
@@ -6449,11 +6632,38 @@ function bcStatutBadge(statut) {
     'Brouillon': 'background:#f3f4f6;color:#4b5563',
     'Envoyé':    'background:#dbeafe;color:#1d4ed8',
     'Confirmé':  'background:#ede9fe;color:#5b21b6',
+    'Reçu partiellement': 'background:#fef3c7;color:#92400e',
     'Reçu':      'background:#d1fae5;color:#065f46',
     'Annulé':    'background:#fee2e2;color:#991b1b',
   };
   const css = styles[statut] || styles['Brouillon'];
   return `<span style="${css};display:inline-flex;align-items:center;padding:2px 9px;border-radius:12px;font-size:11px;font-weight:600">${escHtml(statut)}</span>`;
+}
+
+// ── Base fournisseurs (précomplétion des achats, cf. /fournisseurs) ──
+function fournisseurOptionsHtml() {
+  return state.fournisseurs.map(f => {
+    const info = [f.contact, [f.code_postal, f.ville].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
+    return `<option value="${escHtml(f.nom)}"${info ? ` label="${escHtml(info)}"` : ''}>`;
+  }).join('');
+}
+function findFournisseur(val) {
+  const v = (val || '').trim().toLowerCase();
+  if (!v) return null;
+  return state.fournisseurs.find(f => (f.nom || '').trim().toLowerCase() === v) || null;
+}
+// Recharge fournisseurs + contacts après un enregistrement : les nouveaux
+// fournisseurs / interlocuteurs saisis sont immédiatement proposés.
+async function refreshFournisseursEtContacts() {
+  try {
+    const [fournisseurs, contacts] = await Promise.all([GET('/fournisseurs'), GET('/contacts')]);
+    state.fournisseurs = fournisseurs;
+    state.contacts = contacts;
+    for (const id of ['af-fournisseurs-list', 'bc-fournisseurs-list', 'ia-fournisseurs-list']) {
+      const dl = document.getElementById(id);
+      if (dl) dl.innerHTML = fournisseurOptionsHtml();
+    }
+  } catch (e) { /* non bloquant */ }
 }
 
 // ── Gestion des interlocuteurs fournisseur (achats) ──
@@ -6600,7 +6810,7 @@ function renderBcTablePage() {
         oninput="debounceBcSearch(this.value)" autofocus>
     </div>
     <div class="list-filters">
-      ${[['all','Tous',''],['Brouillon','Brouillon','#6b7280'],['Envoyé','Envoyé','#2563eb'],['Confirmé','Confirmé','#7c3aed'],['Reçu','Reçu','#059669'],['Annulé','Annulé','#dc2626']].map(([f,l,c])=>
+      ${[['all','Tous',''],['Brouillon','Brouillon','#6b7280'],['Envoyé','Envoyé','#2563eb'],['Confirmé','Confirmé','#7c3aed'],['Reçu partiellement','Reçu partiel.','#d97706'],['Reçu','Reçu','#059669'],['Annulé','Annulé','#dc2626']].map(([f,l,c])=>
         `<button class="list-filter-btn ${state.bcFilter===f?'active':''}" onclick="setBcFilter('${f}')">
            ${c?`<span class="fdot" style="background:${c}"></span>`:''}${l}
          </button>`).join('')}
@@ -6616,7 +6826,7 @@ function renderBcTablePage() {
         ${thBcCol('statut','Statut')}
         ${thBcCol('total_ht','Total HT')}
         ${thBcCol('total_ttc','Total TTC')}
-        <th style="width:110px"></th>
+        <th style="width:140px"></th>
       </tr></thead>
       <tbody>
         ${rows.length ? rows.map(bcRow).join('') :
@@ -6651,16 +6861,43 @@ function bcRow(bc) {
         : `<span style="color:var(--text-muted);font-style:italic;font-size:12px">—</span>`}
     </td>
     <td class="td-date">${escHtml(bc.date_commande||'—')}</td>
-    <td>${bcStatutBadge(bc.statut)}</td>
+    <td onclick="event.stopPropagation()" ondblclick="event.stopPropagation()">${bcStatutBadge(bc.statut)}${envoiBadge('bc', bc)}${receptionProgressHtml(bc)}</td>
     <td class="td-muted">${fmtEur(bc.total_ht)}</td>
     <td class="td-muted">${fmtEur(bc.total_ttc)}</td>
     <td onclick="event.stopPropagation()" ondblclick="event.stopPropagation()" style="white-space:nowrap">
+      ${bc.statut !== 'Annulé' && (bc.lignes||[]).length
+        ? `<button class="btn-icon" title="${bc.etat_reception === 'complete' ? 'Commande entièrement reçue — voir les réceptions' : 'Réceptionner les articles livrés (réception partielle possible)'}" onclick="openReceptionModal('${bc.id}')">📥</button>`
+        : ''}
       <button class="btn-icon" title="PDF" onclick="generateBonCommandePdf('${bc.id}')">📄</button>
+      <button class="btn-icon" title="Envoyer la commande par mail au fournisseur" onclick="envoyerCommande('bc', '${bc.id}')">✉️</button>
       <button class="btn-icon" title="Modifier" onclick="openBcModal('${bc.id}')">✏️</button>
       <button class="btn-icon" title="Dupliquer" onclick="duplicateBonCommande('${bc.id}')">📑</button>
       <button class="btn-icon red" title="Supprimer" onclick="deleteBonCommande('${bc.id}')">🗑</button>
     </td>
   </tr>`;
+}
+
+// Avancement de la réception d'un bon (quantités reçues / commandées), affiché
+// sous le statut tant que la commande n'est que partiellement reçue.
+function receptionTotaux(bc) {
+  const lignes = (bc.lignes || []).filter(l => (l.quantite || 0) > 0);
+  const cmd  = lignes.reduce((s, l) => s + (l.quantite || 0), 0);
+  const recu = lignes.reduce((s, l) => s + Math.min(l.quantite_recue || 0, l.quantite || 0), 0);
+  const manquantes = lignes.filter(l => (l.quantite_restante || 0) > 0).length;
+  return { cmd, recu, manquantes, nbLignes: lignes.length };
+}
+function receptionProgressHtml(bc) {
+  if (bc.etat_reception !== 'partielle') return '';
+  const t = receptionTotaux(bc);
+  const pct = t.cmd ? Math.round(100 * t.recu / t.cmd) : 0;
+  return `<div onclick="openReceptionModal('${bc.id}')" style="cursor:pointer;margin-top:4px;font-size:11px;color:#92400e"
+      title="${t.manquantes} ligne(s) sur ${t.nbLignes} en attente de livraison — cliquer pour réceptionner">
+      <div style="height:4px;background:#fde68a;border-radius:2px;overflow:hidden;width:90px;margin-bottom:2px">
+        <div style="height:100%;width:${pct}%;background:#d97706"></div></div>
+      ${fmtQte(t.recu)} / ${fmtQte(t.cmd)} reçus</div>`;
+}
+function fmtQte(q) {
+  return (Math.round((q || 0) * 1000) / 1000).toLocaleString('fr-FR');
 }
 
 function renderBcPagination(total, page, size) {
@@ -6835,10 +7072,11 @@ function iaRow(ia) {
     </td>
     <td class="td-muted">${escHtml(ia.reference_client||'—')}</td>
     <td><span style="font-size:11px;font-weight:600;color:var(--text-muted);border:1px solid var(--border);border-radius:4px;padding:1px 6px">${(ia.langue||'fr').toUpperCase()}</span></td>
-    <td>${iaStatutBadge(ia.statut)}</td>
+    <td onclick="event.stopPropagation()" ondblclick="event.stopPropagation()">${iaStatutBadge(ia.statut)}${envoiBadge('ia', ia)}</td>
     <td class="td-muted">${fmtEur(ia.total_ht)}</td>
     <td onclick="event.stopPropagation()" ondblclick="event.stopPropagation()" style="white-space:nowrap">
       <button class="btn-icon" title="PDF" onclick="generateIntentionAchatPdf('${ia.id}')">📄</button>
+      <button class="btn-icon" title="Envoyer l'intention d'achat par mail au fournisseur" onclick="envoyerCommande('ia', '${ia.id}')">✉️</button>
       <button class="btn-icon" title="Modifier" onclick="openIaModal('${ia.id}')">✏️</button>
       <button class="btn-icon" title="Dupliquer" onclick="duplicateIntentionAchat('${ia.id}')">📑</button>
       <button class="btn-icon red" title="Supprimer" onclick="deleteIntentionAchat('${ia.id}')">🗑</button>
@@ -6961,7 +7199,7 @@ function openBcModal(bcId, duplicateFrom) {
             value="${escHtml(bc.fournisseur_nom||'')}" placeholder="Nom du fournisseur"
             autocomplete="off" oninput="onBcFournisseurNomChange(this.value)">
           <datalist id="bc-fournisseurs-list">
-            ${state.fournisseurs.map(f=>`<option value="${escHtml(f.nom)}">`).join('')}
+            ${fournisseurOptionsHtml()}
           </datalist>
         </div>
         <div>
@@ -7111,6 +7349,7 @@ function openBcModal(bcId, duplicateFrom) {
       </div>
     </div>
     <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="envoyerDepuisModal('bc')" title="Enregistre puis ouvre le mail au fournisseur avec le PDF joint">✉️ Enregistrer et envoyer</button>
       <button class="btn btn-primary" onclick="saveBonCommande('${effectiveBcId||''}')">Enregistrer</button>
     </div>
   </div>`;
@@ -7160,7 +7399,7 @@ function onBcChargeNomChange(val) {
   if (telEl) telEl.value = t.telephone || '';
 }
 function onBcFournisseurNomChange(val) {
-  const f = state.fournisseurs.find(f => f.nom === val);
+  const f = findFournisseur(val);
   if (!f) return;
   if (!_bcInterlocuteurs.length && (f.contact || f.email || f.telephone)) {
     _bcInterlocuteurs = [{ nom: f.contact||'', email: f.email||'', telephone: f.telephone||'', role: '' }];
@@ -7196,6 +7435,69 @@ function clearBcAffaire() {
   if (chapSelect) chapSelect.value = '';
 }
 
+// Ligne de résultat de la recherche de références (lignes BC / IA)
+function pieceResultHtml(p, onPick) {
+  const autres = (p.fournisseurs || []).map(f => f.nom);
+  const info = p.chez_fournisseur
+    ? `<span style="color:#15803d;font-weight:600">★ ce fournisseur</span>`
+      + (p.ref_fournisseur ? ` · réf. ${escHtml(p.ref_fournisseur)}` : '')
+      + (p.prix_fournisseur ? ` · ${fmtEur(p.prix_fournisseur)}` : '')
+    : (autres.length ? `Fournisseur(s) : ${escHtml(autres.join(', '))}` : '');
+  return `
+        <div style="padding:6px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border)"
+          onmousedown="${onPick}">
+          <strong>${escHtml(p.reference)}</strong>${p.libelle ? ' — '+escHtml(p.libelle) : ''}
+          ${info ? `<div style="font-size:11px;color:var(--text-muted);margin-top:1px">${info}</div>` : ''}
+        </div>`;
+}
+
+// ── Catalogue des références produits (table /pieces) depuis une ligne d'achat ──
+function toggleRefSaveBtn(kind, i) {
+  const l = (kind === 'bc' ? _bcLignes : _iaLignes)[i];
+  const btn = document.getElementById(`${kind}-ref-save-${i}`);
+  if (btn && l) btn.style.display = (!l.piece_id && (l.reference||'').trim()) ? 'inline-block' : 'none';
+}
+// Enregistre la référence saisie sur une ligne de BC / d'intention d'achat dans
+// le catalogue (si elle n'y est pas déjà), puis lie la ligne à cette pièce.
+async function savePieceFromLigne(kind, i) {
+  const lignes = kind === 'bc' ? _bcLignes : _iaLignes;
+  const l = lignes[i];
+  const ref = (l?.reference || '').trim();
+  if (!ref) return;
+  const btn = document.getElementById(`${kind}-ref-save-${i}`);
+  if (btn) btn.disabled = true;
+  try {
+    const findExact = async () => {
+      const found = await GET(`/pieces?search=${encodeURIComponent(ref)}&ref_only=true&limit=50`);
+      return (found || []).find(p => (p.reference || '').trim().toLowerCase() === ref.toLowerCase());
+    };
+    let piece = await findExact();
+    if (piece) {
+      toast(`« ${piece.reference} » est déjà au catalogue : ligne liée`, 'info');
+    } else {
+      // Import en masse d'une seule ligne avec skip_doublons : ne remplace jamais
+      // une pièce existante (au pire, complète ses champs vides).
+      await POST('/pieces/bulk', { skip_doublons: true, pieces: [{
+        reference: ref,
+        libelle: (l.libelle || '').trim(),
+        prix_achat: parseFloat(l.prix_unitaire) || 0,
+        // lien avec le fournisseur du bon (sinon créé à l'enregistrement du bon)
+        fournisseur: (document.getElementById(`${kind}-fournisseur-nom`)?.value || '').trim(),
+      }] });
+      piece = await findExact();
+      toast(`Référence « ${ref} » ajoutée au catalogue`, 'success');
+      if (!piece) { if (btn) btn.style.display = 'none'; return; }
+    }
+    l.piece_id = piece.id;
+    l.reference = piece.reference;
+    if (!l.libelle && piece.libelle) l.libelle = piece.libelle;
+    kind === 'bc' ? renderBcLignes() : renderIaLignes();
+  } catch (e) {
+    toast('Ajout au catalogue impossible : ' + e.message, 'error');
+    if (btn) btn.disabled = false;
+  }
+}
+
 function renderBcLignes() {
   const list = document.getElementById('bc-lignes-list');
   if (!list) return;
@@ -7217,7 +7519,16 @@ function renderBcLignes() {
         <span style="position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text-muted);pointer-events:none">€</span>
       </div>
       <div id="bc-ligne-montant-${i}" style="font-size:13px;text-align:right;font-weight:600;padding:7px 4px">${fmtEur((parseFloat(l.quantite)||0) * (parseFloat(l.prix_unitaire)||0))}</div>
-      <button type="button" onclick="removeBcLigne(${i})" style="background:none;border:none;color:var(--danger);font-size:16px;padding:2px 4px;cursor:pointer;line-height:1" title="Supprimer">✕</button>
+      <div style="display:flex;gap:2px;align-items:center">
+        <button type="button" id="bc-ref-save-${i}" onclick="savePieceFromLigne('bc', ${i})"
+          style="display:${(!l.piece_id && (l.reference||'').trim()) ? 'inline-block' : 'none'};background:none;border:none;font-size:15px;padding:2px 4px;cursor:pointer;line-height:1"
+          title="Référence absente du catalogue : l'enregistrer (avec la désignation et le prix d'achat de la ligne) pour la retrouver dans les prochains achats">📦</button>
+        <button type="button" onclick="removeBcLigne(${i})" style="background:none;border:none;color:var(--danger);font-size:16px;padding:2px 4px;cursor:pointer;line-height:1" title="Supprimer">✕</button>
+      </div>
+      ${(l.quantite_recue || 0) > 0 ? `
+      <div style="grid-column:1/-1;font-size:11px;color:${(l.quantite_restante || 0) > 0 ? '#92400e' : '#065f46'}">
+        📥 Reçu ${fmtQte(l.quantite_recue)} / ${fmtQte(l.quantite)}${(l.quantite_restante || 0) > 0 ? ` — reste ${fmtQte(l.quantite_restante)} à recevoir` : ' — ligne entièrement reçue'}
+      </div>` : ''}
     </div>`).join('');
   updateBcLignesTotal();
 }
@@ -7237,19 +7548,19 @@ let _bcRefTimers = {};
 function onBcRefInput(i, val) {
   _bcLignes[i].reference = val;
   _bcLignes[i].piece_id = null;
+  toggleRefSaveBtn('bc', i);
   clearTimeout(_bcRefTimers[i]);
   if (!val || val.length < 2) { hideBcRefResults(i); return; }
   _bcRefTimers[i] = setTimeout(async () => {
     try {
-      const results = await GET(`/pieces?search=${encodeURIComponent(val)}&ref_only=true&limit=15`);
+      // Les références du fournisseur choisi passent en tête, avec son dernier prix
+      const fourn = (document.getElementById('bc-fournisseur-nom')?.value || '').trim();
+      const results = await GET(`/pieces?search=${encodeURIComponent(val)}&ref_only=true&limit=15`
+                                + (fourn ? `&fournisseur=${encodeURIComponent(fourn)}` : ''));
       const box = document.getElementById(`bc-ref-results-${i}`);
       if (!box) return;
       if (!results.length) { box.style.display = 'none'; return; }
-      box.innerHTML = results.map(p => `
-        <div style="padding:6px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border)"
-          onmousedown="pickBcPiece(${i}, '${p.id}', '${escHtml(p.reference).replace(/'/g,"\\'")}', '${escHtml(p.libelle||'').replace(/'/g,"\\'")}', ${p.prix_achat||0})">
-          <strong>${escHtml(p.reference)}</strong>${p.libelle ? ' — '+escHtml(p.libelle) : ''}
-        </div>`).join('');
+      box.innerHTML = results.map(p => pieceResultHtml(p, `pickBcPiece(${i}, '${p.id}', '${escHtml(p.reference).replace(/'/g,"\\'")}', '${escHtml(p.libelle||'').replace(/'/g,"\\'")}', ${(p.prix_fournisseur ?? p.prix_achat) || 0})`)).join('');
       box.style.display = 'block';
     } catch(e) { /* recherche best-effort, ignore les erreurs réseau */ }
   }, 250);
@@ -7273,7 +7584,13 @@ function addBcLigne() {
   const inputs = document.querySelectorAll('#bc-lignes-list > div:last-child input');
   if (inputs[0]) inputs[0].focus();
 }
-function removeBcLigne(i) {
+async function removeBcLigne(i) {
+  const l = _bcLignes[i];
+  if (l && (l.quantite_recue || 0) > 0) {
+    const ok = await confirm('Ligne déjà réceptionnée',
+      `${fmtQte(l.quantite_recue)} article(s) de cette ligne ont déjà été reçus. La supprimer quand même ? (l'historique des réceptions est conservé)`);
+    if (!ok) return;
+  }
   _bcLignes.splice(i, 1);
   renderBcLignes();
 }
@@ -7538,7 +7855,7 @@ function openIaModal(iaId, duplicateFrom) {
             value="${escHtml(ia.fournisseur_nom||'')}" placeholder="Nom du fournisseur"
             autocomplete="off" oninput="onIaFournisseurNomChange(this.value)">
           <datalist id="ia-fournisseurs-list">
-            ${state.fournisseurs.map(f=>`<option value="${escHtml(f.nom)}">`).join('')}
+            ${fournisseurOptionsHtml()}
           </datalist>
         </div>
         <div>
@@ -7663,6 +7980,7 @@ function openIaModal(iaId, duplicateFrom) {
       </div>
     </div>
     <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="envoyerDepuisModal('ia')" title="Enregistre puis ouvre le mail au fournisseur avec le PDF joint">✉️ Enregistrer et envoyer</button>
       <button class="btn btn-primary" onclick="saveIntentionAchat('${effectiveIaId||''}')">Enregistrer</button>
     </div>
   </div>`;
@@ -7727,7 +8045,7 @@ function onIaChargeNomChange(val) {
   if (telEl) telEl.value = t.telephone || '';
 }
 function onIaFournisseurNomChange(val) {
-  const f = state.fournisseurs.find(f => f.nom === val);
+  const f = findFournisseur(val);
   if (!f) return;
   if (!_iaInterlocuteurs.length && (f.contact || f.email || f.telephone)) {
     _iaInterlocuteurs = [{ nom: f.contact||'', email: f.email||'', telephone: f.telephone||'', role: '' }];
@@ -7806,7 +8124,12 @@ function renderIaLignes() {
           value="${l.prix_unitaire ?? 0}" oninput="_iaLignes[${i}].prix_unitaire=this.value;updateIaLigneRow(${i})">
         <span style="position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text-muted);pointer-events:none">€</span>
       </div>
-      <button type="button" onclick="removeIaLigne(${i})" style="background:none;border:none;color:var(--danger);font-size:16px;padding:2px 4px;cursor:pointer;line-height:1" title="Supprimer">✕</button>
+      <div style="display:flex;gap:2px;align-items:center">
+        <button type="button" id="ia-ref-save-${i}" onclick="savePieceFromLigne('ia', ${i})"
+          style="display:${(!l.piece_id && (l.reference||'').trim()) ? 'inline-block' : 'none'};background:none;border:none;font-size:15px;padding:2px 4px;cursor:pointer;line-height:1"
+          title="Référence absente du catalogue : l'enregistrer (avec la désignation et le prix d'achat de la ligne) pour la retrouver dans les prochains achats">📦</button>
+        <button type="button" onclick="removeIaLigne(${i})" style="background:none;border:none;color:var(--danger);font-size:16px;padding:2px 4px;cursor:pointer;line-height:1" title="Supprimer">✕</button>
+      </div>
     </div>`).join('');
   updateIaLignesTotal();
 }
@@ -7819,19 +8142,19 @@ let _iaRefTimers = {};
 function onIaRefInput(i, val) {
   _iaLignes[i].reference = val;
   _iaLignes[i].piece_id = null;
+  toggleRefSaveBtn('ia', i);
   clearTimeout(_iaRefTimers[i]);
   if (!val || val.length < 2) { hideIaRefResults(i); return; }
   _iaRefTimers[i] = setTimeout(async () => {
     try {
-      const results = await GET(`/pieces?search=${encodeURIComponent(val)}&ref_only=true&limit=15`);
+      // Les références du fournisseur choisi passent en tête, avec son dernier prix
+      const fourn = (document.getElementById('ia-fournisseur-nom')?.value || '').trim();
+      const results = await GET(`/pieces?search=${encodeURIComponent(val)}&ref_only=true&limit=15`
+                                + (fourn ? `&fournisseur=${encodeURIComponent(fourn)}` : ''));
       const box = document.getElementById(`ia-ref-results-${i}`);
       if (!box) return;
       if (!results.length) { box.style.display = 'none'; return; }
-      box.innerHTML = results.map(p => `
-        <div style="padding:6px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border)"
-          onmousedown="pickIaPiece(${i}, '${p.id}', '${escHtml(p.reference).replace(/'/g,"\\'")}', '${escHtml(p.libelle||'').replace(/'/g,"\\'")}', ${p.prix_achat||0})">
-          <strong>${escHtml(p.reference)}</strong>${p.libelle ? ' — '+escHtml(p.libelle) : ''}
-        </div>`).join('');
+      box.innerHTML = results.map(p => pieceResultHtml(p, `pickIaPiece(${i}, '${p.id}', '${escHtml(p.reference).replace(/'/g,"\\'")}', '${escHtml(p.libelle||'').replace(/'/g,"\\'")}', ${(p.prix_fournisseur ?? p.prix_achat) || 0})`)).join('');
       box.style.display = 'block';
     } catch(e) { /* recherche best-effort, ignore les erreurs réseau */ }
   }, 250);
@@ -7930,21 +8253,26 @@ async function saveIntentionAchat(iaId) {
   };
   const btn = document.querySelector('.modal-footer .btn-primary');
   btn.disabled = true; btn.textContent = '…';
+  let savedId = null;
   try {
     if (iaId) {
       await PUT(`/intentions-achat/${iaId}`, body);
       toast("Intention d'achat mise à jour", 'success');
+      savedId = iaId;
     } else {
       const created = await POST('/intentions-achat', body);
       btn.setAttribute('onclick', `saveIntentionAchat('${created.id}')`);
       toast("Intention d'achat créée", 'success');
+      savedId = created.id;
     }
+    await refreshFournisseursEtContacts();
     await reloadIntentionsAchat();
   } catch(e) {
     toast(e.message, 'error');
   } finally {
     btn.disabled = false; btn.textContent = 'Enregistrer';
   }
+  return savedId;
 }
 
 function duplicateIntentionAchat(iaId) {
@@ -7995,6 +8323,22 @@ async function generateIntentionAchatPdf(iaId) {
   }
 }
 
+// Après enregistrement : reporte sur les lignes en cours d'édition les id
+// attribués par le serveur (les lignes gardent ainsi leurs réceptions aux
+// enregistrements suivants) et les quantités reçues.
+function _bcLigneNonVide(l) { return l.reference || l.libelle || l.quantite || l.prix_unitaire; }
+function _syncBcLignesFromSaved(saved) {
+  if (!saved || !Array.isArray(saved.lignes)) return;
+  const kept = _bcLignes.filter(_bcLigneNonVide);
+  if (kept.length !== saved.lignes.length) return;
+  kept.forEach((l, i) => {
+    const s = saved.lignes[i];
+    l.id = s.id;
+    l.quantite_recue = s.quantite_recue || 0;
+    l.quantite_restante = s.quantite_restante || 0;
+  });
+}
+
 async function saveBonCommande(bcId) {
   const bcInterlocuteursValides = _bcInterlocuteurs.filter(it => it.nom || it.email);
   const bcPremierContact = bcInterlocuteursValides[0] || {};
@@ -8032,8 +8376,9 @@ async function saveBonCommande(bcId) {
     chapitre_cout:         _bcAffaireId ? (document.getElementById('bc-chapitre-cout').value || '') : '',
     paiements:             JSON.stringify(_bcPaiements.filter(e => e.stade || e.pourcentage)),
     lignes: _bcLignes
-      .filter(l => l.reference || l.libelle || l.quantite || l.prix_unitaire)
+      .filter(_bcLigneNonVide)
       .map((l, i) => ({
+        id: l.id || null,   // conserve l'id de la ligne (réceptions rattachées)
         piece_id: l.piece_id || null,
         reference: l.reference || '',
         libelle: l.libelle || '',
@@ -8044,23 +8389,33 @@ async function saveBonCommande(bcId) {
   };
   const btn = document.querySelector('.modal-footer .btn-primary');
   btn.disabled = true; btn.textContent = '…';
+  let savedId = null;
   try {
     if (bcId) {
-      await PUT(`/bons-commande/${bcId}`, body);
+      const updated = await PUT(`/bons-commande/${bcId}`, body);
+      // Le statut peut avoir été recalculé d'après les réceptions (ligne ajoutée…)
+      const stSel = document.getElementById('bc-statut');
+      if (stSel && updated?.statut) stSel.value = updated.statut;
+      _syncBcLignesFromSaved(updated);
       toast('Bon de commande mis à jour', 'success');
+      savedId = bcId;
     } else {
       const created = await POST('/bons-commande', body);
+      _syncBcLignesFromSaved(created);
       // Une fois créé, les enregistrements suivants mettent à jour ce même
       // bon de commande au lieu d'en recréer un nouveau à chaque clic.
       btn.setAttribute('onclick', `saveBonCommande('${created.id}')`);
       toast('Bon de commande créé', 'success');
+      savedId = created.id;
     }
+    await refreshFournisseursEtContacts();
     await reloadBonsCommande();
   } catch(e) {
     toast(e.message, 'error');
   } finally {
     btn.disabled = false; btn.textContent = 'Enregistrer';
   }
+  return savedId;
 }
 
 function duplicateBonCommande(bcId) {
@@ -8074,7 +8429,9 @@ function duplicateBonCommande(bcId) {
     date_commande: '',
     date_livraison_reelle: '',
     date_reglement: '',
-    lignes: (src.lignes || []).map(l => ({...l})),
+    receptions: [],
+    etat_reception: '',
+    lignes: (src.lignes || []).map(({ id, quantite_recue, quantite_restante, ...l }) => ({...l})),
     paiements: JSON.stringify(paiements.map(p => ({...p, montant_paye: ''}))),
   };
   openBcModal(null, dup);
@@ -8089,6 +8446,334 @@ async function deleteBonCommande(bcId) {
     toast('Bon de commande supprimé', 'success');
     await reloadBonsCommande();
   } catch(e) { toast(e.message, 'error'); }
+}
+
+// ══════════════════ Réceptions des bons de commande ══════════════════
+// Une réception = une livraison (un BL fournisseur). On saisit, ligne par
+// ligne, la quantité effectivement reçue : s'il manque des articles, le bon
+// passe en « Reçu partiellement » et le reliquat reste à réceptionner plus
+// tard ; quand tout est reçu, il passe en « Reçu » (date de livraison réelle
+// = date de la dernière réception). Cf. POST /bons-commande/{id}/receptions.
+let _recBc = null;
+
+async function openReceptionModal(bcId) {
+  let bc;
+  try { bc = await GET(`/bons-commande/${bcId}`); }
+  catch (e) { toast(e.message, 'error'); return; }
+  renderReceptionModal(bc);
+}
+
+function _todayInputDate() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function renderReceptionModal(bc) {
+  _recBc = bc;
+  const prev = document.querySelector('.modal-overlay.reception-overlay');
+  const lignes = (bc.lignes || []).filter(l => (l.quantite || 0) > 0);
+  const aRecevoir = lignes.filter(l => (l.quantite_restante || 0) > 0);
+  const annule = bc.statut === 'Annulé';
+  const peutSaisir = !annule && aRecevoir.length > 0;
+  const t = receptionTotaux(bc);
+
+  const lignesHtml = lignes.map(l => {
+    const reste = l.quantite_restante || 0;
+    const solde = reste <= 0;
+    return `<tr style="${solde ? 'color:var(--text-muted)' : ''}">
+      <td style="padding:6px 8px">${escHtml(l.reference || '—')}</td>
+      <td style="padding:6px 8px">${escHtml(l.libelle || '')}</td>
+      <td style="padding:6px 8px;text-align:right">${fmtQte(l.quantite)}</td>
+      <td style="padding:6px 8px;text-align:right">${fmtQte(l.quantite_recue)}</td>
+      <td style="padding:6px 8px;text-align:right;font-weight:600;color:${solde ? '#065f46' : '#92400e'}">${solde ? '✓' : fmtQte(reste)}</td>
+      <td style="padding:4px 8px">${solde || annule ? '' : `
+        <input class="form-control no-spinner" type="number" min="0" max="${reste}" step="any"
+          style="font-size:13px;padding:5px 8px;text-align:right" value="${reste}"
+          data-ligne="${l.id}" data-max="${reste}" oninput="updateReceptionResume()">`}</td>
+    </tr>`;
+  }).join('');
+
+  const histoHtml = (bc.receptions || []).slice().reverse().map(r => `
+    <div style="border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:6px;font-size:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <strong>${escHtml(r.date_reception || '—')}</strong>
+        ${r.numero_bl ? `<span>BL ${escHtml(r.numero_bl)}</span>` : ''}
+        ${r.receptionnaire ? `<span style="color:var(--text-muted)">par ${escHtml(r.receptionnaire)}</span>` : ''}
+        <button type="button" class="btn btn-ghost btn-xs" style="margin-left:auto;color:var(--danger)"
+          onclick="deleteReception('${bc.id}', '${r.id}')" title="Annuler cette réception (saisie erronée)">✕ Annuler</button>
+      </div>
+      <div style="margin-top:4px;color:var(--text-muted)">
+        ${(r.lignes || []).map(rl => `${fmtQte(rl.quantite_recue)} × ${escHtml(rl.reference || rl.libelle || '?')}`).join(' · ')}
+      </div>
+      ${r.commentaire ? `<div style="margin-top:4px;font-style:italic">${escHtml(r.commentaire)}</div>` : ''}
+    </div>`).join('');
+
+  const etatMsg = annule
+    ? '<div style="padding:10px;background:#fee2e2;border-radius:6px;font-size:13px;margin-bottom:12px">Bon de commande annulé : réception impossible.</div>'
+    : (!lignes.length
+      ? '<div style="padding:10px;background:var(--gray-bg);border-radius:6px;font-size:13px;margin-bottom:12px">Ce bon de commande ne comporte aucune ligne à réceptionner.</div>'
+      : (!aRecevoir.length
+        ? `<div style="padding:10px;background:#d1fae5;color:#065f46;border-radius:6px;font-size:13px;margin-bottom:12px">✓ Commande entièrement reçue${bc.date_livraison_reelle ? ' le ' + escHtml(bc.date_livraison_reelle) : ''}.</div>`
+        : ''));
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay reception-overlay';
+  overlay.innerHTML = `
+  <div class="modal modal-lg" style="max-height:92vh">
+    <div class="modal-header">
+      <h2>📥 Réception — BC ${escHtml(bc.num_bc)}${bc.fournisseur_nom ? ' · ' + escHtml(bc.fournisseur_nom) : ''}</h2>
+      ${bcStatutBadge(bc.statut)}
+      <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+    </div>
+    <div class="modal-body" style="overflow-y:auto;flex:1">
+      ${etatMsg}
+      ${peutSaisir ? `
+      <div class="form-row triple" style="margin-bottom:12px">
+        <div>
+          <label class="form-label">Date de réception</label>
+          <input class="form-control" type="date" id="rec-date" value="${_todayInputDate()}">
+        </div>
+        <div>
+          <label class="form-label">N° bon de livraison</label>
+          <input class="form-control" id="rec-bl" placeholder="BL fournisseur">
+        </div>
+        <div>
+          <label class="form-label">Réceptionné par</label>
+          <input class="form-control" id="rec-par" list="rec-techniciens-list" autocomplete="off">
+          <datalist id="rec-techniciens-list">
+            ${(state.techniciens || []).map(tc => `<option value="${escHtml(tc.nom)}">`).join('')}
+          </datalist>
+        </div>
+      </div>` : ''}
+      ${lignes.length ? `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="font-size:13px;font-weight:600">Articles commandés</span>
+        <span style="font-size:12px;color:var(--text-muted)">${fmtQte(t.recu)} / ${fmtQte(t.cmd)} déjà reçus</span>
+        ${peutSaisir ? `
+        <span style="margin-left:auto;display:flex;gap:6px">
+          <button type="button" class="btn btn-secondary btn-xs" onclick="setReceptionQuantites(true)" title="Tout le reliquat est livré">Tout reçu</button>
+          <button type="button" class="btn btn-secondary btn-xs" onclick="setReceptionQuantites(false)" title="Remettre les quantités à zéro pour ne saisir que ce qui est arrivé">Tout à zéro</button>
+        </span>` : ''}
+      </div>
+      <div style="border:1px solid var(--border);border-radius:6px;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="background:var(--gray-bg);font-size:11px;text-transform:uppercase;color:var(--text-muted)">
+            <th style="padding:6px 8px;text-align:left">Référence</th>
+            <th style="padding:6px 8px;text-align:left">Désignation</th>
+            <th style="padding:6px 8px;text-align:right">Commandé</th>
+            <th style="padding:6px 8px;text-align:right">Déjà reçu</th>
+            <th style="padding:6px 8px;text-align:right">Reste</th>
+            <th style="padding:6px 8px;width:120px">${peutSaisir ? 'Reçu ce jour' : ''}</th>
+          </tr></thead>
+          <tbody id="rec-lignes">${lignesHtml}</tbody>
+        </table>
+      </div>
+      <div id="rec-resume" style="margin-top:8px;font-size:12px"></div>` : ''}
+      ${peutSaisir ? `
+      <div style="margin-top:12px">
+        <label class="form-label">Commentaire</label>
+        <textarea class="form-control" id="rec-commentaire" rows="2" placeholder="Ex : colis endommagé, reliquat annoncé pour le 15/11…"></textarea>
+      </div>` : ''}
+      ${histoHtml ? `
+      <div style="margin-top:16px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px">Réceptions enregistrées</div>
+        ${histoHtml}
+      </div>` : ''}
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Fermer</button>
+      ${peutSaisir ? `<button class="btn btn-primary" id="rec-save-btn" onclick="saveReception()">Enregistrer la réception</button>` : ''}
+    </div>
+  </div>`;
+  if (prev) prev.replaceWith(overlay); else document.body.appendChild(overlay);
+  updateReceptionResume();
+}
+
+function _receptionInputs() {
+  return [...document.querySelectorAll('#rec-lignes input[data-ligne]')];
+}
+
+function setReceptionQuantites(tout) {
+  _receptionInputs().forEach(inp => { inp.value = tout ? inp.dataset.max : 0; });
+  updateReceptionResume();
+}
+
+// Résumé en direct : réception complète ou partielle, articles qui manqueront.
+function updateReceptionResume() {
+  const el = document.getElementById('rec-resume');
+  if (!el) return;
+  const inputs = _receptionInputs();
+  if (!inputs.length) { el.innerHTML = ''; return; }
+  let saisi = 0, manquants = 0, lignesManquantes = 0, erreur = false;
+  inputs.forEach(inp => {
+    const q = parseFloat(inp.value) || 0;
+    const max = parseFloat(inp.dataset.max) || 0;
+    const ko = q < 0 || q > max + 1e-9;
+    inp.style.borderColor = ko ? 'var(--danger)' : '';
+    erreur = erreur || ko;
+    saisi += Math.max(q, 0);
+    if (q < max - 1e-9) { manquants += max - Math.max(q, 0); lignesManquantes++; }
+  });
+  if (erreur) {
+    el.innerHTML = `<span style="color:var(--danger)">Quantité reçue supérieure au reste à recevoir.</span>`;
+  } else if (saisi <= 0) {
+    el.innerHTML = `<span style="color:var(--text-muted)">Aucune quantité saisie.</span>`;
+  } else if (lignesManquantes) {
+    el.innerHTML = `<span style="color:#92400e">⚠ Réception partielle : il manquera ${fmtQte(manquants)} article(s) sur ${lignesManquantes} ligne(s) — le bon passera en « Reçu partiellement ».</span>`;
+  } else {
+    el.innerHTML = `<span style="color:#065f46">✓ Réception complète — le bon passera en « Reçu ».</span>`;
+  }
+}
+
+async function saveReception() {
+  const bc = _recBc;
+  if (!bc) return;
+  const lignes = [];
+  for (const inp of _receptionInputs()) {
+    const q = parseFloat(inp.value) || 0;
+    const max = parseFloat(inp.dataset.max) || 0;
+    if (q < 0 || q > max + 1e-9) { toast('Quantité reçue supérieure au reste à recevoir', 'error'); inp.focus(); return; }
+    if (q > 0) lignes.push({ ligne_id: inp.dataset.ligne, quantite_recue: q });
+  }
+  if (!lignes.length) { toast('Saisissez au moins une quantité reçue', 'warning'); return; }
+  const body = {
+    date_reception: fromInputDate(document.getElementById('rec-date')?.value || ''),
+    numero_bl:      (document.getElementById('rec-bl')?.value || '').trim(),
+    receptionnaire: (document.getElementById('rec-par')?.value || '').trim(),
+    commentaire:    (document.getElementById('rec-commentaire')?.value || '').trim(),
+    lignes,
+  };
+  const btn = document.getElementById('rec-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const updated = await POST(`/bons-commande/${bc.id}/receptions`, body);
+    toast(updated.etat_reception === 'complete'
+      ? 'Réception enregistrée — commande entièrement reçue'
+      : 'Réception partielle enregistrée — reliquat en attente', 'success');
+    renderReceptionModal(updated);
+    await _afterReceptionChange();
+  } catch (e) {
+    toast(e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Enregistrer la réception'; }
+  }
+}
+
+async function deleteReception(bcId, receptionId) {
+  const ok = await confirm('Annuler cette réception ?',
+    'Les quantités de cette livraison seront de nouveau « à recevoir » et le statut du bon sera recalculé.');
+  if (!ok) return;
+  try {
+    const updated = await DEL(`/bons-commande/${bcId}/receptions/${receptionId}`);
+    toast('Réception annulée', 'success');
+    renderReceptionModal(updated);
+    await _afterReceptionChange();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function _afterReceptionChange() {
+  if (state.view === 'achats' && state.achatsMode !== 'intention') await reloadBonsCommande();
+}
+
+// ══════════════════ Envoi des commandes au fournisseur par mail ══════════════════
+// Le mail est préparé par l'app Affaire locale (shared/mailer.py, comme dans les
+// autres apps EMS) : brouillon Outlook avec le PDF joint, sinon mailto + dossier
+// du PDF. L'utilisateur confirme ensuite l'envoi, ce qui pose l'indicateur
+// « envoyé » (date + destinataires) et passe le statut Brouillon à Envoyé(e).
+function _achatListe(kind) { return kind === 'bc' ? (state.bonsCommande || []) : (state.intentionsAchat || []); }
+function _achatApi(kind)   { return kind === 'bc' ? 'bons-commande' : 'intentions-achat'; }
+function _achatLabel(kind) { return kind === 'bc' ? 'bon de commande' : "intention d'achat"; }
+
+function envoiBadge(kind, b) {
+  if (!b.envoye_le) return '';
+  const quand = b.envoye_le.split(' ')[0];
+  const title = `Envoyé le ${b.envoye_le}${b.envoye_a ? ' à ' + b.envoye_a : ''} — cliquer pour annuler l'indicateur`;
+  return ` <span onclick="annulerEnvoi('${kind}', '${b.id}')" title="${escHtml(title)}"
+    style="display:inline-flex;align-items:center;gap:3px;margin-left:4px;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:#dcfce7;color:#15803d;cursor:pointer;white-space:nowrap">✉ Envoyé ${escHtml(quand)}</span>`;
+}
+
+function _destinatairesAchat(b) {
+  let interlocs = [];
+  try { interlocs = JSON.parse(b.interlocuteurs_fournisseur || '[]'); } catch (e) { interlocs = []; }
+  const emails = [];
+  for (const it of interlocs) {
+    const e = (it?.email || '').trim();
+    if (e && !emails.some(x => x.toLowerCase() === e.toLowerCase())) emails.push(e);
+  }
+  if (!emails.length && (b.fournisseur_email || '').trim()) emails.push(b.fournisseur_email.trim());
+  return emails;
+}
+
+async function _getAchat(kind, id) {
+  // Liste affichée d'abord ; sinon (filtre actif, création récente) directement l'API
+  const b = _achatListe(kind).find(x => x.id === id);
+  if (b) return b;
+  try { return await GET(`/${_achatApi(kind)}/${id}`); } catch (e) { return null; }
+}
+
+async function envoyerCommande(kind, id) {
+  const b = await _getAchat(kind, id);
+  if (!b) { toast('Commande introuvable, rechargez la liste', 'error'); return; }
+  if (!LOCAL_PORT) {
+    toast("L'envoi par mail se fait depuis l'application EMS Affaire (serveur local indisponible)", 'error');
+    return;
+  }
+  if (!_destinatairesAchat(b).length) {
+    const ok = await confirm('Aucun email fournisseur',
+      `Aucun interlocuteur avec email n'est renseigné sur ce ${_achatLabel(kind)}. Ouvrir quand même le mail (destinataire à saisir) ?`);
+    if (!ok) return;
+  }
+  if (b.envoye_le) {
+    const ok = await confirm('Déjà envoyé', `Ce ${_achatLabel(kind)} a déjà été envoyé le ${escHtml(b.envoye_le)}. Le renvoyer ?`);
+    if (!ok) return;
+  }
+  toast('Préparation du mail (génération du PDF)…', 'info');
+  let res;
+  try {
+    const r = await fetch('http://127.0.0.1:' + LOCAL_PORT + '/email-commande', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind, bon: b }),
+    });
+    res = await r.json();
+  } catch (e) {
+    toast("Impossible de joindre l'application EMS Affaire : " + e.message, 'error');
+    return;
+  }
+  if (!res.ok) { toast('Envoi impossible : ' + (res.error || 'erreur inconnue'), 'error'); return; }
+  if (!res.pj_auto) {
+    toast('Mail ouvert : joignez le PDF depuis le dossier qui vient de s\'ouvrir', 'info');
+  }
+  const dest = (res.destinataires || []).join('; ');
+  const envoye = await confirm('Mail envoyé ?',
+    `Une fois le mail envoyé${dest ? ' à ' + escHtml(dest) : ''}, confirmez pour marquer ce ${_achatLabel(kind)} comme « envoyé ».`);
+  if (!envoye) return;
+  try {
+    await POST(`/${_achatApi(kind)}/${id}/envoi`, { envoye: true, envoye_a: dest });
+    toast(`${kind === 'bc' ? 'Bon de commande' : "Intention d'achat"} marqué(e) comme envoyé(e)`, 'success');
+    kind === 'bc' ? await reloadBonsCommande() : await reloadIntentionsAchat();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function annulerEnvoi(kind, id) {
+  const b = await _getAchat(kind, id);
+  if (!b) return;
+  const ok = await confirm("Annuler l'indicateur « envoyé » ?",
+    `Envoyé le ${escHtml(b.envoye_le)}${b.envoye_a ? ' à ' + escHtml(b.envoye_a) : ''}. Le statut n'est pas modifié.`);
+  if (!ok) return;
+  try {
+    await POST(`/${_achatApi(kind)}/${id}/envoi`, { envoye: false });
+    kind === 'bc' ? await reloadBonsCommande() : await reloadIntentionsAchat();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// « Enregistrer et envoyer » depuis la fenêtre d'un BC / d'une IA
+async function envoyerDepuisModal(kind) {
+  const saveBtn = document.querySelector('.modal-footer .btn-primary');
+  const m = (saveBtn?.getAttribute('onclick') || '').match(/\('([^']*)'\)/);
+  const currentId = m ? m[1] : '';
+  const id = kind === 'bc' ? await saveBonCommande(currentId) : await saveIntentionAchat(currentId);
+  if (!id) return;   // échec d'enregistrement : le toast d'erreur est déjà affiché
+  document.querySelector('.modal-overlay')?.remove();
+  await envoyerCommande(kind, id);
 }
 
 async function generateBonCommandePdf(bcId) {
@@ -8191,7 +8876,8 @@ function printFicheRecapA4() {
     ${infoRow('Navire / Machine', a.navire_machine)}
     ${infoRow('Complexité', a.complexite)}
     ${infoRow("Chargé d'affaire", a.charge_affaire)}
-    ${infoRow('Responsable technique', a.resp_technique)}
+    ${infoRow('Référent technique', a.resp_technique)}
+    ${infoRow('Commercial EMS', a.commercial)}
     ${infoRow('Date début', a.date_debut)}
     ${infoRow('Date de livraison prévue', a.date_fin_prevue)}
     ${infoRow('Référence interne', a.ref_interne)}
@@ -8357,13 +9043,14 @@ async function _migrerModelesChapitreVersBase() {
 
 async function init() {
   try {
-    const [affaires, clients, techniciens, contacts, fournisseurs, navires, modelesChapitre] = await Promise.all([
+    const [affaires, clients, techniciens, contacts, fournisseurs, navires, commerciaux, modelesChapitre] = await Promise.all([
       GET('/affaires'),
       GET('/clients').catch(() => []),
       GET('/techniciens').catch(() => []),
       GET('/contacts').catch(() => []),
       GET('/fournisseurs').catch(() => []),
       GET('/navires').catch(() => []),
+      GET('/commerciaux').catch(() => []),
       GET('/modeles-chapitre').catch(() => ({ templates: {}, locked: false, custom_types: [], order: [] })),
     ]);
     state.affaires    = affaires;
@@ -8373,7 +9060,8 @@ async function init() {
     state.contacts    = contacts;
     state.fournisseurs = fournisseurs;
     state.navires     = navires;
-    state.chapterTemplates       = modelesChapitre.templates || {};
+    state.commerciaux = commerciaux;
+    state.chapterTemplates      = modelesChapitre.templates || {};
     state.chapterTemplatesLocked = !!modelesChapitre.locked;
     state.chapterCustomTypes     = modelesChapitre.custom_types || [];
     state.chapterTypesOrder      = modelesChapitre.order || [];

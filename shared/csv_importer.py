@@ -45,28 +45,59 @@ def _norm(s):
     return (s or "").strip().lower().replace("°", "").replace(" ", "")
 
 
-def detect_columns(headers):
+# Mapping par défaut pour le catalogue des références produits (table `pieces`,
+# utilisée par les lignes des bons de commande / intentions d'achat).
+# Ordre = du plus spécifique au plus générique : une colonne déjà affectée
+# n'est plus proposée aux champs suivants (« Prix d'achat » ne doit pas aussi
+# être prise comme prix de vente).
+PIECES_MAPPING = {
+    # Colonnes fournisseur d'abord : « Réf. fournisseur » ne doit pas être prise
+    # comme référence produit, ni « Fournisseur » comme marque.
+    "ref_fournisseur": ["Réf. fournisseur", "Ref. fournisseur", "Réf fournisseur",
+                        "Ref fournisseur", "Référence fournisseur", "Reference fournisseur",
+                        "Supplier ref", "Supplier reference", "Vendor ref"],
+    "fournisseur": ["Fournisseur", "Supplier", "Vendor", "Distributeur"],
+    "reference":  ["Référence", "Reference", "Réf", "Ref", "Réf.", "Ref.", "P/N", "PN",
+                   "Part Number", "Part No", "Code article", "Code produit", "Code", "SKU"],
+    "libelle":    ["Libellé", "Libelle", "Désignation", "Designation", "Description",
+                   "Article", "Produit", "Nom"],
+    "marque":     ["Marque", "Brand", "Fabricant", "Constructeur"],
+    "prix_achat": ["Prix d'achat", "Prix achat", "Prix d achat", "PA", "PA HT",
+                   "Coût", "Cout", "Prix fournisseur", "Prix net"],
+    "prix_vente": ["Prix de vente", "Prix vente", "PV", "PV HT", "Tarif", "Prix public",
+                   "Prix HT", "Prix"],
+    "notes":      ["Notes", "Note", "Commentaire", "Commentaires", "Remarque"],
+}
+
+
+def detect_columns(headers, aliases_map=None):
     """
     Auto-détecte le mapping en cherchant chaque champ DB dans les en-têtes CSV.
+    `aliases_map` : {champ: [alias...]} (défaut : DEFAULT_MAPPING, parc moteurs).
+    Une même colonne n'est jamais affectée à deux champs.
     Retourne un dict {field: column_index_or_None}.
     """
+    aliases_map = DEFAULT_MAPPING if aliases_map is None else aliases_map
     norm_headers = [_norm(h) for h in headers]
     mapping = {}
-    for field, aliases in DEFAULT_MAPPING.items():
+    used = set()
+    for field, aliases in aliases_map.items():
         idx = None
         for alias in aliases:
             target = _norm(alias)
             for i, h in enumerate(norm_headers):
-                if h == target:
+                if h == target and i not in used:
                     idx = i
                     break
             if idx is not None:
                 break
         mapping[field] = idx
+        if idx is not None:
+            used.add(idx)
     return mapping
 
 
-def read_csv_preview(path, max_rows=15, delimiter=None, encoding=None):
+def read_csv_preview(path, max_rows=15, delimiter=None, encoding=None, aliases_map=None):
     """
     Lit le CSV et retourne (headers, rows_preview, total_lines, detected_mapping, used_delim, used_enc).
     Détection auto du séparateur et de l'encodage si non fournis.
@@ -108,7 +139,7 @@ def read_csv_preview(path, max_rows=15, delimiter=None, encoding=None):
     headers = rows[0]
     data = rows[1:]
     preview = data[:max_rows]
-    mapping = detect_columns(headers)
+    mapping = detect_columns(headers, aliases_map)
     return headers, preview, len(data), mapping, delimiter, encoding
 
 
@@ -264,4 +295,98 @@ def _build_moteur_data(row, mapping, client_id, num_serie):
         "client_utilisateur_email":   _cell(row, mapping.get("client_utilisateur_email")),
         "client_utilisateur_tel":     _cell(row, mapping.get("client_utilisateur_tel")),
         "client_utilisateur_adresse": _cell(row, mapping.get("client_utilisateur_adresse")),
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#   Import du catalogue des références produits (table `pieces`)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def parse_prix(val) -> float:
+    """« 1 234,56 € » / « 1234.56 » / « 1.234,56 » → 1234.56 ; vide ou illisible → 0."""
+    s = str(val or "").strip().replace("€", "").replace("\u00a0", "").replace(" ", "")
+    if not s:
+        return 0.0
+    if "," in s and "." in s:
+        # le dernier séparateur rencontré est le séparateur décimal
+        if s.rfind(",") > s.rfind("."):
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            s = s.replace(",", "")
+    else:
+        s = s.replace(",", ".")
+    try:
+        return round(float(s), 4)
+    except ValueError:
+        return 0.0
+
+
+def _read_all_rows(path, delimiter, encoding):
+    text = Path(path).read_bytes().decode(encoding or "utf-8", errors="replace")
+    rows = list(csv.reader(io.StringIO(text), delimiter=delimiter))
+    return rows[1:] if rows else []
+
+
+def import_pieces_rows(path, mapping, delimiter, encoding,
+                       skip_doublons=True, dry_run=False, progress_cb=None,
+                       fournisseur_defaut=""):
+    """
+    Importe le catalogue des références produits depuis le CSV, selon le
+    mapping {champ: index_colonne} choisi dans l'écran d'affectation des colonnes.
+    Les lignes sans référence sont ignorées. Référence déjà en base :
+    skip_doublons=True → complète seulement les champs vides ; False → mise à jour.
+    dry_run=True → simulation côté serveur (rien n'est écrit).
+    Fournisseur : colonne « fournisseur » de la ligne, sinon `fournisseur_defaut`
+    (choisi pour tout le fichier) ; la référence est alors liée à ce fournisseur.
+
+    Retourne {'lignes_total', 'lignes_ignorees', 'importees', 'mises_a_jour',
+              'ignorees', 'completees', 'erreurs' (liste de (n_ligne, msg))}.
+    """
+    rows = _read_all_rows(path, delimiter, encoding)
+    total = len(rows)
+    pieces, ignorees_vides = [], 0
+    for row in rows:
+        ref = _cell(row, mapping.get("reference"))
+        if not ref:
+            ignorees_vides += 1
+            continue
+        pieces.append({
+            "reference":  ref,
+            "libelle":    _cell(row, mapping.get("libelle")),
+            "marque":     _cell(row, mapping.get("marque")),
+            "notes":      _cell(row, mapping.get("notes")),
+            "prix_achat": parse_prix(_cell(row, mapping.get("prix_achat"))),
+            "prix_vente": parse_prix(_cell(row, mapping.get("prix_vente"))),
+            "fournisseur":     _cell(row, mapping.get("fournisseur")),
+            "ref_fournisseur": _cell(row, mapping.get("ref_fournisseur")),
+        })
+
+    res = {"importees": 0, "mises_a_jour": 0, "ignorees": 0, "completees": 0,
+           "erreurs": 0, "details_erreurs": []}
+    # Envoi par lots : un fichier de plusieurs milliers de lignes reste fluide
+    # et la barre de progression avance.
+    LOT = 1000
+    for start in range(0, len(pieces), LOT):
+        r = db.bulk_import_pieces(pieces[start:start + LOT],
+                                  skip_doublons=skip_doublons, dry_run=dry_run,
+                                  fournisseur=fournisseur_defaut)
+        for k in ("importees", "mises_a_jour", "ignorees", "completees", "erreurs"):
+            res[k] += r.get(k, 0) or 0
+        res["details_erreurs"] += r.get("details_erreurs", []) or []
+        if progress_cb:
+            progress_cb(min(start + LOT, len(pieces)), len(pieces))
+    if progress_cb:
+        progress_cb(total, total)
+
+    erreurs = [(0, m) for m in res["details_erreurs"]]
+    if res["erreurs"] and not erreurs:
+        erreurs = [(0, f"{res['erreurs']} ligne(s) invalide(s)")]
+    return {
+        "lignes_total":    total,
+        "lignes_ignorees": ignorees_vides,
+        "importees":       res["importees"],
+        "mises_a_jour":    res["mises_a_jour"],
+        "ignorees":        res["ignorees"],
+        "completees":      res["completees"],
+        "erreurs":         erreurs,
     }

@@ -163,6 +163,8 @@ class IntentionAchatOut(BaseModel):
     frais_port:            float = 0.0
     date_generation:       Optional[datetime] = None
     pdf_path:              str = ""
+    envoye_le:             str = ""
+    envoye_a:              str = ""
     version:               int = 1
     lignes:                List[IntentionAchatLigneOut] = []
     total_lignes_ht:       float = 0
@@ -172,3 +174,9 @@ class IntentionAchatOut(BaseModel):
     updated_at:            Optional[datetime] = None
 
     model_config = {"from_attributes": True}
+
+
+class EnvoiIn(BaseModel):
+    """Marque la commande comme envoyée au fournisseur (envoye=False : annule)."""
+    envoye:   bool = True
+    envoye_a: str = ""

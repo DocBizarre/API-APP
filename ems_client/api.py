@@ -254,6 +254,37 @@ def delete_contact(contact_id: str) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+#   Fournisseurs (base des achats, alimentée par l'app Affaire)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def get_fournisseurs(search: str = "") -> List[Dict]:
+    return _client.get("/fournisseurs", search=search)
+
+
+def get_fournisseur(fournisseur_id: str) -> Optional[Dict]:
+    if not fournisseur_id:
+        return None
+    try:
+        return _client.get(f"/fournisseurs/{fournisseur_id}")
+    except APIError as e:
+        if e.status_code == 404:
+            return None
+        raise
+
+
+def upsert_fournisseur(data: Dict, fournisseur_id: Optional[str] = None) -> str:
+    """Si fournisseur_id fourni -> PUT ; sinon POST (upsert par nom)."""
+    if fournisseur_id:
+        _client.put(f"/fournisseurs/{fournisseur_id}", json=data)
+        return fournisseur_id
+    return _client.post("/fournisseurs", json=data)["id"]
+
+
+def delete_fournisseur(fournisseur_id: str) -> None:
+    _client.delete(f"/fournisseurs/{fournisseur_id}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 #   Clients
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -833,12 +864,36 @@ def get_stats_ameliorations() -> Dict:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def get_pieces(search: str = "", ref_only: bool = False,
-                limit: int = 500) -> List[Dict]:
-    """Retourne jusqu'a `limit` pieces (500 par defaut, max 5000)."""
-    return _client.get("/pieces",
-                        search=search,
-                        ref_only=str(bool(ref_only)).lower(),
-                        limit=limit)
+                limit: int = 500, fournisseur: str = "",
+                only_fournisseur: bool = False) -> List[Dict]:
+    """Retourne jusqu'a `limit` pieces (500 par defaut, max 5000).
+    fournisseur : ses references en tete (avec son prix) ; only_fournisseur :
+    uniquement ses references. Chaque piece porte la liste `fournisseurs`."""
+    params = {"search": search, "ref_only": str(bool(ref_only)).lower(), "limit": limit}
+    if fournisseur:
+        params["fournisseur"] = fournisseur
+        params["only_fournisseur"] = str(bool(only_fournisseur)).lower()
+    return _client.get("/pieces", **params)
+
+
+def get_piece_fournisseurs(piece_id: str) -> List[Dict]:
+    return _client.get(f"/pieces/{piece_id}/fournisseurs")
+
+
+def set_piece_fournisseur(piece_id: str, fournisseur_nom: str,
+                          ref_fournisseur: str = "", prix_achat: float = 0) -> Dict:
+    return _client.put(f"/pieces/{piece_id}/fournisseurs",
+                       json={"fournisseur_nom": fournisseur_nom,
+                             "ref_fournisseur": ref_fournisseur,
+                             "prix_achat": prix_achat})
+
+
+def delete_piece_fournisseur(piece_id: str, fournisseur_id: str) -> None:
+    _client.delete(f"/pieces/{piece_id}/fournisseurs/{fournisseur_id}")
+
+
+def get_fournisseur_pieces(fournisseur_id: str) -> List[Dict]:
+    return _client.get(f"/fournisseurs/{fournisseur_id}/pieces")
 
 
 def get_piece(piece_id: str) -> Optional[Dict]:
@@ -878,13 +933,18 @@ def delete_piece(piece_id: str) -> None:
 
 
 def bulk_import_pieces(pieces: List[Dict],
-                         skip_doublons: bool = True) -> Dict:
-    """Import en masse. Retourne {importees, mises_a_jour, ignorees, erreurs, details_erreurs}."""
+                         skip_doublons: bool = True,
+                         dry_run: bool = False,
+                         fournisseur: str = "") -> Dict:
+    """Import en masse. Retourne {importees, mises_a_jour, ignorees, erreurs, details_erreurs}.
+    dry_run=True : simulation côté serveur, rien n'est écrit."""
     # Timeout généreux : un import de plusieurs milliers de pièces peut
     # largement dépasser le timeout par défaut (5s) du client.
     return _client.post("/pieces/bulk",
                          json={"pieces": pieces,
-                               "skip_doublons": skip_doublons},
+                               "skip_doublons": skip_doublons,
+                               "dry_run": dry_run,
+                               "fournisseur": fournisseur or ""},
                          timeout=120)
 
 

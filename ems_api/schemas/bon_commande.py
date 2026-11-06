@@ -6,6 +6,9 @@ from pydantic import BaseModel
 
 
 class BonCommandeLigneIn(BaseModel):
+    # id d'une ligne existante : la ligne est mise à jour en place (son id,
+    # auquel sont rattachées les réceptions, est conservé). Absent = nouvelle ligne.
+    id:            Optional[str] = None
     piece_id:      Optional[str] = None
     reference:     str = ""
     libelle:       str = ""
@@ -24,8 +27,46 @@ class BonCommandeLigneOut(BaseModel):
     prix_unitaire: float = 0.0
     montant_ligne: float = 0.0
     ordre:         int = 0
+    quantite_recue:    float = 0.0   # somme des réceptions de la ligne
+    quantite_restante: float = 0.0   # reste à recevoir (jamais négatif)
     created_at:    Optional[datetime] = None
     updated_at:    Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class ReceptionLigneIn(BaseModel):
+    ligne_id:       str            # id de la ligne du bon de commande
+    quantite_recue: float = 0.0
+
+
+class ReceptionCreate(BaseModel):
+    date_reception: str = ""       # JJ/MM/AAAA (vide = aujourd'hui)
+    numero_bl:      str = ""
+    receptionnaire: str = ""
+    commentaire:    str = ""
+    lignes:         List[ReceptionLigneIn] = []
+
+
+class ReceptionLigneOut(BaseModel):
+    id:                    str
+    bon_commande_ligne_id: Optional[str] = None
+    reference:             str = ""
+    libelle:               str = ""
+    quantite_recue:        float = 0.0
+
+    model_config = {"from_attributes": True}
+
+
+class ReceptionOut(BaseModel):
+    id:              str
+    bon_commande_id: str
+    date_reception:  str = ""
+    numero_bl:       str = ""
+    receptionnaire:  str = ""
+    commentaire:     str = ""
+    lignes:          List[ReceptionLigneOut] = []
+    created_at:      Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 
@@ -141,8 +182,13 @@ class BonCommandeOut(BaseModel):
     paiements:             str = "[]"
     date_generation:       Optional[datetime] = None
     pdf_path:              str = ""
+    envoye_le:             str = ""
+    envoye_a:              str = ""
     version:               int = 1
     lignes:                List[BonCommandeLigneOut] = []
+    receptions:            List[ReceptionOut] = []
+    # "" = rien reçu, "partielle" = reçu en partie, "complete" = tout reçu
+    etat_reception:        str = ""
     total_lignes_ht:       float = 0
     total_ht:              float = 0
     total_ttc:             float = 0
@@ -150,3 +196,9 @@ class BonCommandeOut(BaseModel):
     updated_at:            Optional[datetime] = None
 
     model_config = {"from_attributes": True}
+
+
+class EnvoiIn(BaseModel):
+    """Marque la commande comme envoyée au fournisseur (envoye=False : annule)."""
+    envoye:   bool = True
+    envoye_a: str = ""

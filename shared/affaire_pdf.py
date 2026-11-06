@@ -170,10 +170,15 @@ def build_affaire_html(affaire: dict, items: list, client: dict | None = None,
     """
     Génère le HTML de la fiche affaire.
     pdf_type : "complet" (tout inclus) ou "technique" (sans données financières ni
-                conditions de règlement — destiné à l'atelier).
+                conditions de règlement — destiné à l'atelier), ou
+                "accuse_reception" (accusé de réception de commande destiné au
+                client : sans informations internes — fournisseur, achat,
+                établissement financier, référence interne, statuts, suivi,
+                commentaires — et avec les CGV de vente en fin de document).
     moteurs : liste des moteurs liés à l'affaire (via code_affaire), pour
               affichage de leur(s) numéro(s) de série.
     """
+    is_ar      = pdf_type == "accuse_reception"
     num        = _g(affaire, "num_affaire")
     nom_projet = _g(affaire, "nom_projet")
     statut     = _g(affaire, "statut", "En cours")
@@ -201,6 +206,12 @@ def build_affaire_html(affaire: dict, items: list, client: dict | None = None,
     num_cmd    = _g(affaire, "num_commande_client")
     charge     = _g(affaire, "charge_affaire")
     resp_tech  = _g(affaire, "resp_technique")
+    commercial = _g(affaire, "commercial")
+    commercial_contact = " · ".join(v for v in (_g(affaire, "commercial_email"),
+                                                _g(affaire, "commercial_tel")) if v)
+    commercial_html = _esc(commercial) or "—"
+    if commercial and commercial_contact:
+        commercial_html += f'<br><span style="font-size:8pt;color:#555">{_esc(commercial_contact)}</span>'
     date_deb   = _g(affaire, "date_debut")
     date_fat_    = _g(affaire, "date_fat")
     date_fin_fat = _g(affaire, "date_fin_fat")
@@ -284,7 +295,8 @@ def build_affaire_html(affaire: dict, items: list, client: dict | None = None,
     if for_pdf:
         body_padding = "6mm 6mm 10mm 6mm"
         _safe = lambda s: str(s).replace('"', "'").replace("\\", "")
-        pdf_label = f"Fiche affaire {_safe(num)}" + (" — TECHNIQUE" if pdf_type == "technique" else "")
+        pdf_label = (f"Accusé de réception de commande {_safe(num)}" if is_ar else
+                     f"Fiche affaire {_safe(num)}" + (" — TECHNIQUE" if pdf_type == "technique" else ""))
         css_page = f"""
 @page {{
   size: A4;
@@ -397,7 +409,7 @@ def build_affaire_html(affaire: dict, items: list, client: dict | None = None,
             meta_rows += f'<tr><td class="lbl">N° série</td><td colspan="3" style="font-family:monospace">{_esc(num_serie)}</td></tr>'
         if objectif:
             meta_rows += f'<tr><td class="lbl">Objectif</td><td colspan="3" style="white-space:pre-wrap">{_esc(objectif)}</td></tr>'
-        if suivi:
+        if suivi and not is_ar:
             meta_rows += f'<tr><td class="lbl">Suivi</td><td colspan="3" style="white-space:pre-wrap;color:#4a5560;font-style:italic">{_esc(suivi)}</td></tr>'
 
         meta_table = ""
@@ -438,7 +450,7 @@ def build_affaire_html(affaire: dict, items: list, client: dict | None = None,
     <span style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">
       {type_badge}<strong style="font-size:11px">{_esc(libelle)}</strong>
     </span>
-    {_item_statut_style(statut_it)}
+    {"" if is_ar else _item_statut_style(statut_it)}
   </div>
   {meta_table}{detail_table}
 </div>"""
@@ -464,14 +476,18 @@ def build_affaire_html(affaire: dict, items: list, client: dict | None = None,
                 fin_rows += f'<td class="lbl">TVA (20&nbsp;%)</td><td>{_fmt_eur(tva)}</td></tr>'
             if not exo and ttc is not None:
                 fin_rows += f'<tr><td class="lbl">Prix TTC</td><td style="font-weight:700;color:#002b5c">{_fmt_eur(ttc)}</td><td></td><td></td></tr>'
-        if etab_fin:
+        if is_ar:
+            pass  # informations internes (financement, achat fournisseur) non communiquées au client
+        elif etab_fin:
             fin_rows += f'<tr><td class="lbl">Établissement financier</td><td colspan="3">{_esc(etab_fin)}</td></tr>'
-        if fournisseur:
+        if is_ar:
+            pass
+        elif fournisseur:
             fin_rows += f'<tr><td class="lbl">Fournisseur</td><td>{_esc(fournisseur)}</td>'
             fin_rows += f'<td class="lbl">Date d\'achat</td><td>{_esc(date_achat) or "—"}</td></tr>'
         elif date_achat:
             fin_rows += f'<tr><td class="lbl">Date d\'achat</td><td colspan="3">{_esc(date_achat)}</td></tr>'
-        if ref_fourn:
+        if ref_fourn and not is_ar:
             fin_rows += f'<tr><td class="lbl">Référence fournisseur</td><td colspan="3">{_esc(ref_fourn)}</td></tr>'
 
         if fin_rows:
@@ -492,7 +508,7 @@ def build_affaire_html(affaire: dict, items: list, client: dict | None = None,
 </div>"""
 
     comm_section = ""
-    if commentaires:
+    if commentaires and not is_ar:
         comm_section = f"""
 <div class="section-bloc">
   <div class="section-title">COMMENTAIRES :</div>
@@ -544,12 +560,50 @@ def build_affaire_html(affaire: dict, items: list, client: dict | None = None,
 
     now = datetime.now().strftime("%d/%m/%Y à %H:%M")
     type_label = " — FICHE TECHNIQUE" if pdf_type == "technique" else ""
+    doc_title = (f"Accusé de réception de commande {_esc(num)}" if is_ar
+                 else f"Fiche affaire {_esc(num)}{type_label}")
+    ar_intro = ""
+    if is_ar:
+        ref_cmd = f" n° <strong>{_esc(num_cmd)}</strong>" if num_cmd else ""
+        ar_intro = f"""
+<div class="ar-intro">
+  Nous accusons réception de votre commande{ref_cmd} et vous en remercions.
+  Elle est enregistrée sous la référence <strong>{_esc(num)}</strong> et sera exécutée
+  conformément aux éléments ci-dessous et à nos conditions générales de vente jointes.
+</div>"""
+    cgv_html = ""
+    if is_ar:
+        from .cgv_vente import CGV_VENTE_VERSION, cgv_vente_clauses_html
+        cgv_html = f"""
+<!-- CONDITIONS GÉNÉRALES DE VENTE (même mise en page que les CG des devis) -->
+<div class="cgv-page-wrap">
+  <div class="section-header section-header-blue">CONDITIONS GÉNÉRALES DE VENTE</div>
+  <div class="cgv-body">
+    <div class="cgv-version">{_esc(CGV_VENTE_VERSION)}</div>
+    <div class="cgv-columns">
+      {cgv_vente_clauses_html(_esc)}
+    </div>
+  </div>
+</div>
+
+<div class="signature-page">
+  <div class="section-header section-header-blue">BON POUR ACCORD</div>
+  <div class="cgv-body">
+    <p style="font-size:10.5px;font-weight:600">« Bon pour accord » – Accusé de réception de commande n° {_esc(num)}</p>
+  </div>
+  <div class="accord-box">
+    <div class="accord-cell">
+      <h4>Le client — Lu et approuvé — Nom, qualité, date</h4>
+      <div style="font-size:9.5px;color:#6b7785">Signature et cachet du Client :</div>
+    </div>
+  </div>
+</div>"""
 
     html = f"""<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Fiche affaire {_esc(num)}{type_label}</title>
+<title>{doc_title}</title>
 <style>
 * {{ box-sizing: border-box; margin: 0; padding: 0; }}
 body {{
@@ -634,6 +688,31 @@ td, th {{ border: 1px solid #b8c0c9; padding: 4px 6px; vertical-align: top; }}
 }}
 .footer strong {{ color: #002b5c; }}
 
+/* Accusé de réception : texte d'introduction + CGV de vente (2 colonnes) */
+.ar-intro {{
+  margin: 0 0 6px; padding: 7px 10px; font-size: 11px; line-height: 1.5;
+  border-left: 3px solid #c62828; background: #fafbfc;
+}}
+/* CGV : mêmes règles que les conditions générales des devis (2 colonnes,
+   texte intégral, titres d'article collés à leur premier paragraphe). */
+.cgv-page-wrap {{ page-break-before: always; break-before: page; }}
+.cgv-body {{ border: 1px solid #b8c0c9; border-top: none; border-radius: 0 0 4px 4px; padding: 8px 10px; }}
+.cgv-version {{ font-size: 8pt; color: #6b7785; font-style: italic; margin-bottom: 8px; }}
+.cgv-columns {{ column-count: 2; column-gap: 16px; column-rule: 1px solid #d0d4d9; }}
+.cgv-columns .clause {{ margin-top: 5px; page-break-inside: auto; break-inside: auto; }}
+.cgv-columns .clause:first-child {{ margin-top: 0; }}
+.cgv-columns .clause h5 {{
+  font-size: 8pt; color: #002b5c; margin: 0 0 1px; break-after: avoid; page-break-after: avoid;
+}}
+.cgv-columns .clause h6 {{
+  font-size: 7.6pt; color: #002b5c; margin: 3px 0 0; break-after: avoid; page-break-after: avoid;
+}}
+.cgv-columns .clause p {{ font-size: 7.6pt; line-height: 1.32; margin-top: 2px; color: #3a4552; text-align: justify; }}
+.signature-page {{ margin-top: 10px; page-break-inside: avoid; break-inside: avoid; }}
+.accord-box {{ display: flex; gap: 24px; margin-top: 10px; }}
+.accord-box .accord-cell {{ flex: 1; border: 1px solid #d1d9e0; border-radius: 6px; padding: 14px 16px; min-height: 90px; }}
+.accord-box h4 {{ font-size: 8pt; text-transform: uppercase; color: #6b7785; letter-spacing: .5px; margin-bottom: 30px; }}
+
 /* Print */
 .print-btn {{
   position: fixed; top: 14px; right: 14px;
@@ -658,7 +737,7 @@ td, th {{ border: 1px solid #b8c0c9; padding: 4px 6px; vertical-align: top; }}
 <div class="header">
   <div class="header-left">{logo_html}</div>
   <div class="header-mid">
-    <h1>FICHE D'AFFAIRE</h1>
+    <h1>{"ACCUSÉ DE RÉCEPTION DE COMMANDE" if is_ar else "FICHE D'AFFAIRE"}</h1>
     {f'<div style="margin-top:4px"><span class="technique-badge">Technique</span></div>' if pdf_type == "technique" else ""}
   </div>
   <div class="header-right">
@@ -666,6 +745,7 @@ td, th {{ border: 1px solid #b8c0c9; padding: 4px 6px; vertical-align: top; }}
   </div>
 </div>
 
+{ar_intro}
 <!-- IDENTIFICATION -->
 <div class="section-header section-header-blue">IDENTIFICATION</div>
 <table class="bloc-info">
@@ -677,8 +757,10 @@ td, th {{ border: 1px solid #b8c0c9; padding: 4px 6px; vertical-align: top; }}
     <td>{_esc(charge) or '—'}</td>
   </tr>
   <tr>
-    <td class="lbl">Resp. technique</td>
-    <td colspan="3">{_esc(resp_tech) or '—'}</td>
+    <td class="lbl">Référent technique</td>
+    <td>{_esc(resp_tech) or '—'}</td>
+    <td class="lbl">Commercial</td>
+    <td>{commercial_html}</td>
   </tr>
   <tr>
     <td class="lbl">Projet</td>
@@ -686,12 +768,12 @@ td, th {{ border: 1px solid #b8c0c9; padding: 4px 6px; vertical-align: top; }}
     <td class="lbl">Navire / Machine</td>
     <td>{_esc(navire) or '—'}{navire_detail}</td>
   </tr>
-  <tr>
+  {"" if is_ar else f"""<tr>
     <td class="lbl">Référence interne</td>
     <td>{_esc(ref_int) or '—'}</td>
     <td class="lbl">Statut</td>
     <td>{_statut_style(statut)}</td>
-  </tr>
+  </tr>"""}
   {f'<tr><td class="lbl">N° commande client</td><td colspan="3" style="font-family:monospace">{_esc(num_cmd)}</td></tr>' if num_cmd else ''}
   {moteurs_row}
   <tr>
@@ -703,7 +785,7 @@ td, th {{ border: 1px solid #b8c0c9; padding: 4px 6px; vertical-align: top; }}
   {fat_row}
   {visite_row}
   {commissioning_row}
-  {f'<tr><td class="lbl">Date clôture</td><td>{_esc(date_clo)}</td><td></td><td></td></tr>' if date_clo else ''}
+  {f'<tr><td class="lbl">Date clôture</td><td>{_esc(date_clo)}</td><td></td><td></td></tr>' if date_clo and not is_ar else ''}
 </table>
 
 {fin_section}
@@ -714,6 +796,7 @@ td, th {{ border: 1px solid #b8c0c9; padding: 4px 6px; vertical-align: top; }}
 {reglement_section}
 {garanties_section}
 {comm_section}
+{cgv_html}
 
 <!-- FOOTER -->
 <div class="footer">

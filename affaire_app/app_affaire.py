@@ -17,14 +17,21 @@ import threading
 import time
 import webbrowser
 from configparser import ConfigParser
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs, unquote
+from urllib.parse import urlparse, parse_qs, unquote, quote
+
+# En mode source, rendre importable le package `shared` (mailer commun aux apps EMS)
+if not getattr(sys, "frozen", False):
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Timestamp du dernier heartbeat reçu depuis le navigateur.
 # Initialisé à l'instant courant pour laisser le temps à la page de charger.
 _last_beat: float = 0.0
-_server: HTTPServer | None = None
+_server: ThreadingHTTPServer | None = None
+# URL de l'API (lue dans config.ini au démarrage) : sert à récupérer le PDF des
+# bons de commande / intentions d'achat avant de les joindre au mail.
+_API_URL: str = "http://localhost:8765"
 
 # Délai (secondes) sans heartbeat avant extinction automatique.
 _BEAT_TIMEOUT = 20
@@ -147,6 +154,44 @@ def _watchdog():
             break
 
 
+def _email_commande(payload: dict) -> dict:
+    """Télécharge le PDF du bon de commande / de l'intention d'achat depuis
+    l'API, puis ouvre le brouillon de mail au fournisseur avec la même
+    fonction que les autres apps EMS (shared.mailer : Outlook avec PJ, sinon
+    mailto + dossier du PDF)."""
+    import tempfile
+    import urllib.request
+    from shared import mailer
+
+    kind = payload.get("kind") if payload.get("kind") in ("bc", "ia") else "bc"
+    bon = payload.get("bon") or {}
+    bon_id = str(bon.get("id") or "")
+    if not bon_id:
+        return {"ok": False, "error": "Bon introuvable"}
+    if kind == "bc":
+        url = f"{_API_URL}/bons-commande/{quote(bon_id)}/pdf"
+        num = bon.get("num_bc") or "bon"
+        fname = f"BC_{num}.pdf"
+    else:
+        lang = "en" if bon.get("langue") == "en" else "fr"
+        url = f"{_API_URL}/intentions-achat/{quote(bon_id)}/pdf?lang={lang}"
+        num = bon.get("num_ia") or "intention"
+        fname = f"IA_{num}.pdf"
+    fname = re.sub(r'[\\/:*?"<>|]+', "-", fname)
+
+    dest_dir = Path(tempfile.gettempdir()) / "EMS_achats"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / fname
+    try:
+        with urllib.request.urlopen(url, timeout=120) as r:
+            dest.write_bytes(r.read())
+    except Exception as e:
+        return {"ok": False, "error": f"Génération du PDF impossible : {e}"}
+
+    emails, pj_auto = mailer.email_commande_fournisseur(bon, str(dest), kind)
+    return {"ok": True, "destinataires": emails, "pj_auto": bool(pj_auto), "pdf": str(dest)}
+
+
 class _LocalHandler(BaseHTTPRequestHandler):
     """Même logique qu'ouvrir_fichier() dans les autres apps EMS."""
 
@@ -200,10 +245,31 @@ class _LocalHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b'{"ok":true}')
 
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        result = {"ok": False, "error": "Route inconnue"}
+        if parsed.path == "/email-commande":
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+                payload = json.loads(self.rfile.read(length) or b"{}")
+                result = _email_commande(payload)
+            except Exception as e:
+                result = {"ok": False, "error": str(e)}
+        body = json.dumps(result).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        # Page ouverte en file:// vers 127.0.0.1 (Chrome / Edge : accès réseau privé)
+        self.send_header("Access-Control-Allow-Private-Network", "true")
         self.end_headers()
 
     def log_message(self, *args):
@@ -211,7 +277,7 @@ class _LocalHandler(BaseHTTPRequestHandler):
 
 
 def main():
-    global _server, _last_beat, _COMMERCIAL_GROUP, _COMMERCIAL_ADMINS
+    global _server, _last_beat, _COMMERCIAL_GROUP, _COMMERCIAL_ADMINS, _API_URL
 
     if getattr(sys, "frozen", False):
         base = Path(sys._MEIPASS)
@@ -219,12 +285,26 @@ def main():
         base = Path(__file__).resolve().parent.parent
 
     api_url, affaires_dir, _COMMERCIAL_GROUP, _COMMERCIAL_ADMINS = _read_config()
+    _API_URL = api_url
 
     # Lier le serveur local sur un port libre avant de patcher le HTML.
-    _server = HTTPServer(("127.0.0.1", 0), _LocalHandler)
+    # Multi-thread : le brouillon Outlook (fenêtre modale) ne doit pas bloquer
+    # les heartbeats, sinon le watchdog éteindrait l'app pendant la rédaction.
+    _server = ThreadingHTTPServer(("127.0.0.1", 0), _LocalHandler)
+    _server.daemon_threads = True
     local_port = _server.server_address[1]
 
     html = base / "suivi_affaires.html"
+    if not getattr(sys, "frozen", False):
+        # Mode source : ne jamais réécrire le suivi_affaires.html du dépôt (il est
+        # déployé tel quel par push_to_prod) ; on patche une copie temporaire.
+        import shutil
+        import tempfile
+        tmp_dir = Path(tempfile.gettempdir()) / "EMS_affaire_dev"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        tmp_html = tmp_dir / "suivi_affaires.html"
+        shutil.copyfile(html, tmp_html)
+        html = tmp_html
 
     # Windows strip les query params sur file://, on patche directement le HTML.
     try:

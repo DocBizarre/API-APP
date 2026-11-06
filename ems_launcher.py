@@ -76,18 +76,13 @@ def _demarrer_app(app_key, here_str):
             pass
 
     if app_key == "affaire":
-        import webbrowser as _wb
-        from pathlib import Path as _P
-        from configparser import ConfigParser as _CP
-        _cfg = _CP()
-        _ini = _P(here_str) / "config.ini"
-        _api_url = "http://localhost:8765"
-        if _ini.is_file():
-            _cfg.read(_ini, encoding="utf-8")
-            _url = _cfg.get("server", "url", fallback=None)
-            if _url:
-                _api_url = _url.rstrip("/")
-        _wb.open((_P(here_str) / "suivi_affaires.html").as_uri() + f"?api={_api_url}")
+        # Même démarrage que EMS_Affaire.exe : serveur local (ouverture des
+        # dossiers, envoi des commandes par mail…) + page patchée avec son port
+        # et l'URL de l'API lue dans config.ini. Ouvrir le HTML directement
+        # laisserait LOCAL_PORT à 0 (« serveur local non disponible »).
+        sys.path.insert(0, here_str)
+        from affaire_app import app_affaire as _app_affaire
+        _app_affaire.main()
         return
 
     if app_key == "numerotation":

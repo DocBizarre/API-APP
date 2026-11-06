@@ -9,21 +9,28 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
+from ..schemas.bon_commande import EnvoiIn
 from ..database import get_db
 from ..models.affaire import Affaire, AffaireCoutLigne
 from ..models.piece import Piece
 from ..models.bon_commande import BonCommande, BonCommandeLigne
+from ..models.reception_achat import ReceptionAchat, ReceptionAchatLigne
 from ..schemas.bon_commande import (
     BonCommandeCreate, BonCommandeUpdate, BonCommandeOut,
+    ReceptionCreate, ReceptionOut,
 )
 from ..services.numerotation import next_num_bon_commande
 from .affaires import _get_dossier, _create_arborescence
 from .interventions import _upsert_contact
 from .fournisseurs import _upsert_fournisseur
+from ..services.piece_fournisseurs import lier_lignes_achat
 
 router = APIRouter(prefix="/bons-commande", tags=["bons-commande"])
 
-STATUTS = ["Brouillon", "Envoyé", "Confirmé", "Reçu", "Annulé"]
+STATUTS = ["Brouillon", "Envoyé", "Confirmé", "Reçu partiellement", "Reçu", "Annulé"]
+
+# Tolérance de comparaison des quantités (saisies décimales)
+_EPS = 1e-6
 
 
 def _coerce(c, val):
@@ -37,12 +44,86 @@ def _coerce(c, val):
     return ""
 
 
-def _ligne_to_out(l: BonCommandeLigne) -> dict:
+def _recu_par_ligne(bc: BonCommande) -> dict:
+    """Quantité déjà reçue pour chaque ligne du bon (id de ligne -> quantité)."""
+    recu: dict = {}
+    for r in bc.receptions:
+        for rl in r.lignes:
+            if rl.bon_commande_ligne_id:
+                recu[rl.bon_commande_ligne_id] = (recu.get(rl.bon_commande_ligne_id, 0)
+                                                  + (rl.quantite_recue or 0))
+    return recu
+
+
+def _etat_reception(bc: BonCommande, recu: Optional[dict] = None) -> str:
+    """Renvoie "" (rien reçu), "partielle" ou "complete". Les lignes à quantité
+    nulle (commentaires, lignes de service) ne comptent pas."""
+    recu = _recu_par_ligne(bc) if recu is None else recu
+    lignes = [l for l in bc.lignes if (l.quantite or 0) > _EPS]
+    if not lignes or not any(recu.get(l.id, 0) > _EPS for l in lignes):
+        return ""
+    if all(recu.get(l.id, 0) >= (l.quantite or 0) - _EPS for l in lignes):
+        return "complete"
+    return "partielle"
+
+
+def _date_fr_key(s: str):
+    try:
+        j, m, a = (int(x) for x in (s or "").split("/"))
+        return (a, m, j)
+    except Exception:
+        return (0, 0, 0)
+
+
+def _appliquer_etat_reception(bc: BonCommande) -> None:
+    """Aligne le statut (et la date de livraison réelle) du bon sur ses réceptions."""
+    if bc.statut == "Annulé":
+        return
+    ancien = bc.statut
+    etat = _etat_reception(bc)
+    if etat == "complete":
+        bc.statut = "Reçu"
+        dates = [r.date_reception for r in bc.receptions if r.date_reception]
+        if dates:
+            bc.date_livraison_reelle = max(dates, key=_date_fr_key)
+        return
+    if ancien == "Reçu":
+        # N'est plus entièrement reçu (réception annulée, ligne ajoutée…)
+        bc.date_livraison_reelle = ""
+    if etat == "partielle":
+        bc.statut = "Reçu partiellement"
+    elif ancien in ("Reçu", "Reçu partiellement"):
+        bc.statut = "Confirmé"
+
+
+def _ligne_to_out(l: BonCommandeLigne, recu: Optional[dict] = None) -> dict:
     d = {}
     for c in l.__table__.columns:
         d[c.name] = _coerce(c, getattr(l, c.name))
     d["piece_id"] = l.piece_id  # préserver None (pas de piece cataloguée)
+    q_recue = (recu or {}).get(l.id, 0)
+    d["quantite_recue"] = q_recue
+    d["quantite_restante"] = max((l.quantite or 0) - q_recue, 0)
     return d
+
+
+def _reception_to_out(r: ReceptionAchat) -> dict:
+    return {
+        "id": r.id,
+        "bon_commande_id": r.bon_commande_id,
+        "date_reception": r.date_reception or "",
+        "numero_bl": r.numero_bl or "",
+        "receptionnaire": r.receptionnaire or "",
+        "commentaire": r.commentaire or "",
+        "created_at": r.created_at,
+        "lignes": [{
+            "id": rl.id,
+            "bon_commande_ligne_id": rl.bon_commande_ligne_id,
+            "reference": rl.reference or "",
+            "libelle": rl.libelle or "",
+            "quantite_recue": rl.quantite_recue or 0,
+        } for rl in r.lignes],
+    }
 
 
 def _to_out(bc: BonCommande) -> dict:
@@ -50,7 +131,10 @@ def _to_out(bc: BonCommande) -> dict:
     for c in bc.__table__.columns:
         d[c.name] = _coerce(c, getattr(bc, c.name))
     d["affaire_id"] = bc.affaire_id  # préserver None (non-lié), pas de coercition en ""
-    d["lignes"] = [_ligne_to_out(l) for l in bc.lignes]
+    recu = _recu_par_ligne(bc)
+    d["lignes"] = [_ligne_to_out(l, recu) for l in bc.lignes]
+    d["receptions"] = [_reception_to_out(r) for r in bc.receptions]
+    d["etat_reception"] = _etat_reception(bc, recu)
     total_lignes_ht = sum(l.montant_ligne or 0 for l in bc.lignes)
     total_ht = total_lignes_ht + (bc.frais_port or 0)
     d["total_lignes_ht"] = total_lignes_ht
@@ -84,17 +168,34 @@ def _check_affaire(affaire_id: Optional[str], db: Session) -> None:
 
 
 def _recalc_lignes(bc: BonCommande, lignes_in: list, db: Session) -> None:
-    """Remplace intégralement les lignes du bon de commande."""
-    for l in list(bc.lignes):
-        db.delete(l)
+    """Remplace les lignes du bon de commande par `lignes_in`.
+
+    Les lignes existantes sont mises à jour en place (même id) plutôt que
+    recréées, car les réceptions y sont rattachées par leur id : une ligne
+    entrante est associée à une ligne existante par son `id`, ou à défaut
+    (client qui n'envoie pas l'id) par (référence, désignation). Les lignes
+    existantes non associées sont supprimées."""
+    existantes = {l.id: l for l in bc.lignes}
+    ids_explicites = {getattr(li, "id", None) for li in lignes_in} & existantes.keys()
+    prises: set = set()
+
+    def _associer(ligne):
+        lid = getattr(ligne, "id", None)
+        if lid in existantes and lid not in prises:
+            return existantes[lid]
+        for l in bc.lignes:
+            if (l.id not in prises and l.id not in ids_explicites
+                    and (l.reference or "") == (ligne.reference or "")
+                    and (l.libelle or "") == (ligne.libelle or "")):
+                return l
+        return None
+
     for i, ligne in enumerate(lignes_in):
         piece_id = ligne.piece_id or None
         if piece_id and not db.query(Piece).filter(Piece.id == piece_id).first():
             piece_id = None
         montant = round((ligne.quantite or 0) * (ligne.prix_unitaire or 0), 2)
-        db.add(BonCommandeLigne(
-            id=str(uuid4()),
-            bon_commande_id=bc.id,
+        valeurs = dict(
             piece_id=piece_id,
             reference=ligne.reference,
             libelle=ligne.libelle,
@@ -102,7 +203,17 @@ def _recalc_lignes(bc: BonCommande, lignes_in: list, db: Session) -> None:
             prix_unitaire=ligne.prix_unitaire,
             montant_ligne=montant,
             ordre=ligne.ordre or i,
-        ))
+        )
+        cible = _associer(ligne)
+        if cible is not None:
+            prises.add(cible.id)
+            for k, v in valeurs.items():
+                setattr(cible, k, v)
+        else:
+            db.add(BonCommandeLigne(id=str(uuid4()), bon_commande_id=bc.id, **valeurs))
+    for lid, l in existantes.items():
+        if lid not in prises:
+            db.delete(l)
 
 
 def _sync_cout_ligne_from_bc(bc: BonCommande, db: Session) -> None:
@@ -218,6 +329,7 @@ def create_bon_commande(body: BonCommandeCreate, db: Session = Depends(get_db)):
                        bc.fournisseur_tel, bc.fournisseur_rue, bc.fournisseur_code_postal,
                        bc.fournisseur_ville, bc.fournisseur_pays)
     _upsert_interlocuteurs_fournisseur(db, bc.interlocuteurs_fournisseur)
+    lier_lignes_achat(db, bc.fournisseur_nom, body.lignes, bc.date_commande)
     db.commit()
     db.refresh(bc)
     _sync_cout_ligne_from_bc(bc, db)
@@ -244,9 +356,15 @@ def update_bon_commande(bc_id: str, body: BonCommandeUpdate,
                        bc.fournisseur_tel, bc.fournisseur_rue, bc.fournisseur_code_postal,
                        bc.fournisseur_ville, bc.fournisseur_pays)
     _upsert_interlocuteurs_fournisseur(db, bc.interlocuteurs_fournisseur)
+    lier_lignes_achat(db, bc.fournisseur_nom,
+                      body.lignes if lignes is not None else list(bc.lignes),
+                      bc.date_commande)
     bc.version = (bc.version or 1) + 1
     db.commit()
     db.refresh(bc)
+    if lignes is not None and bc.receptions:
+        # Lignes modifiées (quantité, ajout…) : l'état de réception peut changer
+        _appliquer_etat_reception(bc)
     _sync_cout_ligne_from_bc(bc, db)
     db.commit()
     return _to_out(bc)
@@ -315,3 +433,101 @@ def generer_pdf_bon_commande(bc_id: str, db: Session = Depends(get_db)):
             "Cache-Control": "no-store",
         },
     )
+
+@router.post("/{bc_id}/envoi", response_model=BonCommandeOut,
+             summary="Marque la commande comme envoyée au fournisseur (ou annule)")
+def marquer_envoi(bc_id: str, body: EnvoiIn, db: Session = Depends(get_db)):
+    obj = _get_bon(bc_id, db)
+    if body.envoye:
+        obj.envoye_le = datetime.now().strftime("%d/%m/%Y %H:%M")
+        obj.envoye_a = (body.envoye_a or "").strip()
+        if (obj.statut or "Brouillon") == "Brouillon":
+            obj.statut = "Envoyé"
+    else:
+        obj.envoye_le = ""
+        obj.envoye_a = ""
+    obj.version = (obj.version or 1) + 1
+    db.commit()
+    db.refresh(obj)
+    return _to_out(obj)
+
+
+# ── Réceptions (livraisons fournisseur, éventuellement partielles) ──
+
+@router.get("/{bc_id}/receptions", response_model=List[ReceptionOut],
+            summary="Historique des réceptions du bon de commande")
+def list_receptions(bc_id: str, db: Session = Depends(get_db)):
+    return [_reception_to_out(r) for r in _get_bon(bc_id, db).receptions]
+
+
+@router.post("/{bc_id}/receptions", response_model=BonCommandeOut, status_code=201,
+             summary="Enregistre une réception (totale ou partielle) des articles commandés")
+def create_reception(bc_id: str, body: ReceptionCreate, db: Session = Depends(get_db)):
+    bc = _get_bon(bc_id, db)
+    if bc.statut == "Annulé":
+        raise HTTPException(409, "Bon de commande annulé : réception impossible")
+    lignes_bc = {l.id: l for l in bc.lignes}
+    recu = _recu_par_ligne(bc)
+
+    a_recevoir: dict = {}
+    for rl in body.lignes:
+        q = rl.quantite_recue or 0
+        if q < -_EPS:
+            raise HTTPException(422, "Quantité reçue négative")
+        if q <= _EPS:
+            continue
+        if rl.ligne_id not in lignes_bc:
+            raise HTTPException(422, "Ligne absente de ce bon de commande "
+                                     "(le bon a été modifié entre-temps ? rechargez-le)")
+        a_recevoir[rl.ligne_id] = a_recevoir.get(rl.ligne_id, 0) + q
+    if not a_recevoir:
+        raise HTTPException(422, "Aucune quantité reçue saisie")
+    for lid, q in a_recevoir.items():
+        ligne = lignes_bc[lid]
+        restant = (ligne.quantite or 0) - recu.get(lid, 0)
+        if q > restant + _EPS:
+            nom = ligne.reference or ligne.libelle or f"ligne {(ligne.ordre or 0) + 1}"
+            raise HTTPException(
+                422, f"{nom} : {q:g} reçu(s) pour {max(restant, 0):g} restant(s) à recevoir")
+
+    reception = ReceptionAchat(
+        id=str(uuid4()),
+        bon_commande_id=bc.id,
+        date_reception=(body.date_reception or "").strip() or datetime.now().strftime("%d/%m/%Y"),
+        numero_bl=(body.numero_bl or "").strip(),
+        receptionnaire=(body.receptionnaire or "").strip(),
+        commentaire=(body.commentaire or "").strip(),
+    )
+    for lid, q in a_recevoir.items():
+        ligne = lignes_bc[lid]
+        reception.lignes.append(ReceptionAchatLigne(
+            id=str(uuid4()),
+            bon_commande_ligne_id=lid,
+            reference=ligne.reference or "",
+            libelle=ligne.libelle or "",
+            quantite_recue=q,
+        ))
+    bc.receptions.append(reception)
+    db.flush()
+    _appliquer_etat_reception(bc)
+    bc.version = (bc.version or 1) + 1
+    db.commit()
+    db.refresh(bc)
+    return _to_out(bc)
+
+
+@router.delete("/{bc_id}/receptions/{reception_id}", response_model=BonCommandeOut,
+               summary="Annule une réception saisie par erreur")
+def delete_reception(bc_id: str, reception_id: str, db: Session = Depends(get_db)):
+    bc = _get_bon(bc_id, db)
+    reception = next((r for r in bc.receptions if r.id == reception_id), None)
+    if reception is None:
+        raise HTTPException(404, "Réception introuvable")
+    bc.receptions.remove(reception)
+    db.flush()
+    _appliquer_etat_reception(bc)
+    bc.version = (bc.version or 1) + 1
+    db.commit()
+    db.refresh(bc)
+    return _to_out(bc)
+
