@@ -15,12 +15,27 @@
 # - PSRemoting active sur le serveur (Enable-PSRemoting -Force depuis le serveur)
 #   Sinon le redemarrage devra se faire manuellement en RDP
 
+# Options :
+#   -Server 192.168.1.10   cible (IP par defaut : le nom EMSVMA001 n'est pas
+#                          resolu hors du reseau local, ex. via VPN)
+#   -AskCredential         demande un compte du domaine EMS pour PSRemoting
+#                          (necessaire hors domaine : poste perso, VPN...)
+param(
+    [string]$Server = "192.168.1.10",
+    [switch]$AskCredential
+)
+
 # ----- Configuration (modifiable si necessaire) -----
-$DEV_PATH    = "C:\Users\Stagiaire.be\Desktop\APP API"
-$SERVER_NAME = "EMSVMA001"
+$DEV_PATH    = $PSScriptRoot          # dossier contenant ce script (= racine du depot)
+$SERVER_NAME = $Server
 $SERVER_IP   = "192.168.1.10"
 $SERVER_PORT = "8765"
 $SHARE_PATH  = "\\$SERVER_NAME\EMS_install"
+
+$remoteArgs = @{ ComputerName = $SERVER_NAME; ErrorAction = "Stop" }
+if ($AskCredential) {
+    $remoteArgs.Credential = Get-Credential -Message "Compte du domaine EMS (PSRemoting sur $SERVER_NAME)"
+}
 
 # Couleurs pour la lisibilite
 function Write-Step    { Write-Host ""; Write-Host "===== $args =====" -ForegroundColor Cyan }
@@ -41,6 +56,8 @@ Write-Ok "Repertoire dev OK"
 if (-not (Test-Path $SHARE_PATH)) {
     Write-ErrMsg "Partage serveur inaccessible : $SHARE_PATH"
     Write-ErrMsg "Verifie que le partage EMS_install existe sur le serveur."
+    Write-ErrMsg "Hors domaine (VPN), connecte-le d'abord avec ton compte EMS :"
+    Write-ErrMsg "  net use $SHARE_PATH /user:DOMAINE\identifiant *"
     exit 1
 }
 Write-Ok "Partage serveur accessible"
@@ -160,7 +177,7 @@ if (-not (Test-Path $dstManifest)) {
 # ----- 2b. Installation des dépendances Python sur le serveur -----
 Write-Step "Mise a jour des dependances Python"
 try {
-    Invoke-Command -ComputerName $SERVER_NAME -ErrorAction Stop -ScriptBlock {
+    Invoke-Command @remoteArgs -ScriptBlock {
         & "C:\EMS\.venv\Scripts\pip.exe" install -r "C:\EMS\requirements.txt" --quiet 2>&1 | Out-Null
     }
     Write-Ok "Dépendances installées (pip install -r requirements.txt)"
@@ -174,7 +191,7 @@ Write-Step "Redemarrage du service sur le serveur"
 
 $redemarre = $false
 try {
-    Invoke-Command -ComputerName $SERVER_NAME -ErrorAction Stop -ScriptBlock {
+    Invoke-Command @remoteArgs -ScriptBlock {
         # Tuer tous les python existants
         Get-Process python -ErrorAction SilentlyContinue | Stop-Process -Force
         Start-Sleep -Seconds 2
